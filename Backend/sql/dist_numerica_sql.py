@@ -1,0 +1,431 @@
+"""
+SQL da Distribuicao Numerica.
+
+Dois templates:
+  BASE_DN_SQL         — agrupa por (vendedor x fornecedor), usado em linhas/equipe/supervisor
+  BASE_DN_SQL_GER     — agrupa direto por fornecedor com COUNT DISTINCT, usado no gerencial
+                        evita dupla contagem de clientes que compraram de mais de um vendedor
+
+Placeholders:
+  {DATE_REF}          → substituido via .replace() antes do .format()
+  {excl_usur}         → "AND PCUSUARI.CODUSUR NOT IN (...)" ou ""
+  {filtro_*}          → filtros por vendedor/supervisor
+  {select_final}      → SELECT final injetado
+"""
+from typing import Optional
+from config import FILIAL
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Template para linhas (agrupa por vendedor × fornecedor)
+# ─────────────────────────────────────────────────────────────────────────────
+BASE_DN_SQL = """
+WITH PARAMS AS (
+    SELECT
+        ADD_MONTHS(TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'MM'),-3)  AS DT_INI,
+        LAST_DAY(ADD_MONTHS(TO_DATE('{DATE_REF}','YYYY-MM-DD'),-1))    AS DT_FIM,
+        TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'MM')                 AS DT_MES_INI,
+        TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'))                      AS DT_HOJE,
+        TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'DAY')               AS DT_SEMANA_INI,
+        TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD')) - 1                  AS DT_ONTEM
+    FROM DUAL
+),
+QT_CLI_META AS (
+    SELECT
+        PCNFSAID.CODUSUR                                               AS COD_VENDEDOR,
+        NVL(PCNFSAID.CODSUPERVISOR,
+            PCSUPERV.CODSUPERVISOR)                                    AS COD_SUPERVISOR,
+        PCPRODUT.CODFORNEC,
+        PCFORNEC.FORNECEDOR                                            AS NOME_FORNECEDOR,
+        COUNT(DISTINCT PCMOV.CODCLI)                                   AS QT_CLI_META
+    FROM PCNFSAID
+        INNER JOIN PCMOV       ON PCMOV.NUMTRANSVENDA  = PCNFSAID.NUMTRANSVENDA
+                               AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+        LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
+        INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD     = PCMOV.CODPROD
+        INNER JOIN PCFORNEC    ON PCFORNEC.CODFORNEC   = PCPRODUT.CODFORNEC
+        INNER JOIN PCUSUARI    ON PCUSUARI.CODUSUR     = PCNFSAID.CODUSUR
+        INNER JOIN PCSUPERV    ON PCSUPERV.CODSUPERVISOR =
+                                      NVL(PCNFSAID.CODSUPERVISOR, PCUSUARI.CODSUPERVISOR)
+        INNER JOIN PCCLIENT    ON PCCLIENT.CODCLI      = PCMOV.CODCLI
+        CROSS JOIN PARAMS P
+    WHERE PCMOV.DTMOV      BETWEEN P.DT_INI AND P.DT_FIM
+      AND PCNFSAID.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
+      AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+      AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+      AND PCMOV.CODOPER NOT IN ('SR','SO')
+      AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+      AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+      AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+      AND PCNFSAID.DTCANCEL   IS NULL
+      {excl_usur}
+      {filtro_meta}
+    GROUP BY
+        PCNFSAID.CODUSUR,
+        NVL(PCNFSAID.CODSUPERVISOR, PCSUPERV.CODSUPERVISOR),
+        PCPRODUT.CODFORNEC, PCFORNEC.FORNECEDOR
+),
+QT_CLI_MES AS (
+    SELECT
+        PCNFSAID.CODUSUR                                               AS COD_VENDEDOR,
+        NVL(PCNFSAID.CODSUPERVISOR,
+            PCSUPERV.CODSUPERVISOR)                                    AS COD_SUPERVISOR,
+        PCPRODUT.CODFORNEC,
+        COUNT(DISTINCT PCMOV.CODCLI)                                   AS QT_CLI_MES
+    FROM PCNFSAID
+        INNER JOIN PCMOV       ON PCMOV.NUMTRANSVENDA  = PCNFSAID.NUMTRANSVENDA
+                               AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+        LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
+        INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD     = PCMOV.CODPROD
+        INNER JOIN PCUSUARI    ON PCUSUARI.CODUSUR     = PCNFSAID.CODUSUR
+        INNER JOIN PCSUPERV    ON PCSUPERV.CODSUPERVISOR =
+                                      NVL(PCNFSAID.CODSUPERVISOR, PCUSUARI.CODSUPERVISOR)
+        INNER JOIN PCCLIENT    ON PCCLIENT.CODCLI      = PCMOV.CODCLI
+        CROSS JOIN PARAMS P
+    WHERE PCMOV.DTMOV      BETWEEN P.DT_MES_INI AND P.DT_HOJE
+      AND PCNFSAID.DTSAIDA BETWEEN P.DT_MES_INI AND P.DT_HOJE
+      AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+      AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+      AND PCMOV.CODOPER NOT IN ('SR','SO')
+      AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+      AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+      AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+      AND PCNFSAID.DTCANCEL   IS NULL
+      {excl_usur}
+      {filtro_mes}
+    GROUP BY
+        PCNFSAID.CODUSUR,
+        NVL(PCNFSAID.CODSUPERVISOR, PCSUPERV.CODSUPERVISOR),
+        PCPRODUT.CODFORNEC
+),
+NAO_FAT_SEMANA AS (
+    SELECT
+        PCUSUARI.CODUSUR    AS COD_VENDEDOR,
+        PCPRODUT.CODFORNEC,
+        COUNT(DISTINCT PCPEDC.CODCLI) AS QT_CLI_NAO_FAT_SEMANA
+    FROM PCPEDI
+        INNER JOIN PCPEDC   ON PCPEDC.NUMPED    = PCPEDI.NUMPED
+        INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
+        LEFT  JOIN PCPRODUT ON PCPRODUT.CODPROD = PCPEDI.CODPROD
+        CROSS JOIN PARAMS P
+    WHERE PCPEDC.DATA        BETWEEN P.DT_SEMANA_INI AND P.DT_ONTEM
+      AND PCPEDC.CODFILIAL   IN ('{FILIAL}')
+      AND PCPEDC.CONDVENDA   IN (1,2,3,7,9,14,15,17,18,19,98)
+      AND PCPEDC.POSICAO     <> 'F'
+      AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.DTCANCEL    IS NULL
+      AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+      {excl_usur}
+      {filtro_nao_fat_semana}
+    GROUP BY PCUSUARI.CODUSUR, PCPRODUT.CODFORNEC
+    HAVING COUNT(DISTINCT PCPEDC.CODCLI) > 0
+),
+NAO_FAT_HOJE AS (
+    SELECT
+        PCUSUARI.CODUSUR    AS COD_VENDEDOR,
+        PCPRODUT.CODFORNEC,
+        COUNT(DISTINCT PCPEDC.CODCLI) AS QT_CLI_NAO_FAT_HOJE
+    FROM PCPEDI
+        INNER JOIN PCPEDC   ON PCPEDC.NUMPED    = PCPEDI.NUMPED
+        INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
+        LEFT  JOIN PCPRODUT ON PCPRODUT.CODPROD = PCPEDI.CODPROD
+        CROSS JOIN PARAMS P
+    WHERE PCPEDC.DATA      = P.DT_HOJE
+      AND PCPEDC.CODFILIAL IN ('{FILIAL}')
+      AND PCPEDC.CONDVENDA IN (1,2,3,7,9,14,15,17,18,19,98)
+      AND PCPEDC.POSICAO   <> 'F'
+      AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.DTCANCEL  IS NULL
+      AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+      {excl_usur}
+      {filtro_nao_fat_hoje}
+    GROUP BY PCUSUARI.CODUSUR, PCPRODUT.CODFORNEC
+    HAVING COUNT(DISTINCT PCPEDC.CODCLI) > 0
+),
+FAT_HOJE AS (
+    SELECT
+        PCNFSAID.CODUSUR                                               AS COD_VENDEDOR,
+        NVL(PCNFSAID.CODSUPERVISOR,
+            PCSUPERV.CODSUPERVISOR)                                    AS COD_SUPERVISOR,
+        PCPRODUT.CODFORNEC,
+        COUNT(DISTINCT PCMOV.CODCLI)                                   AS QT_CLI_FAT_HOJE
+    FROM PCNFSAID
+        INNER JOIN PCMOV       ON PCMOV.NUMTRANSVENDA  = PCNFSAID.NUMTRANSVENDA
+                               AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+        LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
+        INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD     = PCMOV.CODPROD
+        INNER JOIN PCUSUARI    ON PCUSUARI.CODUSUR     = PCNFSAID.CODUSUR
+        INNER JOIN PCSUPERV    ON PCSUPERV.CODSUPERVISOR =
+                                      NVL(PCNFSAID.CODSUPERVISOR, PCUSUARI.CODSUPERVISOR)
+        INNER JOIN PCCLIENT    ON PCCLIENT.CODCLI      = PCMOV.CODCLI
+        CROSS JOIN PARAMS P
+    WHERE PCMOV.DTMOV      = P.DT_HOJE
+      AND PCNFSAID.DTSAIDA = P.DT_HOJE
+      AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+      AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+      AND PCMOV.CODOPER NOT IN ('SR','SO')
+      AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+      AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+      AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+      AND PCNFSAID.DTCANCEL   IS NULL
+      {excl_usur}
+      {filtro_fat_hoje}
+    GROUP BY
+        PCNFSAID.CODUSUR,
+        NVL(PCNFSAID.CODSUPERVISOR, PCSUPERV.CODSUPERVISOR),
+        PCPRODUT.CODFORNEC
+)
+{select_final}
+""".replace("{FILIAL}", FILIAL)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Template GERENCIAL — COUNT DISTINCT direto por fornecedor (sem agrupar por
+# vendedor) para evitar dupla contagem de clientes multiplos
+# ─────────────────────────────────────────────────────────────────────────────
+BASE_DN_SQL_GER = """
+WITH PARAMS AS (
+    SELECT
+        ADD_MONTHS(TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'MM'),-3)  AS DT_INI,
+        LAST_DAY(ADD_MONTHS(TO_DATE('{DATE_REF}','YYYY-MM-DD'),-1))    AS DT_FIM,
+        TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'MM')                 AS DT_MES_INI,
+        TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'))                      AS DT_HOJE,
+        TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'DAY')               AS DT_SEMANA_INI,
+        TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD')) - 1                  AS DT_ONTEM
+    FROM DUAL
+),
+QT_CLI_META AS (
+    SELECT
+        PCPRODUT.CODFORNEC,
+        PCFORNEC.FORNECEDOR                                            AS NOME_FORNECEDOR,
+        COUNT(DISTINCT PCMOV.CODCLI)                                   AS QT_CLI_META
+    FROM PCNFSAID
+        INNER JOIN PCMOV       ON PCMOV.NUMTRANSVENDA  = PCNFSAID.NUMTRANSVENDA
+                               AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+        LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
+        INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD     = PCMOV.CODPROD
+        INNER JOIN PCFORNEC    ON PCFORNEC.CODFORNEC   = PCPRODUT.CODFORNEC
+        INNER JOIN PCUSUARI    ON PCUSUARI.CODUSUR     = PCNFSAID.CODUSUR
+        INNER JOIN PCCLIENT    ON PCCLIENT.CODCLI      = PCMOV.CODCLI
+        CROSS JOIN PARAMS P
+    WHERE PCMOV.DTMOV      BETWEEN P.DT_INI AND P.DT_FIM
+      AND PCNFSAID.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
+      AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+      AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+      AND PCMOV.CODOPER NOT IN ('SR','SO')
+      AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+      AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+      AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+      AND PCNFSAID.DTCANCEL   IS NULL
+    GROUP BY PCPRODUT.CODFORNEC, PCFORNEC.FORNECEDOR
+),
+QT_CLI_MES AS (
+    SELECT
+        PCPRODUT.CODFORNEC,
+        COUNT(DISTINCT PCMOV.CODCLI)                                   AS QT_CLI_MES
+    FROM PCNFSAID
+        INNER JOIN PCMOV       ON PCMOV.NUMTRANSVENDA  = PCNFSAID.NUMTRANSVENDA
+                               AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+        LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
+        INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD     = PCMOV.CODPROD
+        INNER JOIN PCUSUARI    ON PCUSUARI.CODUSUR     = PCNFSAID.CODUSUR
+        INNER JOIN PCCLIENT    ON PCCLIENT.CODCLI      = PCMOV.CODCLI
+        CROSS JOIN PARAMS P
+    WHERE PCMOV.DTMOV      BETWEEN P.DT_MES_INI AND P.DT_HOJE
+      AND PCNFSAID.DTSAIDA BETWEEN P.DT_MES_INI AND P.DT_HOJE
+      AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+      AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+      AND PCMOV.CODOPER NOT IN ('SR','SO')
+      AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+      AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+      AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+      AND PCNFSAID.DTCANCEL   IS NULL
+    GROUP BY PCPRODUT.CODFORNEC
+),
+NAO_FAT_SEMANA AS (
+    SELECT
+        PCPRODUT.CODFORNEC,
+        COUNT(DISTINCT PCPEDC.CODCLI) AS QT_CLI_NAO_FAT_SEMANA
+    FROM PCPEDI
+        INNER JOIN PCPEDC   ON PCPEDC.NUMPED    = PCPEDI.NUMPED
+        INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
+        LEFT  JOIN PCPRODUT ON PCPRODUT.CODPROD = PCPEDI.CODPROD
+        CROSS JOIN PARAMS P
+    WHERE PCPEDC.DATA        BETWEEN P.DT_SEMANA_INI AND P.DT_ONTEM
+      AND PCPEDC.CODFILIAL   IN ('{FILIAL}')
+      AND PCPEDC.CONDVENDA   IN (1,2,3,7,9,14,15,17,18,19,98)
+      AND PCPEDC.POSICAO     <> 'F'
+      AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.DTCANCEL    IS NULL
+      AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+    GROUP BY PCPRODUT.CODFORNEC
+    HAVING COUNT(DISTINCT PCPEDC.CODCLI) > 0
+),
+NAO_FAT_HOJE AS (
+    SELECT
+        PCPRODUT.CODFORNEC,
+        COUNT(DISTINCT PCPEDC.CODCLI) AS QT_CLI_NAO_FAT_HOJE
+    FROM PCPEDI
+        INNER JOIN PCPEDC   ON PCPEDC.NUMPED    = PCPEDI.NUMPED
+        INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
+        LEFT  JOIN PCPRODUT ON PCPRODUT.CODPROD = PCPEDI.CODPROD
+        CROSS JOIN PARAMS P
+    WHERE PCPEDC.DATA      = P.DT_HOJE
+      AND PCPEDC.CODFILIAL IN ('{FILIAL}')
+      AND PCPEDC.CONDVENDA IN (1,2,3,7,9,14,15,17,18,19,98)
+      AND PCPEDC.POSICAO   <> 'F'
+      AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.DTCANCEL  IS NULL
+      AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+    GROUP BY PCPRODUT.CODFORNEC
+    HAVING COUNT(DISTINCT PCPEDC.CODCLI) > 0
+),
+FAT_HOJE AS (
+    SELECT
+        PCPRODUT.CODFORNEC,
+        COUNT(DISTINCT PCMOV.CODCLI)                                   AS QT_CLI_FAT_HOJE
+    FROM PCNFSAID
+        INNER JOIN PCMOV       ON PCMOV.NUMTRANSVENDA  = PCNFSAID.NUMTRANSVENDA
+                               AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+        LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
+        INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD     = PCMOV.CODPROD
+        INNER JOIN PCUSUARI    ON PCUSUARI.CODUSUR     = PCNFSAID.CODUSUR
+        INNER JOIN PCCLIENT    ON PCCLIENT.CODCLI      = PCMOV.CODCLI
+        CROSS JOIN PARAMS P
+    WHERE PCMOV.DTMOV      = P.DT_HOJE
+      AND PCNFSAID.DTSAIDA = P.DT_HOJE
+      AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+      AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+      AND PCMOV.CODOPER NOT IN ('SR','SO')
+      AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+      AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+      AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+      AND PCNFSAID.DTCANCEL   IS NULL
+    GROUP BY PCPRODUT.CODFORNEC
+)
+SELECT
+    M.CODFORNEC,
+    M.NOME_FORNECEDOR,
+    M.QT_CLI_META,
+    NVL(A.QT_CLI_MES, 0)                                             AS QT_CLI_MES,
+    NVL(N.QT_CLI_NAO_FAT_SEMANA, 0)                                  AS QT_CLI_NAO_FAT_SEMANA,
+    NVL(A.QT_CLI_MES, 0) + NVL(N.QT_CLI_NAO_FAT_SEMANA, 0)         AS QT_CLI_REALIZADO,
+    ROUND(
+        (NVL(A.QT_CLI_MES,0) + NVL(N.QT_CLI_NAO_FAT_SEMANA,0))
+        / NULLIF(M.QT_CLI_META,0) * 100
+    , 2)                                                              AS PCT_ATING,
+    NVL(NH.QT_CLI_NAO_FAT_HOJE, 0)                                   AS QT_CLI_NAO_FAT_HOJE,
+    NVL(FH.QT_CLI_FAT_HOJE, 0)                                       AS QT_CLI_FAT_HOJE
+FROM QT_CLI_META M
+    LEFT JOIN QT_CLI_MES     A  ON A.CODFORNEC  = M.CODFORNEC
+    LEFT JOIN NAO_FAT_SEMANA N  ON N.CODFORNEC  = M.CODFORNEC
+    LEFT JOIN NAO_FAT_HOJE   NH ON NH.CODFORNEC = M.CODFORNEC
+    LEFT JOIN FAT_HOJE       FH ON FH.CODFORNEC = M.CODFORNEC
+ORDER BY M.NOME_FORNECEDOR
+""".replace("{FILIAL}", FILIAL)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SELECTs para o template por linhas
+# ─────────────────────────────────────────────────────────────────────────────
+SELECT_LINHAS = """
+SELECT
+    M.COD_VENDEDOR,
+    U.NOME                                                        AS NOME_VENDEDOR,
+    M.COD_SUPERVISOR,
+    S.NOME                                                        AS NOME_SUPERVISOR,
+    M.CODFORNEC,
+    M.NOME_FORNECEDOR,
+    M.QT_CLI_META,
+    NVL(A.QT_CLI_MES, 0)                                         AS QT_CLI_MES,
+    NVL(N.QT_CLI_NAO_FAT_SEMANA, 0)                              AS QT_CLI_NAO_FAT_SEMANA,
+    NVL(A.QT_CLI_MES, 0) + NVL(N.QT_CLI_NAO_FAT_SEMANA, 0)     AS QT_CLI_REALIZADO,
+    ROUND(
+        (NVL(A.QT_CLI_MES,0) + NVL(N.QT_CLI_NAO_FAT_SEMANA,0))
+        / NULLIF(M.QT_CLI_META,0) * 100
+    , 2)                                                          AS PCT_ATING,
+    NVL(NH.QT_CLI_NAO_FAT_HOJE, 0)                               AS QT_CLI_NAO_FAT_HOJE,
+    NVL(FH.QT_CLI_FAT_HOJE, 0)                                   AS QT_CLI_FAT_HOJE
+FROM QT_CLI_META M
+    INNER JOIN PCUSUARI U ON U.CODUSUR       = M.COD_VENDEDOR
+    INNER JOIN PCSUPERV S ON S.CODSUPERVISOR = M.COD_SUPERVISOR
+    LEFT JOIN QT_CLI_MES     A  ON A.COD_VENDEDOR  = M.COD_VENDEDOR AND A.CODFORNEC  = M.CODFORNEC
+    LEFT JOIN NAO_FAT_SEMANA N  ON N.COD_VENDEDOR  = M.COD_VENDEDOR AND N.CODFORNEC  = M.CODFORNEC
+    LEFT JOIN NAO_FAT_HOJE   NH ON NH.COD_VENDEDOR = M.COD_VENDEDOR AND NH.CODFORNEC = M.CODFORNEC
+    LEFT JOIN FAT_HOJE       FH ON FH.COD_VENDEDOR = M.COD_VENDEDOR AND FH.CODFORNEC = M.CODFORNEC
+ORDER BY M.COD_SUPERVISOR, M.COD_VENDEDOR, M.NOME_FORNECEDOR
+"""
+
+_AGG_TMPL = """
+SELECT
+    {group_cols},
+    SUM(M.QT_CLI_META)                                                           AS QT_CLI_META,
+    SUM(NVL(A.QT_CLI_MES, 0))                                                    AS QT_CLI_MES,
+    SUM(NVL(N.QT_CLI_NAO_FAT_SEMANA, 0))                                         AS QT_CLI_NAO_FAT_SEMANA,
+    SUM(NVL(A.QT_CLI_MES,0) + NVL(N.QT_CLI_NAO_FAT_SEMANA,0))                  AS QT_CLI_REALIZADO,
+    ROUND(
+        SUM(NVL(A.QT_CLI_MES,0) + NVL(N.QT_CLI_NAO_FAT_SEMANA,0))
+        / NULLIF(SUM(M.QT_CLI_META),0) * 100
+    , 2)                                                                          AS PCT_ATING,
+    SUM(NVL(NH.QT_CLI_NAO_FAT_HOJE, 0))                                          AS QT_CLI_NAO_FAT_HOJE,
+    SUM(NVL(FH.QT_CLI_FAT_HOJE, 0))                                              AS QT_CLI_FAT_HOJE
+FROM QT_CLI_META M
+    INNER JOIN PCUSUARI U ON U.CODUSUR       = M.COD_VENDEDOR
+    INNER JOIN PCSUPERV S ON S.CODSUPERVISOR = M.COD_SUPERVISOR
+    LEFT JOIN QT_CLI_MES     A  ON A.COD_VENDEDOR  = M.COD_VENDEDOR AND A.CODFORNEC  = M.CODFORNEC
+    LEFT JOIN NAO_FAT_SEMANA N  ON N.COD_VENDEDOR  = M.COD_VENDEDOR AND N.CODFORNEC  = M.CODFORNEC
+    LEFT JOIN NAO_FAT_HOJE   NH ON NH.COD_VENDEDOR = M.COD_VENDEDOR AND NH.CODFORNEC = M.CODFORNEC
+    LEFT JOIN FAT_HOJE       FH ON FH.COD_VENDEDOR = M.COD_VENDEDOR AND FH.CODFORNEC = M.CODFORNEC
+GROUP BY {group_by_cols}
+ORDER BY {order_cols}
+"""
+
+SELECT_SUPERVISOR = _AGG_TMPL.format(
+    group_cols    = "M.COD_SUPERVISOR, S.NOME AS NOME_SUPERVISOR, M.CODFORNEC, M.NOME_FORNECEDOR",
+    group_by_cols = "M.COD_SUPERVISOR, S.NOME, M.CODFORNEC, M.NOME_FORNECEDOR",
+    order_cols    = "M.NOME_FORNECEDOR",
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# build_dn_query
+# ─────────────────────────────────────────────────────────────────────────────
+def build_dn_query(modo: str, filtro_id: Optional[int] = None,
+                   date_ref: Optional[str] = None) -> tuple:
+    from database import parse_data
+    dr = date_ref or parse_data(None)
+
+    # Gerencial usa template proprio com COUNT DISTINCT por fornecedor
+    if modo == "gerencial":
+        sql = BASE_DN_SQL_GER.replace("{DATE_REF}", dr)
+        return sql, []
+
+    excl = "AND PCUSUARI.CODUSUR NOT IN (2,10,160,180)"
+
+    if modo == "vendedor" and filtro_id is not None:
+        fm   = "AND PCNFSAID.CODUSUR = :p1"
+        fms  = "AND PCNFSAID.CODUSUR = :p2"
+        fnfs = "AND PCUSUARI.CODUSUR = :p3"
+        fnfh = "AND PCUSUARI.CODUSUR = :p4"
+        ffh  = "AND PCNFSAID.CODUSUR = :p5"
+        params = [filtro_id] * 5
+        sel = SELECT_LINHAS
+    elif modo in ("equipe", "supervisor") and filtro_id is not None:
+        fm   = "AND NVL(PCNFSAID.CODSUPERVISOR,PCSUPERV.CODSUPERVISOR) = :p1"
+        fms  = "AND NVL(PCNFSAID.CODSUPERVISOR,PCSUPERV.CODSUPERVISOR) = :p2"
+        fnfs = "AND PCUSUARI.CODSUPERVISOR = :p3"
+        fnfh = "AND PCUSUARI.CODSUPERVISOR = :p4"
+        ffh  = "AND NVL(PCNFSAID.CODSUPERVISOR,PCSUPERV.CODSUPERVISOR) = :p5"
+        params = [filtro_id] * 5
+        sel = SELECT_LINHAS if modo == "equipe" else SELECT_SUPERVISOR
+    else:  # todos
+        fm = fms = fnfs = fnfh = ffh = ""
+        params = []
+        sel = SELECT_LINHAS
+
+    sql = (BASE_DN_SQL
+           .replace("{DATE_REF}", dr)
+           .format(
+               excl_usur=excl,
+               filtro_meta=fm,             filtro_mes=fms,
+               filtro_nao_fat_semana=fnfs, filtro_nao_fat_hoje=fnfh,
+               filtro_fat_hoje=ffh,        select_final=sel,
+           ))
+    return sql, params

@@ -1,0 +1,8 @@
+Backend/.venv/
+Frontend/node_modules/
+Frontend/dist/
+Backend/__pycache__/
+Backend/**/__pycache__/
+*.pyc
+.env
+flashbi_users.db
