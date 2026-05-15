@@ -10,7 +10,7 @@ from models.bateu_levou import (
     upsert_meta, listar_metas_supervisor, listar_todas_metas,
 )
 from sql.bateu_levou_sql import (
-    sql_nao_faturado_supervisor, sql_faturado_supervisor, agregar_por_vendedor,
+    sql_322_supervisor, agregar_por_vendedor,
 )
 
 create_bl_tables()
@@ -201,11 +201,15 @@ def get_vendedores_sup(sup: int, u: CurrentUser = Depends(get_current_user)):
 
 # ── Dados para visualização ───────────────────────────────────────────────────
 @router.get("/campanhas/{cid}/dados")
-def get_dados(cid: int, data: Optional[str] = None, modo: str = "nao_faturado",
+def get_dados(cid: int, data: Optional[str] = None,
               filtro_supervisor: Optional[int] = None,
               u: CurrentUser = Depends(get_current_user)):
+    """
+    Dados do Bateu Levou baseados na rotina 322:
+    PCPEDI + PCPEDC, período completo, sem distinção faturado/não faturado.
+    QT_REALIZADO = semana_ini → ontem | QT_DIA = hoje
+    """
     camp = _check(cid, u)
-    if modo not in ("nao_faturado","faturado"): raise HTTPException(400,"modo invalido.")
 
     dr         = parse_data(data)
     semana_ini = camp["semana_ini"]
@@ -216,8 +220,6 @@ def get_dados(cid: int, data: Optional[str] = None, modo: str = "nao_faturado",
     sups = listar_supervisores_campanha(cid)
     if u.is_supervisor:
         sups = [u.cod_winthor] if u.cod_winthor in sups else []
-    elif u.is_vendedor:
-        sups = sups  # processa tudo, filtra por vendedor depois
     elif filtro_supervisor:
         sups = [filtro_supervisor] if filtro_supervisor in sups else []
 
@@ -225,11 +227,10 @@ def get_dados(cid: int, data: Optional[str] = None, modo: str = "nao_faturado",
     for sup in sups:
         prods = listar_produtos_supervisor(cid, sup)
         if not prods: continue
-        codprods   = [p["codprod"] for p in prods]
-        metas_sup  = {k: v for (s, k), v in todas_metas.items() if s == sup}
+        codprods  = [p["codprod"] for p in prods]
+        metas_sup = {k: v for (s, k), v in todas_metas.items() if s == sup}
 
-        sql = (sql_nao_faturado_supervisor if modo == "nao_faturado" else sql_faturado_supervisor)(
-            codprods, unidade, semana_ini, dr, sup)
+        sql = sql_322_supervisor(codprods, unidade, semana_ini, dr, sup)
         try:
             rows = execute_query(sql, [])
         except Exception as e:
@@ -241,17 +242,33 @@ def get_dados(cid: int, data: Optional[str] = None, modo: str = "nao_faturado",
 
         vendedores = agregar_por_vendedor(rows, metas_sup)
 
-        # Adiciona vendedores com meta mas sem realizado
+        # Adiciona vendedores com meta mas sem pedidos no período
+        # Busca os nomes no Oracle para não mostrar só o código
         vend_com_real = {v["cod_vendedor"] for v in vendedores}
-        for cod_v, meta in metas_sup.items():
-            if cod_v not in vend_com_real and meta > 0:
-                if u.is_vendedor and cod_v != u.cod_winthor:
-                    continue
+        sem_real = [cod_v for cod_v, meta in metas_sup.items()
+                    if cod_v not in vend_com_real and meta > 0
+                    and (not u.is_vendedor or cod_v == u.cod_winthor)]
+
+        if sem_real:
+            try:
+                in_list = ",".join(str(c) for c in sem_real)
+                nome_sql = f"""
+                    SELECT CODUSUR, NOME FROM PCUSUARI
+                    WHERE CODUSUR IN ({in_list})
+                """
+                nomes = {r["codusur"]: r["nome"]
+                         for r in execute_query(nome_sql, [])}
+            except Exception:
+                nomes = {}
+
+            for cod_v in sem_real:
                 vendedores.append({
-                    "cod_vendedor": cod_v, "nome_vendedor": f"#{cod_v}",
+                    "cod_vendedor":  cod_v,
+                    "nome_vendedor": nomes.get(cod_v, f"#{cod_v}"),
                     "cod_supervisor": sup, "nome_supervisor": "",
-                    "meta": float(meta), "qt_realizado": 0.0,
-                    "qt_dia": 0.0, "pct_ating": 0.0, "produtos": [],
+                    "meta": float(metas_sup[cod_v]),
+                    "qt_realizado": 0.0, "qt_dia": 0.0,
+                    "pct_ating": 0.0, "produtos": [],
                 })
 
         if vendedores:
@@ -260,7 +277,7 @@ def get_dados(cid: int, data: Optional[str] = None, modo: str = "nao_faturado",
                 "vendedores": vendedores,
             })
 
-    return {"campanha": camp, "modo": modo, "data_ref": dr,
+    return {"campanha": camp, "data_ref": dr,
             "unidade": unidade, "dados": resultado}
 
 

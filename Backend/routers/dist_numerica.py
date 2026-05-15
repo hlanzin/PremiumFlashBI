@@ -16,12 +16,12 @@ def _filtrar_fornecedor(rows: list, codfornecs: List[int]) -> list:
 
 
 @router.get("")
-def get_todos(data: Optional[str] = None, u: CurrentUser = Depends(get_current_user)):
+def get_todos(data: Optional[str] = None, agrupamento: str = "fornecedor", u: CurrentUser = Depends(get_current_user)):
     if u.is_vendedor:
         raise FORBIDDEN
     try:
         dr = parse_data(data)
-        sql, params = build_dn_query("todos", date_ref=dr)
+        sql, params = build_dn_query("todos", date_ref=dr, agrupamento=agrupamento)
         rows = execute_query(sql, params)
         if u.is_supervisor and u.cod_winthor:
             rows = [r for r in rows if r.get("cod_supervisor") == u.cod_winthor]
@@ -33,12 +33,12 @@ def get_todos(data: Optional[str] = None, u: CurrentUser = Depends(get_current_u
 
 
 @router.get("/gerencial")
-def get_gerencial(data: Optional[str] = None, u: CurrentUser = Depends(get_current_user)):
+def get_gerencial(data: Optional[str] = None, agrupamento: str = "fornecedor", u: CurrentUser = Depends(get_current_user)):
     if u.is_supervisor or u.is_vendedor:
         raise FORBIDDEN
     try:
         dr = parse_data(data)
-        sql, params = build_dn_query("gerencial", date_ref=dr)
+        sql, params = build_dn_query("gerencial", date_ref=dr, agrupamento=agrupamento)
         rows = execute_query(sql, params)
         if u.is_fornecedor:
             rows = _filtrar_fornecedor(rows, u.codfornecs)
@@ -48,14 +48,14 @@ def get_gerencial(data: Optional[str] = None, u: CurrentUser = Depends(get_curre
 
 
 @router.get("/vendedor/{cod}")
-def get_por_vendedor(cod: int, data: Optional[str] = None, u: CurrentUser = Depends(get_current_user)):
+def get_por_vendedor(cod: int, data: Optional[str] = None, agrupamento: str = "fornecedor", u: CurrentUser = Depends(get_current_user)):
     if u.is_vendedor and u.cod_winthor != cod:
         raise FORBIDDEN
     if u.is_fornecedor:
         raise FORBIDDEN
     try:
         dr = parse_data(data)
-        sql, params = build_dn_query("vendedor", filtro_id=cod, date_ref=dr)
+        sql, params = build_dn_query("vendedor", filtro_id=cod, date_ref=dr, agrupamento=agrupamento)
         rows = execute_query(sql, params)
         if not rows:
             raise HTTPException(404, f"Vendedor {cod} sem dados.")
@@ -71,14 +71,14 @@ def get_por_vendedor(cod: int, data: Optional[str] = None, u: CurrentUser = Depe
 
 
 @router.get("/equipe/{cod}")
-def get_por_equipe(cod: int, data: Optional[str] = None, u: CurrentUser = Depends(get_current_user)):
+def get_por_equipe(cod: int, data: Optional[str] = None, agrupamento: str = "fornecedor", u: CurrentUser = Depends(get_current_user)):
     if u.is_vendedor or u.is_fornecedor:
         raise FORBIDDEN
     if u.is_supervisor and u.cod_winthor != cod:
         raise FORBIDDEN
     try:
         dr = parse_data(data)
-        sql, params = build_dn_query("equipe", filtro_id=cod, date_ref=dr)
+        sql, params = build_dn_query("equipe", filtro_id=cod, date_ref=dr, agrupamento=agrupamento)
         rows = execute_query(sql, params)
         if not rows:
             raise HTTPException(404, f"Nenhum dado para supervisor {cod}.")
@@ -92,14 +92,14 @@ def get_por_equipe(cod: int, data: Optional[str] = None, u: CurrentUser = Depend
 
 
 @router.get("/supervisor/{cod}")
-def get_por_supervisor(cod: int, data: Optional[str] = None, u: CurrentUser = Depends(get_current_user)):
+def get_por_supervisor(cod: int, data: Optional[str] = None, agrupamento: str = "fornecedor", u: CurrentUser = Depends(get_current_user)):
     if u.is_vendedor or u.is_fornecedor:
         raise FORBIDDEN
     if u.is_supervisor and u.cod_winthor != cod:
         raise FORBIDDEN
     try:
         dr = parse_data(data)
-        sql, params = build_dn_query("supervisor", filtro_id=cod, date_ref=dr)
+        sql, params = build_dn_query("supervisor", filtro_id=cod, date_ref=dr, agrupamento=agrupamento)
         rows = execute_query(sql, params)
         if not rows:
             raise HTTPException(404, f"Supervisor {cod} sem dados.")

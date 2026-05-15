@@ -1,32 +1,21 @@
 import os
-from typing import Dict
+from dotenv import load_dotenv
+
+load_dotenv()  # carrega o .env da pasta atual
 
 # ── Banco Oracle ──────────────────────────────────────────────────────────────
 DB_CONFIG = {
-    "lib_dir": r"C:\InstantClient2",
-    "host":    "192.168.38.250",
-    "port":    1521,
-    "service": "WINT",
-    "user":    "PONTUAL",
-    "password":"PONTUAL",
+    "lib_dir": os.getenv("DB_LIB_DIR",  r"C:\InstantClient2"),
+    "host":    os.getenv("DB_HOST",     "192.168.38.250"),
+    "port":    int(os.getenv("DB_PORT", "1521")),
+    "service": os.getenv("DB_SERVICE",  "WINT"),
+    "user":    os.getenv("DB_USER",     "PONTUAL"),
+    "password":os.getenv("DB_PASSWORD", "PONTUAL"),
 }
 
-# ── Filial padrão ─────────────────────────────────────────────────────────────
-FILIAL = "3"
+# ── Filial ────────────────────────────────────────────────────────────────────
+FILIAL = os.getenv("FILIAL", "3")
 
-# ── Autenticação ──────────────────────────────────────────────────────────────
-# Chave secreta para assinar os tokens JWT.
-# Em produção substitua por uma variável de ambiente forte.
-SECRET_KEY  = os.getenv("SECRET_KEY", "premium-flash-secret-2026")
-ALGORITHM   = "HS256"
-TOKEN_EXPIRE_HOURS = 12
-
-# Usuários válidos: {"username": "senha_em_texto"}
-# Em produção use hash bcrypt e banco de dados.
-USERS: Dict[str, str] = {
-    "admin":   "premium@2026",
-    "gerente": "flash@2026",
-}
-
-# ── Vendedores excluídos (exceto gerencial) ───────────────────────────────────
-CODUSUR_EXCLUIDOS = [2, 10, 160, 180]
+# ── Auth ──────────────────────────────────────────────────────────────────────
+SECRET_KEY         = os.getenv("SECRET_KEY",         "premium-flash-secret-2026")
+TOKEN_EXPIRE_HOURS = int(os.getenv("TOKEN_EXPIRE_HOURS", "720"))  # 30 dias

@@ -6,3 +6,6 @@ Backend/**/__pycache__/
 *.pyc
 .env
 flashbi_users.db
+Backend/flashbi_users.db
+Frontend/.env
+Frontend - Copia/

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Login          from "./auth/Login";
 import ModuleFaturamento  from "./modules/faturamento";
 import ModuleDistNumerica from "./modules/dist_numerica";
@@ -55,6 +55,13 @@ export default function App() {
     setAuth({ token:"", userInfo:{} });
     setActiveModule("faturamento");
   };
+
+  // Redireciona para login automaticamente em qualquer 401
+  useEffect(() => {
+    const handler = () => handleLogout();
+    window.addEventListener("unauthorized", handler);
+    return () => window.removeEventListener("unauthorized", handler);
+  }, []);
 
   // ── Tela de login ─────────────────────────────────────────────────────────
   if (!auth.token) {

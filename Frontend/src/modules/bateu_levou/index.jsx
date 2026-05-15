@@ -86,7 +86,6 @@ function Acompanhamento({ campanha, token, cargo, isMobile }) {
   const [grupos,    setGrupos]    = useState([]);   // [{cod_supervisor, vendedores}]
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState(null);
-  const [modo,      setModo]      = useState("nao_faturado");
   const [expanded,  setExpanded]  = useState({});
   const [supFiltro, setSupFiltro] = useState(null);
   const hoje = getToday();
@@ -111,14 +110,14 @@ function Acompanhamento({ campanha, token, cargo, isMobile }) {
   const fetchDados = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      let url = `${API_BASE}/api/bl/campanhas/${campanha.id}/dados?modo=${modo}&data=${dataRef}`;
+      let url = `${API_BASE}/api/bl/campanhas/${campanha.id}/dados?data=${dataRef}`;
       if (supFiltro) url += `&filtro_supervisor=${supFiltro}`;
       const res = await fetch(url, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setGrupos((await res.json()).dados ?? []);
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [campanha.id, modo, dataRef, supFiltro, headers]);
+  }, [campanha.id, dataRef, supFiltro, headers]);
 
   useEffect(() => { fetchDados(); }, [fetchDados]);
 
@@ -147,19 +146,6 @@ function Acompanhamento({ campanha, token, cargo, isMobile }) {
       <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,
                     padding:"8px 16px", display:"flex", alignItems:"center",
                     gap:"8px", flexWrap:"wrap" }}>
-
-        {/* Toggle modo */}
-        <div style={{ display:"flex", border:`1px solid ${C.border}`, borderRadius:"6px", overflow:"hidden" }}>
-          {[["nao_faturado","Não Faturado"],["faturado","Faturado"]].map(([id,label]) => (
-            <button key={id} onClick={() => setModo(id)}
-              style={{ padding:"6px 12px", border:"none", cursor:"pointer",
-                       fontSize:"12px", fontFamily:C.sans,
-                       background:modo===id?C.primary:"#fff",
-                       color:modo===id?"#fff":C.text,
-                       fontWeight:modo===id?700:400,
-                       borderRight:`1px solid ${C.border}` }}>{label}</button>
-          ))}
-        </div>
 
         {/* Filtro supervisor (gerencial/fornecedor) */}
         {(cargo === "gerencial" || cargo === "fornecedor") && grupos.length > 1 && (

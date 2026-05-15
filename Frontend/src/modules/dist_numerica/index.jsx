@@ -12,7 +12,7 @@ const arrow = (p) => {
   if (p == null) return <span style={{ color:"#ccc" }}>—</span>;
   const [bg, shadow, Icon] =
     p >= 100 ? [C.green, "rgba(22,163,74,.5)",  TrendingUp  ] :
-    p >= 80  ? [C.amber, "rgba(217,119,6,.5)",  Minus       ] :
+    p >= 90  ? [C.amber, "rgba(217,119,6,.5)",  Minus       ] :
                [C.red,   "rgba(220,38,38,.5)",  TrendingDown];
   return (
     <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center",
@@ -39,9 +39,9 @@ function Th({ label, col, sortCol, sortDir, onSort, align }) {
   );
 }
 
-function DataRow({ row, i, showVendedor }) {
+function DataRow({ row, i, showVendedor, colDimNome }) {
   const [hov, setHov] = useState(false);
-  const pct = row.pct_ating;
+  const pct = row.qt_cli_meta > 0 ? (row.qt_cli_mes / row.qt_cli_meta) * 100 : null;
   const bg  = hov ? C.rowHover : i % 2 === 0 ? C.rowEven : C.rowOdd;
   const td  = { padding:"5px 8px", borderBottom:`1px solid ${C.border}`, verticalAlign:"middle", background:bg };
   return (
@@ -50,11 +50,10 @@ function DataRow({ row, i, showVendedor }) {
         <td style={{ ...td, textAlign:"center", fontFamily:C.mono, fontWeight:600, color:C.primary, fontSize:"11px" }}>{row.cod_vendedor}</td>
         <td style={{ ...td, maxWidth:"140px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:"11px" }}>{row.nome_vendedor}</td>
       </>}
-      <td style={{ ...td, fontWeight:600 }}>{row.nome_fornecedor ?? "—"}</td>
+      <td style={{ ...td, fontWeight:600 }}>{row[colDimNome] ?? "—"}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_meta)}</td>
-      <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_mes)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(row.qt_cli_mes)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_nao_fat_semana)}</td>
-      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(row.qt_cli_realizado)}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary }}>{fmtN(row.qt_cli_nao_fat_hoje)}</td>
       <td style={{ ...td, textAlign:"center" }}>{arrow(pct)}</td>
@@ -106,6 +105,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
   const [activeCode, setActiveCode] = useState(
     (cargo === "supervisor" || cargo === "vendedor") ? codUser : null
   );
+  const [agrupamento, setAgrupamento] = useState("fornecedor"); // "fornecedor" | "secao"
   const [data,       setData]       = useState([]);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState(null);
@@ -138,6 +138,10 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
   const equipes = useMemo(() => supervisores.filter(s => EQUIPE_CODES.includes(s.cod)), [supervisores]);
 
+  // coluna dinâmica conforme agrupamento
+  const colDimId   = agrupamento === "secao" ? "dim_id"     : "dim_id";
+  const colDimNome = agrupamento === "secao" ? "nome_secao" : "nome_fornecedor";
+
   const fetchData = useCallback(async () => {
     setLoading(true); setError(null);
     try {
@@ -146,13 +150,15 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       if (mode === "equipe"     && activeCode) url += `/equipe/${activeCode}`;
       if (mode === "vendedor"   && activeCode) url += `/vendedor/${activeCode}`;
       if (mode === "supervisor" && activeCode) url += `/supervisor/${activeCode}`;
-      url += `?data=${dataRef}`;
+      url += `?data=${dataRef}&agrupamento=${agrupamento}`;
       const res = await fetch(url, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData((await res.json()).dados ?? []);
+      // Resetar coluna de ordenação ao trocar agrupamento
+      setSortCol(agrupamento === "secao" ? "nome_secao" : "nome_fornecedor");
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [mode, activeCode, dataRef, headers]);
+  }, [mode, activeCode, dataRef, agrupamento, headers]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -160,7 +166,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
     let r = [...data];
     if (search) {
       const s = search.toLowerCase();
-      r = r.filter(row => (row.nome_fornecedor??"").toLowerCase().includes(s) || (row.nome_vendedor??"").toLowerCase().includes(s));
+      r = r.filter(row => (row[colDimNome]??"").toLowerCase().includes(s) || (row.nome_vendedor??"").toLowerCase().includes(s));
     }
     r.sort((a,b) => {
       let av=a[sortCol]??0, bv=b[sortCol]??0;
@@ -168,16 +174,15 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       return sortDir==="asc"?(av<bv?-1:av>bv?1:0):(av>bv?-1:av<bv?1:0);
     });
     return r;
-  }, [data, search, sortCol, sortDir]);
+  }, [data, search, sortCol, sortDir, colDimNome]);
 
   const tot = {
     meta:   rows.reduce((s,r)=>s+(r.qt_cli_meta??0),0),
-    real:   rows.reduce((s,r)=>s+(r.qt_cli_realizado??0),0),
     mes:    rows.reduce((s,r)=>s+(r.qt_cli_mes??0),0),
     semana: rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_semana??0),0),
     dia:    rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_hoje??0),0),
   };
-  const totPct = tot.meta > 0 ? (tot.real / tot.meta) * 100 : 0;
+  const totPct = tot.meta > 0 ? (tot.mes / tot.meta) * 100 : 0;
 
   const handleSort = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
   const changeMode = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
@@ -212,7 +217,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
             {!isMobile && (
               <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
                 Meta: <b style={{color:"#fff"}}>{fmtN(tot.meta)}</b>
-                &nbsp;·&nbsp; Realizado: <b style={{color:"#fff"}}>{fmtN(tot.real)}</b>
+                &nbsp;·&nbsp; Faturado Mês: <b style={{color:"#fff"}}>{fmtN(tot.mes)}</b>
                 &nbsp;·&nbsp; <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
                 {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
               </div>
@@ -234,7 +239,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                       padding:"6px 12px", display:"flex", gap:"12px",
                       fontSize:"11px", color:C.textSub, overflowX:"auto" }}>
           <span>Meta: <b style={{color:C.text}}>{fmtN(tot.meta)}</b></span>
-          <span>Real: <b style={{color:C.text}}>{fmtN(tot.real)}</b></span>
+          <span>Mes: <b style={{color:C.text}}>{fmtN(tot.mes)}</b></span>
           <span style={{marginLeft:"auto"}}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></span>
         </div>
       )}
@@ -243,6 +248,21 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,
                     padding:isMobile?"6px 12px":"8px 20px",
                     display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
+
+        {/* Toggle Fornecedor / Seção */}
+        <div style={{ display:"flex", border:`1px solid ${C.border}`, borderRadius:"6px", overflow:"hidden" }}>
+          {[["fornecedor","Fornecedor"],["secao","Seção"]].map(([id,label]) => (
+            <button key={id} onClick={() => setAgrupamento(id)}
+              style={{ padding:"6px 12px", border:"none", cursor:"pointer",
+                       fontSize:"12px", fontFamily:C.sans,
+                       background:agrupamento===id?C.primary:"#fff",
+                       color:agrupamento===id?"#fff":C.text,
+                       fontWeight:agrupamento===id?700:400,
+                       borderRight:`1px solid ${C.border}` }}>
+              {label}
+            </button>
+          ))}
+        </div>
 
         {isMobile ? (
           <div style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%" }}>
@@ -359,7 +379,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                 {showVendedor && (
                   <tr>
                     <th colSpan={2} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"left", border:`1px solid ${C.primaryDk}` }}>VENDEDOR</th>
-                    <th colSpan={8} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"center", border:`1px solid ${C.primaryDk}` }}>INDICADORES</th>
+                    <th colSpan={7} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"center", border:`1px solid ${C.primaryDk}` }}>INDICADORES</th>
                   </tr>
                 )}
                 <tr>
@@ -367,22 +387,36 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                     <Th label="RCA"          col="cod_vendedor"          sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                     <Th label="NOME"         col="nome_vendedor"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
                   </>}
-                  <Th label="FORNECEDOR"     col="nome_fornecedor"       sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                  <Th label={agrupamento === "secao" ? "SEÇÃO" : "FORNECEDOR"}
+                      col={colDimNome}             sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
                   <Th label="META"           col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"       col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="NÃO FAT. SEMANA"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="REALIZADO"      col="qt_cli_realizado"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="% ATING"        col="pct_ating"             sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
+                  <Th label="CART. SEMANA"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="% ATING"        col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="REALIZ. DIA"    col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="STATUS"         col="pct_ating"             sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
+                  <Th label="STATUS"         col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row,i) => (
-                  <DataRow key={`${row.cod_vendedor}-${row.codfornec}-${i}`}
-                    row={row} i={i} showVendedor={showVendedor}/>
+                  <DataRow key={`${row.cod_vendedor}-${row.dim_id}-${i}`}
+                    row={row} i={i} showVendedor={showVendedor} colDimNome={colDimNome}/>
                 ))}
               </tbody>
+              {rows.length > 0 && (
+                <tfoot>
+                  <tr style={{ background:C.total, color:C.totalTxt, fontWeight:700 }}>
+                    {showVendedor && <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }} colSpan={2}>{rows.length} linhas</td>}
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }}>TOTAL</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.meta)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(tot.mes)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.semana)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.dia)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>{arrow(totPct)}</td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
             {rows.length === 0 && <div style={{ padding:"40px", textAlign:"center", color:C.textSub }}>Nenhum dado encontrado.</div>}
           </div>
