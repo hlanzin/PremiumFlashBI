@@ -1,16 +1,16 @@
 """
 SQL do Bateu Levou — baseado na rotina 322 (Venda Por Departamento).
 
-Usa PCPEDI + PCPEDC para o período completo, sem filtro de POSICAO,
-exatamente como a 322 faz. Uma única consulta, sem toggle faturado/não faturado.
+Usa PCPEDI + PCPEDC, sem filtro de POSICAO, igual à 322.
+Uma única consulta, sem toggle faturado/não faturado.
 
-Dois períodos (via CASE):
-  QT_REALIZADO  → semana_ini até data_ref - 1 (ontem)
-  QT_DIA        → apenas data_ref (hoje)
+fechamento=False (semana em curso):
+  QT_REALIZADO = semana_ini → data_ref - 1 (ontem)
+  QT_DIA       = data_ref (hoje)
 
-Unidade:
-  UN → SUM(PCPEDI.QT)
-  CX → SUM(PCPEDI.QT / QTUNITCX)
+fechamento=True (campanha encerrada):
+  QT_REALIZADO = semana_ini → data_ref (semana toda)
+  QT_DIA       = 0
 """
 from config import FILIAL
 from typing import List
@@ -30,24 +30,23 @@ def sql_322_supervisor(codprods: List[int], unidade: str,
                        semana_ini: str, data_ref: str,
                        cod_supervisor: int,
                        fechamento: bool = False) -> str:
-    """
-    fechamento=True  → campanha encerrada: realizado = semana completa, dia = 0
-    fechamento=False → semana em curso:    realizado = dom→ontem, dia = hoje
-    """
     qt    = _qt_expr(unidade)
     prods = _in_produtos(codprods)
 
     if fechamento:
-        # Toda a semana vai pro realizado, dia fica zerado
-        case_real = f"""WHEN PCPEDC.DATA BETWEEN TO_DATE('{semana_ini}','YYYY-MM-DD')
-                                             AND TO_DATE('{data_ref}','YYYY-MM-DD')
-                        THEN {qt}"""
-        case_dia  = "WHEN 1=0 THEN 0"
+        # Campanha encerrada: semana toda vai pro realizado, dia = 0
+        case_real = (
+            f"WHEN PCPEDC.DATA BETWEEN TO_DATE('{semana_ini}','YYYY-MM-DD')"
+            f" AND TO_DATE('{data_ref}','YYYY-MM-DD') THEN {qt}"
+        )
+        case_dia = "WHEN 1=0 THEN 0"
     else:
-        case_real = f"""WHEN PCPEDC.DATA BETWEEN TO_DATE('{semana_ini}','YYYY-MM-DD')
-                                             AND TO_DATE('{data_ref}','YYYY-MM-DD') - 1
-                        THEN {qt}"""
-        case_dia  = f"WHEN PCPEDC.DATA = TO_DATE('{data_ref}','YYYY-MM-DD') THEN {qt}"
+        # Semana em curso: realizado = dom→ontem, dia = hoje
+        case_real = (
+            f"WHEN PCPEDC.DATA BETWEEN TO_DATE('{semana_ini}','YYYY-MM-DD')"
+            f" AND TO_DATE('{data_ref}','YYYY-MM-DD') - 1 THEN {qt}"
+        )
+        case_dia = f"WHEN PCPEDC.DATA = TO_DATE('{data_ref}','YYYY-MM-DD') THEN {qt}"
 
     return f"""
 SELECT
@@ -57,14 +56,8 @@ SELECT
     PCSUPERV.NOME                                                  AS NOME_SUPERVISOR,
     PCPEDI.CODPROD,
     PCPRODUT.DESCRICAO,
-    SUM(CASE
-            {case_real}
-            ELSE 0
-        END)                                                       AS QT_REALIZADO,
-    SUM(CASE
-            {case_dia}
-            ELSE 0
-        END)                                                       AS QT_DIA
+    SUM(CASE {case_real} ELSE 0 END)                               AS QT_REALIZADO,
+    SUM(CASE {case_dia}  ELSE 0 END)                               AS QT_DIA
 FROM PCPEDI
     ,PCPEDC
     ,PCPRODUT
@@ -94,10 +87,6 @@ ORDER BY PCUSUARI.CODUSUR, PCPRODUT.DESCRICAO
 
 
 def agregar_por_vendedor(oracle_rows: list, metas_sup: dict) -> list:
-    """
-    Agrupa linhas Oracle (produto × vendedor) em lista de vendedores
-    com produtos aninhados e totais.
-    """
     vendedores = {}
     for row in oracle_rows:
         cod_v = row["cod_vendedor"]

@@ -217,8 +217,9 @@ def get_dados(cid: int, data: Optional[str] = None,
     unidade    = camp["unidade"]
     todas_metas = listar_todas_metas(cid)
 
-    # Campanha encerrada: data_ref chegou no último dia da semana ou passou
-    fechamento = dr >= semana_fim
+    # Fechamento apenas quando a semana da campanha já terminou de verdade
+    from datetime import date as _date
+    fechamento = semana_fim < _date.today().isoformat()
 
     # Define quais supervisores processar
     sups = listar_supervisores_campanha(cid)
