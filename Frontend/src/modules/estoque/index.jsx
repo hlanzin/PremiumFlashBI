@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { Search, RefreshCw, ChevronDown, ChevronUp, FileSpreadsheet } from "lucide-react";
 import { C, fmt, fmtQty, getToday } from "../../theme";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
@@ -76,6 +76,34 @@ export default function ModuleEstoque({ isMobile, token }) {
     padding:"5px 8px", borderBottom:`1px solid ${C.border}`,
     verticalAlign:"middle", fontSize:"11px", ...extra,
   });
+
+  const exportarExcel = () => {
+    if (!filtered.length) return;
+
+    const nomeSecao = secoes.find(s => s.codsec === secaoSel)?.descricao ?? `Secao_${secaoSel}`;
+    const nomeArq   = `Estoque_${nomeSecao.replace(/\s+/g,"_")}_${dataRef}.csv`;
+
+    const linhas = [
+      ["CODIGO","PRODUTO","QT/CX","ESTOQUE UN","ESTOQUE CX","VALOR"].join(";"),
+      ...filtered.map(r => [
+        r.codprod,
+        `"${(r.descricao ?? "").replace(/"/g,'""')}"`,
+        r.qtunitcx ?? "",
+        r.qtestoque ?? "",
+        r.qtestoquecx ?? "",
+        String(r.valor_estoque ?? "").replace(".",","),
+      ].join(";")),
+      ["","TOTAL","","","",
+        String(filtered.reduce((s,r)=>s+(r.valor_estoque??0),0).toFixed(2)).replace(".",",")
+      ].join(";"),
+    ];
+
+    const blob = new Blob(["\uFEFF" + linhas.join("\r\n")], { type:"text/csv;charset=utf-8;" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url; a.download = nomeArq; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <>
@@ -230,6 +258,22 @@ export default function ModuleEstoque({ isMobile, token }) {
           </div>
         )}
       </div>
+
+      {/* Botão Excel flutuante */}
+      {filtered.length > 0 && (
+        <div style={{ position:"fixed", bottom:"24px", right:"24px", zIndex:1000 }}>
+          <button onClick={exportarExcel}
+            style={{
+              display:"flex", alignItems:"center", gap:"8px",
+              background:"#1D6F42", border:"none", color:"#fff",
+              padding:"10px 18px", borderRadius:"8px", cursor:"pointer",
+              fontSize:"13px", fontFamily:C.sans, fontWeight:700,
+              boxShadow:"0 4px 14px rgba(29,111,66,.45)",
+            }}>
+            <FileSpreadsheet size={16}/> Exportar Excel
+          </button>
+        </div>
+      )}
     </>
   );
 }
