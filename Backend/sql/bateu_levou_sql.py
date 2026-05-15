@@ -28,16 +28,26 @@ def _in_produtos(codprods: List[int]) -> str:
 
 def sql_322_supervisor(codprods: List[int], unidade: str,
                        semana_ini: str, data_ref: str,
-                       cod_supervisor: int) -> str:
+                       cod_supervisor: int,
+                       fechamento: bool = False) -> str:
     """
-    Retorna SQL da 322 adaptado para o Bateu Levou:
-    - período completo: semana_ini → data_ref
-    - filtrado pelos CODPRODs da campanha e pelo supervisor
-    - agrupa por vendedor × produto
-    - calcula QT_REALIZADO (domingo→ontem) e QT_DIA (hoje)
+    fechamento=True  → campanha encerrada: realizado = semana completa, dia = 0
+    fechamento=False → semana em curso:    realizado = dom→ontem, dia = hoje
     """
     qt    = _qt_expr(unidade)
     prods = _in_produtos(codprods)
+
+    if fechamento:
+        # Toda a semana vai pro realizado, dia fica zerado
+        case_real = f"""WHEN PCPEDC.DATA BETWEEN TO_DATE('{semana_ini}','YYYY-MM-DD')
+                                             AND TO_DATE('{data_ref}','YYYY-MM-DD')
+                        THEN {qt}"""
+        case_dia  = "WHEN 1=0 THEN 0"
+    else:
+        case_real = f"""WHEN PCPEDC.DATA BETWEEN TO_DATE('{semana_ini}','YYYY-MM-DD')
+                                             AND TO_DATE('{data_ref}','YYYY-MM-DD') - 1
+                        THEN {qt}"""
+        case_dia  = f"WHEN PCPEDC.DATA = TO_DATE('{data_ref}','YYYY-MM-DD') THEN {qt}"
 
     return f"""
 SELECT
@@ -48,14 +58,11 @@ SELECT
     PCPEDI.CODPROD,
     PCPRODUT.DESCRICAO,
     SUM(CASE
-            WHEN PCPEDC.DATA BETWEEN TO_DATE('{semana_ini}','YYYY-MM-DD')
-                                 AND TO_DATE('{data_ref}','YYYY-MM-DD') - 1
-            THEN {qt}
+            {case_real}
             ELSE 0
         END)                                                       AS QT_REALIZADO,
     SUM(CASE
-            WHEN PCPEDC.DATA = TO_DATE('{data_ref}','YYYY-MM-DD')
-            THEN {qt}
+            {case_dia}
             ELSE 0
         END)                                                       AS QT_DIA
 FROM PCPEDI

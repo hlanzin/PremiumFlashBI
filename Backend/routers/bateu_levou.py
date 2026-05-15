@@ -213,8 +213,12 @@ def get_dados(cid: int, data: Optional[str] = None,
 
     dr         = parse_data(data)
     semana_ini = camp["semana_ini"]
+    semana_fim = camp["semana_fim"]
     unidade    = camp["unidade"]
     todas_metas = listar_todas_metas(cid)
+
+    # Campanha encerrada: data_ref chegou no último dia da semana ou passou
+    fechamento = dr >= semana_fim
 
     # Define quais supervisores processar
     sups = listar_supervisores_campanha(cid)
@@ -230,7 +234,7 @@ def get_dados(cid: int, data: Optional[str] = None,
         codprods  = [p["codprod"] for p in prods]
         metas_sup = {k: v for (s, k), v in todas_metas.items() if s == sup}
 
-        sql = sql_322_supervisor(codprods, unidade, semana_ini, dr, sup)
+        sql = sql_322_supervisor(codprods, unidade, semana_ini, dr, sup, fechamento=fechamento)
         try:
             rows = execute_query(sql, [])
         except Exception as e:
