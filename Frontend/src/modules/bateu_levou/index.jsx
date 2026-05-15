@@ -157,6 +157,9 @@ function useCampanhaDados(campanha, token, filtroSup) {
   const [dataRef, setDataRef] = useState(maxData);
   const headers = useMemo(()=>({Authorization:`Bearer ${token}`}),[token]);
 
+  // Reseta a data para o dia final da campanha sempre que a campanha mudar
+  useEffect(()=>{ setDataRef(maxData); }, [campanha.id]);
+
   const fetch_ = useCallback(async()=>{
     setLoading(true); setError(null);
     try {
@@ -570,207 +573,289 @@ function FornecedorView({token, userInfo, isMobile}) {
   return (<>
     <ModuleHeader isMobile={isMobile} titulo="BATEU LEVOU"/>
 
-    <div style={{display:"flex",height:"calc(100vh - 90px)",overflow:"hidden"}}>
-
-      {/* PAINEL LATERAL DE CAMPANHAS */}
-      {(showPanel||!isMobile)&&(
-        <div style={{width:"260px",flexShrink:0,borderRight:`2px solid ${C.border}`,
-          background:"#FAFAFA",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-
-          {/* Busca + nova */}
-          <div style={{padding:"10px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:"6px"}}>
-            <div style={{position:"relative",flex:1}}>
-              <Search size={12} style={{position:"absolute",left:"8px",top:"50%",
-                transform:"translateY(-50%)",color:C.textSub}}/>
-              <input value={busca} onChange={e=>setBusca(e.target.value)}
-                placeholder="Buscar campanha..."
-                style={{width:"100%",padding:"6px 8px 6px 26px",border:`1px solid ${C.border}`,
-                  borderRadius:"6px",fontSize:"11px",outline:"none"}}/>
-            </div>
-            <button onClick={()=>{setShowNova(v=>!v);}}
-              title="Nova campanha"
-              style={{background:showNova?C.primaryDk:C.primary,border:"none",color:"#fff",
-                padding:"6px 10px",borderRadius:"6px",cursor:"pointer"}}>
-              <Plus size={13}/>
-            </button>
-          </div>
-
-          {/* Form nova campanha */}
-          {showNova&&(
-            <div style={{padding:"10px",borderBottom:`1px solid ${C.border}`,background:"#fff"}}>
-              <div style={{fontSize:"11px",fontWeight:700,color:C.primary,marginBottom:"8px"}}>Nova campanha</div>
-              <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
-                <input value={novaNome} onChange={e=>setNovaNome(e.target.value)}
-                  placeholder="Nome" style={{padding:"5px 8px",border:`1px solid ${C.border}`,
-                    borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
-                <div style={{display:"flex",gap:"6px"}}>
-                  <input value={novaCodsec} onChange={e=>setNovaCodsec(e.target.value)}
-                    placeholder="CODSEC" type="number" style={{flex:1,padding:"5px 8px",
-                      border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
-                  <select value={novaUnidade} onChange={e=>setNovaUnidade(e.target.value)}
-                    style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
-                    <option value="UN">UN</option>
-                    <option value="CX">CX</option>
-                  </select>
-                </div>
-                <input type="date" value={novaIni} onChange={e=>setNovaIni(e.target.value)}
-                  style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
-                <input type="date" value={novaFim} onChange={e=>setNovaFim(e.target.value)}
-                  style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
-                <button onClick={criarCampanha} disabled={criando}
-                  style={{background:C.green,border:"none",color:"#fff",padding:"6px",
-                    borderRadius:"4px",cursor:"pointer",fontSize:"11px",fontWeight:700}}>
-                  {criando?"Criando...":"Criar campanha"}
-                </button>
+    {/* ── MOBILE: lista em tela cheia → detalhe em tela cheia ── */}
+    {isMobile ? (
+      <>
+        {/* Tela da lista */}
+        {(!campanhaSel || showPanel) && (
+          <div style={{display:"flex",flexDirection:"column",overflow:"hidden",height:"calc(100dvh - 56px)"}}>
+            <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:"8px",background:"#fff"}}>
+              <div style={{position:"relative",flex:1}}>
+                <Search size={12} style={{position:"absolute",left:"8px",top:"50%",transform:"translateY(-50%)",color:C.textSub}}/>
+                <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar campanha..."
+                  style={{width:"100%",padding:"9px 8px 9px 28px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
               </div>
+              <button onClick={()=>setShowNova(v=>!v)}
+                style={{background:showNova?C.primaryDk:C.primary,border:"none",color:"#fff",
+                  padding:"9px 14px",borderRadius:"8px",cursor:"pointer",flexShrink:0}}>
+                <Plus size={16}/>
+              </button>
             </div>
-          )}
 
-          {/* Lista de campanhas agrupada por semana */}
-          <div style={{flex:1,overflowY:"auto"}}>
-            {loading&&<div style={{padding:"20px",textAlign:"center",color:C.textSub,fontSize:"11px"}}>Carregando...</div>}
-            {!loading&&grupos.map(({semana,lista})=>{
-              const ativa = semana >= semanaAtualIni();
-              return (
-                <div key={semana}>
-                  <div style={{padding:"5px 10px",background:ativa?"#F0FFF4":"#F5F5F5",
-                    borderBottom:`1px solid ${C.border}`,fontSize:"10px",fontWeight:700,
-                    color:ativa?C.green:C.textSub,letterSpacing:"0.04em",
-                    display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <span>{semana}</span>
-                    <span style={{background:ativa?C.green:C.textSub,color:"#fff",
-                      borderRadius:"10px",padding:"1px 6px",fontSize:"9px"}}>
-                      {ativa?"ATIVA":"ENCERRADA"}
-                    </span>
+            {showNova&&(
+              <div style={{padding:"12px",borderBottom:`1px solid ${C.border}`,background:"#fff"}}>
+                <div style={{fontSize:"12px",fontWeight:700,color:C.primary,marginBottom:"10px"}}>Nova campanha</div>
+                <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                  <input value={novaNome} onChange={e=>setNovaNome(e.target.value)} placeholder="Nome da campanha"
+                    style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
+                  <div style={{display:"flex",gap:"8px"}}>
+                    <input value={novaCodsec} onChange={e=>setNovaCodsec(e.target.value)} placeholder="CODSEC" type="number"
+                      style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
+                    <select value={novaUnidade} onChange={e=>setNovaUnidade(e.target.value)}
+                      style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
+                      <option value="UN">UN</option><option value="CX">CX</option>
+                    </select>
                   </div>
-                  {lista.map(c=>(
-                    <div key={c.id} onClick={()=>{setCampanhaSel(c);setEditCamp(null);setConfirmDel(false);if(isMobile)setShowPanel(false);}}
-                      style={{padding:"8px 12px",borderBottom:`1px solid ${C.border}`,
-                        cursor:"pointer",fontSize:"11px",
-                        background:campanhaSel?.id===c.id?`${C.primary}15`:"transparent",
-                        borderLeft:campanhaSel?.id===c.id?`3px solid ${C.primary}`:"3px solid transparent"}}>
-                      <div style={{fontWeight:campanhaSel?.id===c.id?700:500,
-                        color:campanhaSel?.id===c.id?C.primary:C.text}}>{c.nome}</div>
-                      <div style={{fontSize:"10px",color:C.textSub,marginTop:"2px"}}>
-                        {c.semana_ini} → {c.semana_fim} · {c.unidade}
-                      </div>
-                    </div>
-                  ))}
+                  <div style={{display:"flex",gap:"8px"}}>
+                    <input type="date" value={novaIni} onChange={e=>setNovaIni(e.target.value)}
+                      style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
+                    <input type="date" value={novaFim} onChange={e=>setNovaFim(e.target.value)}
+                      style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
+                  </div>
+                  <button onClick={criarCampanha} disabled={criando}
+                    style={{background:C.green,border:"none",color:"#fff",padding:"10px",
+                      borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700}}>
+                    {criando?"Criando...":"Criar campanha"}
+                  </button>
                 </div>
-              );
-            })}
-            {!loading&&grupos.length===0&&(
-              <div style={{padding:"24px",textAlign:"center",color:C.textSub,fontSize:"11px"}}>
-                {busca?"Nenhuma campanha encontrada.":"Nenhuma campanha criada ainda."}
               </div>
             )}
-          </div>
-        </div>
-      )}
 
-      {/* PAINEL PRINCIPAL */}
-      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-        {!campanhaSel?(
-          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.textSub,fontSize:"13px"}}>
-            {isMobile?(
-              <button onClick={()=>setShowPanel(true)}
-                style={{background:C.primary,border:"none",color:"#fff",padding:"10px 20px",
-                  borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700}}>
-                Ver campanhas
-              </button>
-            ):"Selecione uma campanha ao lado."}
-          </div>
-        ):(
-          <>
-            {/* Barra de título + ações */}
-            <div style={{padding:"8px 12px",borderBottom:`2px solid ${C.border}`,
-              background:"#fff",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
-              {isMobile&&(
-                <button onClick={()=>setShowPanel(true)}
-                  style={{background:"#f0f0f0",border:"none",padding:"5px 8px",borderRadius:"5px",cursor:"pointer"}}>
-                  ☰
-                </button>
-              )}
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontWeight:700,fontSize:"13px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  {campanhaSel.nome}
+            <div style={{flex:1,overflowY:"auto",background:"#F8F9FA"}}>
+              {loading&&<div style={{padding:"40px",textAlign:"center",color:C.textSub}}>Carregando...</div>}
+              {!loading&&grupos.map(({semana,lista})=>{
+                const ativa=lista.some(c=>c.semana_fim>=hoje);
+                return (
+                  <div key={semana}>
+                    <div style={{padding:"8px 14px",background:ativa?"#EDFFF5":"#F0F0F0",
+                      borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <span style={{fontSize:"11px",fontWeight:700,color:ativa?C.green:C.textSub}}>{semana}</span>
+                      <span style={{background:ativa?C.green:C.textSub,color:"#fff",borderRadius:"10px",padding:"2px 8px",fontSize:"10px",fontWeight:600}}>
+                        {ativa?"ATIVA":"ENCERRADA"}
+                      </span>
+                    </div>
+                    {lista.map(c=>(
+                      <div key={c.id} onClick={()=>{setCampanhaSel(c);setShowPanel(false);setEditCamp(null);setConfirmDel(false);}}
+                        style={{padding:"14px",borderBottom:`1px solid ${C.border}`,background:"#fff",cursor:"pointer",
+                          display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                        <div>
+                          <div style={{fontWeight:600,fontSize:"14px",color:C.text}}>{c.nome}</div>
+                          <div style={{fontSize:"11px",color:C.textSub,marginTop:"3px"}}>{c.semana_ini} → {c.semana_fim} · {c.unidade}</div>
+                        </div>
+                        <ChevronRight size={18} color={C.textSub}/>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              {!loading&&grupos.length===0&&(
+                <div style={{padding:"48px",textAlign:"center",color:C.textSub}}>
+                  {busca?"Nenhuma campanha encontrada.":"Nenhuma campanha criada ainda."}
                 </div>
-                <div style={{fontSize:"10px",color:C.textSub}}>
-                  {campanhaSel.semana_ini} → {campanhaSel.semana_fim} · {campanhaSel.unidade}
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tela de detalhe */}
+        {campanhaSel && !showPanel && (
+          <div style={{display:"flex",flexDirection:"column",height:"calc(100dvh - 56px)",overflow:"hidden"}}>
+            {/* Topbar */}
+            <div style={{padding:"10px 12px",background:"#fff",borderBottom:`2px solid ${C.border}`,
+              display:"flex",alignItems:"center",gap:"8px"}}>
+              <button onClick={()=>setShowPanel(true)}
+                style={{background:"#F0F0F0",border:"none",padding:"8px 12px",borderRadius:"8px",
+                  cursor:"pointer",fontSize:"13px",color:C.text,flexShrink:0}}>
+                ‹ Voltar
+              </button>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:"13px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{campanhaSel.nome}</div>
+                <div style={{fontSize:"10px",color:C.textSub}}>{campanhaSel.semana_ini} → {campanhaSel.semana_fim} · {campanhaSel.unidade}
+                  {encerrada&&<span style={{marginLeft:"6px",color:C.red,fontStyle:"italic"}}>encerrada</span>}
+                </div>
+              </div>
+              <button onClick={()=>{setEditCamp(campanhaSel);setEditForm({nome:campanhaSel.nome,semana_ini:campanhaSel.semana_ini,semana_fim:campanhaSel.semana_fim});setConfirmDel(false);}}
+                style={{background:"#EBF5FF",border:"1px solid #BFDBFE",color:"#2563EB",padding:"8px 10px",borderRadius:"8px",cursor:"pointer"}}>✏️</button>
+              {!confirmDel?(<button onClick={()=>setConfirmDel(true)}
+                  style={{background:"#FFF0F0",border:`1px solid ${C.red}40`,color:C.red,padding:"8px 10px",borderRadius:"8px",cursor:"pointer"}}>🗑️</button>
+              ):(<div style={{display:"flex",gap:"6px"}}>
+                  <button onClick={deletar} style={{background:C.red,border:"none",color:"#fff",padding:"8px 14px",borderRadius:"8px",cursor:"pointer",fontWeight:700,fontSize:"12px"}}>Sim</button>
+                  <button onClick={()=>setConfirmDel(false)} style={{background:"#fff",border:`1px solid ${C.border}`,padding:"8px 12px",borderRadius:"8px",cursor:"pointer",fontSize:"12px"}}>Não</button>
+                </div>)}
+            </div>
+
+            {editCamp&&(
+              <div style={{padding:"12px",background:"#EBF5FF",borderBottom:"1px solid #BFDBFE",display:"flex",flexDirection:"column",gap:"8px"}}>
+                <input value={editForm.nome??""} onChange={e=>setEditForm(f=>({...f,nome:e.target.value}))} placeholder="Nome"
+                  style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
+                <div style={{display:"flex",gap:"8px"}}>
+                  <input type="date" value={editForm.semana_ini??""} onChange={e=>setEditForm(f=>({...f,semana_ini:e.target.value}))}
+                    style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
+                  <input type="date" value={editForm.semana_fim??""} onChange={e=>setEditForm(f=>({...f,semana_fim:e.target.value}))}
+                    style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
+                </div>
+                <div style={{display:"flex",gap:"8px"}}>
+                  <button onClick={salvarEdicao} disabled={salvandoCamp}
+                    style={{flex:1,background:"#2563EB",border:"none",color:"#fff",padding:"10px",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700}}>
+                    {salvandoCamp?"Salvando...":"Salvar"}</button>
+                  <button onClick={()=>{setEditCamp(null);setEditForm({});}}
+                    style={{background:"#fff",border:`1px solid ${C.border}`,padding:"10px 16px",borderRadius:"8px",cursor:"pointer",fontSize:"13px"}}>Cancelar</button>
+                </div>
+              </div>
+            )}
+
+            <div style={{display:"flex",borderBottom:`2px solid ${C.border}`,background:"#fff"}}>
+              {[["acompanhar","Acompanhar",Eye],["configurar","Configurar",Settings]].map(([id,label,Icon])=>(
+                <button key={id} onClick={()=>setAba(id)}
+                  style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",
+                    padding:"11px",border:"none",cursor:"pointer",fontSize:"13px",
+                    background:aba===id?C.primary:"#fff",color:aba===id?"#fff":C.text,
+                    fontWeight:aba===id?700:400}}>
+                  <Icon size={14}/> {label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{flex:1,overflowY:"auto"}}>
+              {aba==="acompanhar"
+                ?<Acompanhamento campanha={campanhaSel} token={token} cargo="fornecedor" isMobile={true}/>
+                :<Configuracao   campanha={campanhaSel} token={token} isMobile={true}/>}
+            </div>
+          </div>
+        )}
+      </>
+    ) : (
+
+    /* ── DESKTOP: dois painéis ── */
+    <div style={{display:"flex",height:"calc(100vh - 90px)",overflow:"hidden"}}>
+      <div style={{width:"260px",flexShrink:0,borderRight:`2px solid ${C.border}`,background:"#FAFAFA",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        <div style={{padding:"10px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:"6px"}}>
+          <div style={{position:"relative",flex:1}}>
+            <Search size={12} style={{position:"absolute",left:"8px",top:"50%",transform:"translateY(-50%)",color:C.textSub}}/>
+            <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar campanha..."
+              style={{width:"100%",padding:"6px 8px 6px 26px",border:`1px solid ${C.border}`,borderRadius:"6px",fontSize:"11px",outline:"none"}}/>
+          </div>
+          <button onClick={()=>setShowNova(v=>!v)}
+            style={{background:showNova?C.primaryDk:C.primary,border:"none",color:"#fff",padding:"6px 10px",borderRadius:"6px",cursor:"pointer"}}>
+            <Plus size={13}/>
+          </button>
+        </div>
+
+        {showNova&&(
+          <div style={{padding:"10px",borderBottom:`1px solid ${C.border}`,background:"#fff"}}>
+            <div style={{fontSize:"11px",fontWeight:700,color:C.primary,marginBottom:"8px"}}>Nova campanha</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
+              <input value={novaNome} onChange={e=>setNovaNome(e.target.value)} placeholder="Nome"
+                style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
+              <div style={{display:"flex",gap:"6px"}}>
+                <input value={novaCodsec} onChange={e=>setNovaCodsec(e.target.value)} placeholder="CODSEC" type="number"
+                  style={{flex:1,padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
+                <select value={novaUnidade} onChange={e=>setNovaUnidade(e.target.value)}
+                  style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
+                  <option value="UN">UN</option><option value="CX">CX</option>
+                </select>
+              </div>
+              <input type="date" value={novaIni} onChange={e=>setNovaIni(e.target.value)}
+                style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
+              <input type="date" value={novaFim} onChange={e=>setNovaFim(e.target.value)}
+                style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
+              <button onClick={criarCampanha} disabled={criando}
+                style={{background:C.green,border:"none",color:"#fff",padding:"6px",borderRadius:"4px",cursor:"pointer",fontSize:"11px",fontWeight:700}}>
+                {criando?"Criando...":"Criar campanha"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div style={{flex:1,overflowY:"auto"}}>
+          {loading&&<div style={{padding:"20px",textAlign:"center",color:C.textSub,fontSize:"11px"}}>Carregando...</div>}
+          {!loading&&grupos.map(({semana,lista})=>{
+            const ativa=lista.some(c=>c.semana_fim>=hoje);
+            return (
+              <div key={semana}>
+                <div style={{padding:"5px 10px",background:ativa?"#F0FFF4":"#F5F5F5",borderBottom:`1px solid ${C.border}`,
+                  fontSize:"10px",fontWeight:700,color:ativa?C.green:C.textSub,letterSpacing:"0.04em",
+                  display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span>{semana}</span>
+                  <span style={{background:ativa?C.green:C.textSub,color:"#fff",borderRadius:"10px",padding:"1px 6px",fontSize:"9px"}}>
+                    {ativa?"ATIVA":"ENCERRADA"}
+                  </span>
+                </div>
+                {lista.map(c=>(
+                  <div key={c.id} onClick={()=>{setCampanhaSel(c);setEditCamp(null);setConfirmDel(false);}}
+                    style={{padding:"8px 12px",borderBottom:`1px solid ${C.border}`,cursor:"pointer",fontSize:"11px",
+                      background:campanhaSel?.id===c.id?`${C.primary}15`:"transparent",
+                      borderLeft:campanhaSel?.id===c.id?`3px solid ${C.primary}`:"3px solid transparent"}}>
+                    <div style={{fontWeight:campanhaSel?.id===c.id?700:500,color:campanhaSel?.id===c.id?C.primary:C.text}}>{c.nome}</div>
+                    <div style={{fontSize:"10px",color:C.textSub,marginTop:"2px"}}>{c.semana_ini} → {c.semana_fim} · {c.unidade}</div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          {!loading&&grupos.length===0&&(
+            <div style={{padding:"24px",textAlign:"center",color:C.textSub,fontSize:"11px"}}>
+              {busca?"Nenhuma campanha encontrada.":"Nenhuma campanha criada ainda."}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {!campanhaSel?(<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:C.textSub}}>Selecione uma campanha ao lado.</div>):(
+          <>
+            <div style={{padding:"8px 12px",borderBottom:`2px solid ${C.border}`,background:"#fff",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:"13px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{campanhaSel.nome}</div>
+                <div style={{fontSize:"10px",color:C.textSub}}>{campanhaSel.semana_ini} → {campanhaSel.semana_fim} · {campanhaSel.unidade}
                   {encerrada&&<span style={{marginLeft:"8px",color:C.red,fontStyle:"italic"}}>encerrada</span>}
                 </div>
               </div>
-
-              {/* Editar */}
-              <button onClick={()=>{setEditCamp(campanhaSel);setEditForm({nome:campanhaSel.nome,
-                semana_ini:campanhaSel.semana_ini,semana_fim:campanhaSel.semana_fim});setConfirmDel(false);}}
-                style={{background:"#EBF5FF",border:"1px solid #BFDBFE",color:"#2563EB",
-                  padding:"5px 8px",borderRadius:"5px",cursor:"pointer",fontSize:"11px"}}>✏️</button>
-
-              {/* Excluir */}
-              {!confirmDel?(
-                <button onClick={()=>setConfirmDel(true)}
-                  style={{background:"#FFF0F0",border:`1px solid ${C.red}40`,color:C.red,
-                    padding:"5px 8px",borderRadius:"5px",cursor:"pointer",fontSize:"11px"}}>🗑️</button>
-              ):(
+              <button onClick={()=>{setEditCamp(campanhaSel);setEditForm({nome:campanhaSel.nome,semana_ini:campanhaSel.semana_ini,semana_fim:campanhaSel.semana_fim});setConfirmDel(false);}}
+                style={{background:"#EBF5FF",border:"1px solid #BFDBFE",color:"#2563EB",padding:"5px 8px",borderRadius:"5px",cursor:"pointer",fontSize:"11px"}}>✏️</button>
+              {!confirmDel?(<button onClick={()=>setConfirmDel(true)} style={{background:"#FFF0F0",border:`1px solid ${C.red}40`,color:C.red,padding:"5px 8px",borderRadius:"5px",cursor:"pointer",fontSize:"11px"}}>🗑️</button>):(
                 <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
                   <span style={{fontSize:"10px",color:C.red,fontWeight:600}}>Excluir?</span>
-                  <button onClick={deletar} style={{background:C.red,border:"none",color:"#fff",
-                    padding:"4px 10px",borderRadius:"4px",cursor:"pointer",fontSize:"11px",fontWeight:700}}>Sim</button>
-                  <button onClick={()=>setConfirmDel(false)} style={{background:"#fff",
-                    border:`1px solid ${C.border}`,padding:"4px 8px",borderRadius:"4px",cursor:"pointer",fontSize:"11px"}}>Não</button>
+                  <button onClick={deletar} style={{background:C.red,border:"none",color:"#fff",padding:"4px 10px",borderRadius:"4px",cursor:"pointer",fontSize:"11px",fontWeight:700}}>Sim</button>
+                  <button onClick={()=>setConfirmDel(false)} style={{background:"#fff",border:`1px solid ${C.border}`,padding:"4px 8px",borderRadius:"4px",cursor:"pointer",fontSize:"11px"}}>Não</button>
                 </div>
               )}
-
-              {/* Abas */}
               <div style={{display:"flex",border:`1px solid ${C.border}`,borderRadius:"6px",overflow:"hidden"}}>
-                <button onClick={()=>setAba("acompanhar")}
-                  style={{display:"flex",alignItems:"center",gap:"4px",padding:"5px 10px",border:"none",
-                    cursor:"pointer",fontSize:"11px",background:aba==="acompanhar"?C.primary:"#fff",
-                    color:aba==="acompanhar"?"#fff":C.text,fontWeight:aba==="acompanhar"?700:400,
-                    borderRight:`1px solid ${C.border}`}}>
-                  <Eye size={12}/> Acompanhar
-                </button>
-                <button onClick={()=>setAba("configurar")}
-                  style={{display:"flex",alignItems:"center",gap:"4px",padding:"5px 10px",border:"none",
-                    cursor:"pointer",fontSize:"11px",background:aba==="configurar"?C.primary:"#fff",
-                    color:aba==="configurar"?"#fff":C.text,fontWeight:aba==="configurar"?700:400}}>
-                  <Settings size={12}/> Configurar
-                </button>
+                {[["acompanhar","Acompanhar",Eye],["configurar","Configurar",Settings]].map(([id,label,Icon])=>(
+                  <button key={id} onClick={()=>setAba(id)}
+                    style={{display:"flex",alignItems:"center",gap:"5px",padding:"5px 10px",border:"none",cursor:"pointer",fontSize:"11px",
+                      background:aba===id?C.primary:"#fff",color:aba===id?"#fff":C.text,fontWeight:aba===id?700:400,
+                      borderRight:id==="acompanhar"?`1px solid ${C.border}`:"none"}}>
+                    <Icon size={12}/> {label}
+                  </button>
+                ))}
               </div>
             </div>
-
-            {/* Form editar */}
             {editCamp&&(
-              <div style={{padding:"10px 12px",background:"#EBF5FF",borderBottom:"1px solid #BFDBFE",
-                display:"flex",flexWrap:"wrap",gap:"8px",alignItems:"flex-end"}}>
-                <input value={editForm.nome??""} placeholder="Nome" onChange={e=>setEditForm(f=>({...f,nome:e.target.value}))}
+              <div style={{padding:"10px 12px",background:"#EBF5FF",borderBottom:"1px solid #BFDBFE",display:"flex",flexWrap:"wrap",gap:"8px",alignItems:"flex-end"}}>
+                <input value={editForm.nome??""} onChange={e=>setEditForm(f=>({...f,nome:e.target.value}))} placeholder="Nome"
                   style={{padding:"6px 8px",border:`1px solid ${C.border}`,borderRadius:"5px",fontSize:"11px",outline:"none",flex:2,minWidth:"140px"}}/>
                 <input type="date" value={editForm.semana_ini??""} onChange={e=>setEditForm(f=>({...f,semana_ini:e.target.value}))}
                   style={{padding:"6px 8px",border:`1px solid ${C.border}`,borderRadius:"5px",fontSize:"11px",outline:"none"}}/>
                 <input type="date" value={editForm.semana_fim??""} onChange={e=>setEditForm(f=>({...f,semana_fim:e.target.value}))}
                   style={{padding:"6px 8px",border:`1px solid ${C.border}`,borderRadius:"5px",fontSize:"11px",outline:"none"}}/>
                 <button onClick={salvarEdicao} disabled={salvandoCamp}
-                  style={{background:"#2563EB",border:"none",color:"#fff",padding:"6px 14px",
-                    borderRadius:"5px",cursor:"pointer",fontSize:"11px",fontWeight:700}}>
-                  {salvandoCamp?"Salvando...":"Salvar"}
-                </button>
+                  style={{background:"#2563EB",border:"none",color:"#fff",padding:"6px 14px",borderRadius:"5px",cursor:"pointer",fontSize:"11px",fontWeight:700}}>
+                  {salvandoCamp?"Salvando...":"Salvar"}</button>
                 <button onClick={()=>{setEditCamp(null);setEditForm({});}}
-                  style={{background:"#fff",border:`1px solid ${C.border}`,padding:"6px 10px",
-                    borderRadius:"5px",cursor:"pointer",fontSize:"11px"}}>Cancelar</button>
+                  style={{background:"#fff",border:`1px solid ${C.border}`,padding:"6px 10px",borderRadius:"5px",cursor:"pointer",fontSize:"11px"}}>Cancelar</button>
               </div>
             )}
-
-            {/* Conteúdo */}
             <div style={{flex:1,overflowY:"auto"}}>
               {aba==="acompanhar"
-                ?<Acompanhamento campanha={campanhaSel} token={token} cargo="fornecedor" isMobile={isMobile}/>
-                :<Configuracao   campanha={campanhaSel} token={token} isMobile={isMobile}/>}
+                ?<Acompanhamento campanha={campanhaSel} token={token} cargo="fornecedor" isMobile={false}/>
+                :<Configuracao   campanha={campanhaSel} token={token} isMobile={false}/>}
             </div>
           </>
         )}
       </div>
     </div>
+    )}
   </>);
 }
 
