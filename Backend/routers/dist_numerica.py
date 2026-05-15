@@ -12,7 +12,8 @@ def _filtrar_fornecedor(rows: list, codfornecs: List[int]) -> list:
     if not codfornecs:
         return []
     s = set(int(x) for x in codfornecs)
-    return [r for r in rows if int(r.get("codfornec") or 0) in s]
+    # Suporta tanto a coluna dim_id (novo SQL) quanto codfornec (legado)
+    return [r for r in rows if int(r.get("dim_id") or r.get("codfornec") or 0) in s]
 
 
 @router.get("")
