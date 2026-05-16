@@ -1,12 +1,68 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Faturamento por Seção</title>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+
+    <title>Bussiness Intelligence - Premium Distribuidora</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json"/>
+    <meta name="theme-color" content="#AA0000"/>
+
+    <!-- iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+    <meta name="apple-mobile-web-app-title" content="Flash BI"/>
+    <link rel="apple-touch-icon" href="/icon-192.png"/>
+
+    <!-- Android -->
+    <meta name="mobile-web-app-capable" content="yes"/>
+
+    <!-- Evita flash branco no carregamento -->
+    <style>
+      body { background: #AA0000; margin: 0; }
+      #root { background: #F8F9FA; min-height: 100vh; }
+    </style>
+
+    <link rel="icon" type="image/png" href="/icon-192.png"/>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Registra o Service Worker -->
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker
+            .register("/sw.js")
+            .then(reg => {
+              // Verifica update a cada vez que o app abre
+              reg.update();
+
+              // Se há um SW novo esperando, ativa automaticamente
+              reg.addEventListener("updatefound", () => {
+                const newWorker = reg.installing;
+                newWorker.addEventListener("statechange", () => {
+                  if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+                    // Manda o SW novo assumir sem perguntar ao usuário
+                    newWorker.postMessage("SKIP_WAITING");
+                  }
+                });
+              });
+            });
+
+          // Quando o SW novo assumir o controle, recarrega a página
+          let refreshing = false;
+          navigator.serviceWorker.addEventListener("controllerchange", () => {
+            if (!refreshing) {
+              refreshing = true;
+              window.location.reload();
+            }
+          });
+        });
+      }
+    </script>
   </body>
 </html>
