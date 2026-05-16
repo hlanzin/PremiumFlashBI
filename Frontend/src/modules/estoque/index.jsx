@@ -111,7 +111,7 @@ export default function ModuleEstoque({ isMobile, token }) {
       <div style={{
         background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
         padding: isMobile ? "8px 12px" : "10px 20px",
-        display:"flex", alignItems:"center", justifyContent:"space-between",
+        display:isMobile?"none":"flex", alignItems:"center", justifyContent:"space-between",
         flexWrap:"wrap", gap:"8px", borderBottom:`3px solid ${C.gold}`,
       }}>
         <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>

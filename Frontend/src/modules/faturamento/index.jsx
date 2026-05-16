@@ -450,7 +450,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
       <div style={{
         background:"linear-gradient(135deg,#AA0000,#CC0000 60%,#AA0000)",
         padding: isMobile?"8px 12px":"10px 20px",
-        display:"flex", alignItems:"center", justifyContent:"space-between",
+        display:isMobile?"none":"flex", alignItems:"center", justifyContent:"space-between",
         flexWrap:"wrap", gap:"8px", borderBottom:`3px solid ${C.gold}`,
       }}>
         <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
@@ -463,14 +463,13 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
               FATURAMENTO SELL OUT
               {nomeAtivo() && <span style={{ fontWeight:400, fontSize:"11px", color:"rgba(255,255,255,.8)", marginLeft:"6px" }}>— {nomeAtivo()}</span>}
             </div>
-            {!isMobile && (
-              <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
+                  <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
                 Dias consultados: <b style={{color:"#fff"}}>{summary.dias_consulta}</b>
                 &nbsp;·&nbsp; Decorridos: <b style={{color:"#fff"}}>{summary.dias_decorridos}</b>
                 &nbsp;·&nbsp; Mes: <b style={{color:"#fff"}}>{summary.dias_mes}</b>
                 {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
               </div>
-            )}
+
           </div>
         </div>
         <div style={{ display:"flex", gap:isMobile?"8px":"14px", alignItems:"center" }}>
@@ -553,7 +552,6 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
         {mode==="supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..."/>}
 
         {/* Busca */}
-        {!isMobile && (
           <div style={{ display:"flex", alignItems:"center", gap:"6px",
                         border:`1px solid ${C.border}`, borderRadius:"6px",
                         padding:"5px 10px", background:C.bg }}>
@@ -562,7 +560,6 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
               style={{ border:"none", background:"transparent", fontSize:"12px",
                        width:"120px", outline:"none", color:C.text, fontFamily:C.sans }}/>
           </div>
-        )}
 
         {/* Seletor de data */}
         <div style={{ display:"flex", alignItems:"center", gap:"6px",

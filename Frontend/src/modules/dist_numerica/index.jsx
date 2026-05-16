@@ -201,7 +201,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       <div style={{
         background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
         padding:isMobile?"8px 12px":"10px 20px",
-        display:"flex", alignItems:"center", justifyContent:"space-between",
+        display:isMobile?"none":"flex", alignItems:"center", justifyContent:"space-between",
         flexWrap:"wrap", gap:"8px", borderBottom:`3px solid ${C.gold}`,
       }}>
         <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
@@ -214,14 +214,13 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
               DISTRIBUICAO NUMERICA
               {nomeAtivo() && <span style={{ fontWeight:400, fontSize:"11px", color:"rgba(255,255,255,.8)", marginLeft:"6px" }}>— {nomeAtivo()}</span>}
             </div>
-            {!isMobile && (
-              <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
+                  <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
                 Meta: <b style={{color:"#fff"}}>{fmtN(tot.meta)}</b>
                 &nbsp;·&nbsp; Faturado Mês: <b style={{color:"#fff"}}>{fmtN(tot.mes)}</b>
                 &nbsp;·&nbsp; <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
                 {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
               </div>
-            )}
+
           </div>
         </div>
         <button onClick={fetchData} disabled={loading}
@@ -307,7 +306,6 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
         {mode==="vendedor"   && <Dropdown value={activeCode} onChange={setActiveCode} options={vendedores}  placeholder="Selecione um vendedor..."/>}
         {mode==="supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..."/>}
 
-        {!isMobile && (
           <div style={{ display:"flex", alignItems:"center", gap:"6px",
                         border:`1px solid ${C.border}`, borderRadius:"6px",
                         padding:"5px 10px", background:C.bg }}>
@@ -316,7 +314,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
               style={{ border:"none", background:"transparent", fontSize:"12px",
                        width:"120px", outline:"none", color:C.text, fontFamily:C.sans }}/>
           </div>
-        )}
+
 
         <div style={{ display:"flex", alignItems:"center", gap:"6px",
                       border:`1px solid ${C.border}`, borderRadius:"6px",

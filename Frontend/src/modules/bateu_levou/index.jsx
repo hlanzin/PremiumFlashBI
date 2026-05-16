@@ -394,6 +394,7 @@ function Configuracao({campanha, token, isMobile}) {
 // HEADER padrão do módulo
 // ─────────────────────────────────────────────────────────────────────────────
 function ModuleHeader({isMobile, titulo}) {
+  if (isMobile) return null;
   return (
     <div style={{background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
       padding:isMobile?"8px 12px":"10px 20px",display:"flex",alignItems:"center",

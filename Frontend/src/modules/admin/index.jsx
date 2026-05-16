@@ -528,6 +528,7 @@ export default function ModuleAdmin({ isMobile, token, userInfo = {} }) {
   return (
     <>
       {/* Header */}
+      {!isMobile && (
       <div style={{ background:`linear-gradient(135deg,#1e1e2e,#2d2d4e 60%,#1e1e2e)`,
                     padding:isMobile?"8px 12px":"10px 20px",
                     display:"flex", alignItems:"center", gap:"12px",
@@ -542,8 +543,8 @@ export default function ModuleAdmin({ isMobile, token, userInfo = {} }) {
                          padding:"1px 8px", fontSize:"10px", color:"#EDE9FE" }}>ADMIN</span>
         </div>
       </div>
+)}
 
-      {/* Abas */}
       <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,
                     padding:"8px 16px", display:"flex", gap:"8px" }}>
         {[["usuarios","Usuários"],["campanhas","Campanhas BL"]].map(([id,label]) => (
@@ -562,3 +563,4 @@ export default function ModuleAdmin({ isMobile, token, userInfo = {} }) {
     </>
   );
 }
+

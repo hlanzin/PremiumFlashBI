@@ -86,6 +86,30 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const [sortCol, setSortCol] = useState("tendencia_pct");
+  const [sortDir, setSortDir] = useState("desc");
+
+  const sortedRows = useMemo(() => {
+    const enriched = rows.map(r => ({
+      ...r,
+      pct_ating: r.valor_meta_secao > 0
+        ? (r.valor_faturado_mes_atual / r.valor_meta_secao) * 100 : null,
+      pct_dia: r.necessidade_dia > 0
+        ? (r.nao_faturado_hoje / r.necessidade_dia) * 100 : null,
+    }));
+    if (!sortCol) return enriched;
+    return enriched.sort((a, b) => {
+      const av = a[sortCol] ?? -Infinity;
+      const bv = b[sortCol] ?? -Infinity;
+      return sortDir === "desc" ? bv - av : av - bv;
+    });
+  }, [rows, sortCol, sortDir]);
+
+  const handleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === "desc" ? "asc" : "desc");
+    else { setSortCol(col); setSortDir("desc"); }
+  };
+
   const tot = {
     meta: rows.reduce((s,r) => s+(r.valor_meta_secao??0), 0),
     real: rows.reduce((s,r) => s+(r.valor_faturado_mes_atual??0), 0),
@@ -213,13 +237,20 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
     }
   };
 
-  const TH = ({ label, align }) => (
-    <th style={{ padding:"6px 8px", background:C.subHeader, color:"#fff", fontSize:"10px",
+  const TH = ({ label, align, col }) => {
+    const active = col && sortCol === col;
+    const arrow  = active ? (sortDir === "desc" ? " ↓" : " ↑") : "";
+    return (
+      <th onClick={col ? () => handleSort(col) : undefined}
+        style={{ padding:"6px 8px", color:"#fff", fontSize:"10px",
                  fontWeight:700, textAlign:align??"left", whiteSpace:"nowrap",
-                 border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em" }}>
-      {label}
-    </th>
-  );
+                 border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em",
+                 cursor:col?"pointer":"default", userSelect:"none",
+                 background: active ? C.primaryDk : C.subHeader }}>
+        {label}{arrow}
+      </th>
+    );
+  };
 
   return (
     <>
@@ -227,7 +258,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
       <div style={{
         background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
         padding:isMobile?"8px 12px":"10px 20px",
-        display:"flex", alignItems:"center", justifyContent:"space-between",
+        display:isMobile?"none":"flex", alignItems:"center", justifyContent:"space-between",
         flexWrap:"wrap", gap:"8px", borderBottom:`3px solid ${C.gold}`,
       }}>
         <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
@@ -319,19 +350,19 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                   <TH label="POS"        align="center"/>
                   <TH label="VENDEDOR"/>
                   {cargo === "gerencial" && <TH label="SUPERVISOR"/>}
-                  <TH label="OBJETIVO"   align="right"/>
-                  <TH label="REALIZADO"  align="right"/>
-                  <TH label="% ATING"    align="center"/>
-                  <TH label="% TEND."    align="center"/>
-                  <TH label="R.A.F"      align="right"/>
-                  <TH label="NECESS/DIA" align="right"/>
-                  <TH label="REALIZ/DIA" align="right"/>
-                  <TH label="% DIA"      align="center"/>
+                  <TH label="OBJETIVO"   align="right"  col="valor_meta_secao"/>
+                  <TH label="REALIZADO"  align="right"  col="valor_faturado_mes_atual"/>
+                  <TH label="% ATING"    align="center" col="pct_ating"/>
+                  <TH label="% TEND."    align="center" col="tendencia_pct"/>
+                  <TH label="R.A.F"      align="right"  col="resta_a_fazer"/>
+                  <TH label="NECESS/DIA" align="right"  col="necessidade_dia"/>
+                  <TH label="REALIZ/DIA" align="right"  col="nao_faturado_hoje"/>
+                  <TH label="% DIA"      align="center" col="pct_dia"/>
                   <TH label="STATUS"     align="center"/>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, i) => {
+                {sortedRows.map((row, i) => {
                   const pos    = i + 1;
                   const m      = medal(pos);
                   const pct    = row.valor_meta_secao > 0 ? (row.valor_faturado_mes_atual / row.valor_meta_secao) * 100 : null;
