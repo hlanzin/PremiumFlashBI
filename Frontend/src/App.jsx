@@ -6,11 +6,12 @@ import ModuleEstoque      from "./modules/estoque";
 import ModuleRanking      from "./modules/ranking";
 import ModuleBateuLevou   from "./modules/bateu_levou";
 import ModuleAdmin        from "./modules/admin";
+import ModuleChamados     from "./modules/chamados";
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
   BarChart3, TrendingUp, Package, Tag, Star, Settings,
-  LogOut, Menu, X, ChevronRight,
+  LogOut, Menu, X, ChevronRight, Snowflake
 } from "lucide-react";
 
 // ── Registro de módulos ───────────────────────────────────────────────────────
@@ -19,8 +20,9 @@ const BI_MODULES = [
   { id:"ranking",       label:"Ranking",         icon:Star,       component:ModuleRanking,      cargos:["admin","gerencial","supervisor"] },
   { id:"dist_numerica", label:"Dist. Numérica",  icon:TrendingUp, component:ModuleDistNumerica, cargos:null },
   { id:"bateu_levou",   label:"Bateu Levou",     icon:Tag,        component:ModuleBateuLevou,   cargos:null },
-  { id:"estoque",       label:"Estoque",         icon:Package,    component:ModuleEstoque,      cargos:null },
-  { id:"admin",         label:"Admin",           icon:Settings,   component:ModuleAdmin,        cargos:["admin"] },
+  { id:"estoque",       label:"Estoque",          icon:Package,    component:ModuleEstoque,      cargos:null },
+  { id:"chamados",      label:"Chamados Freezer", icon:Snowflake,   component:ModuleChamados,     cargos:null },
+  { id:"admin",         label:"Admin",            icon:Settings,   component:ModuleAdmin,        cargos:["admin"] },
 ];
 
 const SIDEBAR_W     = 220;   // largura expandida
