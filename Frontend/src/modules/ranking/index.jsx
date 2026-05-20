@@ -287,6 +287,15 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
           <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
           {!isMobile && " Atualizar"}
         </button>
+        {rows.length > 0 && (
+          <button onClick={exportToPDF}
+            style={{ display:"flex", alignItems:"center", gap:"5px",
+              background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
+              color:"#fff", padding:isMobile?"6px":"6px 12px", borderRadius:"6px",
+              cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
+            <FileText size={13}/> {!isMobile && "Exportar PDF"}
+          </button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -453,21 +462,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
         )}
       </div>
 
-      {/* Botão PDF flutuante */}
-      {rows.length > 0 && (
-        <div style={{ position:"fixed", bottom:"24px", right:"24px", zIndex:1000 }}>
-          <button onClick={exportToPDF}
-            style={{
-              display:"flex", alignItems:"center", gap:"8px",
-              background:C.primary, border:"none", color:"#fff",
-              padding:"10px 18px", borderRadius:"8px", cursor:"pointer",
-              fontSize:"13px", fontFamily:C.sans, fontWeight:700,
-              boxShadow:`0 4px 14px rgba(170,0,0,.45)`,
-            }}>
-            <FileText size={16}/> Exportar PDF
-          </button>
-        </div>
-      )}
+
     </>
   );
 }

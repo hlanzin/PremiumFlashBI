@@ -189,6 +189,15 @@ export default function ModuleEstoque({ isMobile, token }) {
               hoje
             </button>
           )}
+          {filtered.length > 0 && (
+            <button onClick={exportarExcel}
+              style={{ display:"flex", alignItems:"center", gap:"5px",
+                background:"#1D6F42", border:"none", color:"#fff",
+                padding:"5px 12px", borderRadius:"6px", cursor:"pointer",
+                fontSize:"11px", fontWeight:700, marginLeft:"8px" }}>
+              <FileSpreadsheet size={13}/> Exportar
+            </button>
+          )}
         </div>
       </div>
 
@@ -259,21 +268,7 @@ export default function ModuleEstoque({ isMobile, token }) {
         )}
       </div>
 
-      {/* Botão Excel flutuante */}
-      {filtered.length > 0 && (
-        <div style={{ position:"fixed", bottom:"24px", right:"24px", zIndex:1000 }}>
-          <button onClick={exportarExcel}
-            style={{
-              display:"flex", alignItems:"center", gap:"8px",
-              background:"#1D6F42", border:"none", color:"#fff",
-              padding:"10px 18px", borderRadius:"8px", cursor:"pointer",
-              fontSize:"13px", fontFamily:C.sans, fontWeight:700,
-              boxShadow:"0 4px 14px rgba(29,111,66,.45)",
-            }}>
-            <FileSpreadsheet size={16}/> Exportar Excel
-          </button>
-        </div>
-      )}
+
     </>
   );
 }

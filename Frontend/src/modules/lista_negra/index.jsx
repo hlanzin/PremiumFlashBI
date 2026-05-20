@@ -90,19 +90,34 @@ function SupervisorRow({ nome, rows }) {
 }
 
 // ── Linha do cliente ──────────────────────────────────────────────────────────
-function ClienteRow({ row, i, showVendedor, showSupervisor }) {
+function ClienteRow({ row, i, showVendedor, showSupervisor, showMudancaBase }) {
   const [hov, setHov] = useState(false);
   const bg = hov ? C.rowHover : i%2===0 ? C.rowEven : C.rowOdd;
   const td = { padding:"5px 8px", borderBottom:`1px solid ${C.border}`,
                verticalAlign:"middle", background:bg };
+  const mudou = showMudancaBase && row.mudanca_base === 1;
   return (
     <tr onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
       <td style={{ ...td, textAlign:"center", fontFamily:C.mono, fontWeight:600,
         color:C.primary, fontSize:"11px" }}>{row.cod_cliente}</td>
       <td style={{ ...td, maxWidth:"200px", overflow:"hidden",
         textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-        <div style={{ fontWeight:500 }}>{row.nome_fantasia || row.razao_social}</div>
+        <div style={{ fontWeight:500, display:"flex", alignItems:"center", gap:"6px" }}>
+          {row.nome_fantasia || row.razao_social}
+          {mudou && (
+            <span style={{ fontSize:"9px", fontWeight:700, padding:"1px 5px",
+              borderRadius:"4px", background:"#FFF3CD", color:"#92400E",
+              border:"1px solid #FCD34D", whiteSpace:"nowrap", flexShrink:0 }}>
+              MUDANÇA DE BASE
+            </span>
+          )}
+        </div>
         {row.nome_fantasia && <div style={{ fontSize:"10px", color:C.textSub }}>{row.razao_social}</div>}
+        {mudou && (
+          <div style={{ fontSize:"10px", color:"#92400E" }}>
+            Base atual: {row.nome_vendedor_original ?? `#${row.cod_vendedor_original}`}
+          </div>
+        )}
       </td>
       {showVendedor && <td style={{ ...td, fontSize:"11px", color:C.textSub }}>{row.nome_vendedor ?? "—"}</td>}
       {showSupervisor && <td style={{ ...td, fontSize:"11px", color:C.textSub }}>{row.cod_supervisor ?? "—"}</td>}
@@ -163,7 +178,8 @@ function buildRows(rows, mode, showVendedor) {
 
   // Demais modos: sem agrupamento
   return rows.map((r, i) => <ClienteRow key={r.cod_cliente} row={r} i={i}
-    showVendedor={showVendedor} showSupervisor={false}/>);
+    showVendedor={showVendedor} showSupervisor={false}
+    showMudancaBase={mode === "vendedor"}/>);
 }
 
 // ── Cabeçalho da tabela ───────────────────────────────────────────────────────
@@ -278,12 +294,18 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
     if (!dimId) return;
     setLoading(true); setError(null);
     try {
-      let url = `${API_BASE}/api/lista-negra?agrupamento=${agrupamento}&dim_id=${dimId}&data=${dataRef}`;
+      let url;
+      if (mode === "vendedor" && activeCode) {
+        // Endpoint dedicado: filtra dentro do SQL pelo PCNFSAID.CODUSUR
+        url = `${API_BASE}/api/lista-negra/vendedor?agrupamento=${agrupamento}&dim_id=${dimId}&data=${dataRef}&cod_vendedor=${activeCode}`;
+      } else {
+        url = `${API_BASE}/api/lista-negra?agrupamento=${agrupamento}&dim_id=${dimId}&data=${dataRef}`;
+      }
       const j = await fetch(url, { headers }).then(r => r.json());
       setData(j.dados ?? []);
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [dimId, agrupamento, dataRef, headers]);
+  }, [dimId, agrupamento, dataRef, mode, activeCode, headers]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -297,7 +319,7 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
     let r = [...data];
     if (mode === "equipe"     && activeCode) r = r.filter(x => x.cod_supervisor === activeCode);
     if (mode === "supervisor" && activeCode) r = r.filter(x => x.cod_supervisor === activeCode);
-    if (mode === "vendedor"   && activeCode) r = r.filter(x => x.cod_vendedor   === activeCode);
+    // modo "vendedor": dados já vêm filtrados pelo servidor via /vendedor — não filtra aqui
     if (mode === "gerencial"  && filtroVendedor) r = r.filter(x => x.cod_vendedor === filtroVendedor);
     if (apenasNaoComprou) r = r.filter(x => !x.pos_faturado && !x.pos_nao_faturado);
     if (search.trim()) {

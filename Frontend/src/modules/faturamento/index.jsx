@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
          ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus, Menu, X, FileText } from "lucide-react";
 import { C, fmt, fmtPct, pctStyle, getToday } from "../../theme";
@@ -43,13 +43,14 @@ const agg = (rows) => {
   return { meta, real, raf, nec, dia, pct, tend, pctDia };
 };
 
-function Th({ label, col, sortCol, sortDir, onSort, align }) {
+function Th({ label, col, sortCol, sortDir, onSort, align, sticky }) {
   const active = sortCol === col;
   return (
     <th onClick={() => onSort(col)} style={{
       padding:"6px 8px", background:C.subHeader, color:"#fff", fontSize:"10px",
       fontWeight:700, textAlign:align??"left", cursor:"pointer", userSelect:"none",
       whiteSpace:"nowrap", border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em",
+      ...(sticky ? { position:"sticky", left:0, zIndex:3 } : {}),
     }}>
       {label}
       {active && (sortDir === "asc"
@@ -79,20 +80,22 @@ function GrupoRow({ nome, rows, showVendedor }) {
   );
 }
 
-function DataRow({ row, i, showVendedor }) {
+function DataRow({ row, i, showVendedor, isMobile }) {
   const [hov, setHov] = useState(false);
   const pct    = row.valor_meta_secao > 0 ? (row.valor_faturado_mes_atual/row.valor_meta_secao)*100 : null;
   const tend   = row.tendencia_pct;
   const pctDia = row.necessidade_dia  > 0 ? (row.nao_faturado_hoje/row.necessidade_dia)*100  : null;
   const bg     = hov ? C.rowHover : i%2===0 ? C.rowEven : C.rowOdd;
   const td     = { padding:"5px 8px", borderBottom:`1px solid #EED0D0`, verticalAlign:"middle", background:bg };
+  const stickyTd = isMobile ? { ...td, position:"sticky", left:0, zIndex:2, boxShadow:"2px 0 4px rgba(0,0,0,.08)" } : td;
   return (
     <tr onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
       {showVendedor && <>
         <td style={{ ...td, textAlign:"center", fontFamily:C.mono, fontWeight:600, color:C.primary, fontSize:"11px" }}>{row.cod_vendedor}</td>
-        <td style={{ ...td, maxWidth:"140px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:"11px" }}>{row.nome_vendedor}</td>
+        <td style={{ ...stickyTd, maxWidth:"140px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:"11px" }}>{row.nome_vendedor}</td>
       </>}
-      <td style={{ ...td, fontWeight:600, paddingLeft: getGrupo(row.cod_secao)?"18px":"8px" }}>{row.secao??"—"}</td>
+      <td style={{ ...stickyTd, fontWeight:600, paddingLeft: getGrupo(row.cod_secao)?"18px":"8px",
+        left: showVendedor && isMobile ? "auto" : 0 }}>{row.secao??"—"}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmt(row.valor_meta_secao)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmt(row.valor_faturado_mes_atual)}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
@@ -106,7 +109,92 @@ function DataRow({ row, i, showVendedor }) {
   );
 }
 
-function buildTableRows(rows, showVendedor) {
+
+function SupervisorTotalRow({ row, i }) {
+  const pct    = (row.valor_meta_secao??0) > 0
+    ? (row.valor_faturado_mes_atual/row.valor_meta_secao)*100 : null;
+  const tend   = row.tendencia_pct;
+  const pctDia = (row.necessidade_dia??0) > 0
+    ? (row.nao_faturado_hoje/row.necessidade_dia)*100 : null;
+  const bg = i%2===0 ? C.rowEven : C.rowOdd;
+  const td = { padding:"6px 10px", borderBottom:`1px solid #EED0D0`,
+               verticalAlign:"middle", background:bg };
+  return (
+    <tr>
+      <td style={{ ...td, fontWeight:700, fontSize:"12px", color:C.primary }}>
+        {row.nome_supervisor ?? "—"}
+      </td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmt(row.valor_meta_secao)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmt(row.valor_faturado_mes_atual)}</td>
+      <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
+      <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(tend)}>{fmtPct(tend)}</span></td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:(row.resta_a_fazer??0)<=0?C.green:C.red }}>{fmt(row.resta_a_fazer)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmt(row.necessidade_dia)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary }}>{fmt(row.nao_faturado_hoje)}</td>
+      <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pctDia)}>{fmtPct(pctDia)}</span></td>
+      <td style={{ ...td, textAlign:"center" }}>{arrow(tend)}</td>
+    </tr>
+  );
+}
+
+function buildTableRowsBySupervisor(rows) {
+  // Agrupa por supervisor mantendo a ordem
+  const grupos = [];
+  const map = new Map();
+  rows.forEach(row => {
+    const key = row.cod_supervisor ?? "—";
+    if (!map.has(key)) {
+      const g = { cod: key, nome: row.nome_supervisor ?? `#${key}`, rows: [] };
+      map.set(key, g);
+      grupos.push(g);
+    }
+    map.get(key).rows.push(row);
+  });
+  const tStyle = { padding:"5px 8px", border:"1px solid #880000",
+    background:"#AA0000", color:"#fff", fontFamily:C.mono, textAlign:"right", fontWeight:700, fontSize:"11px" };
+
+  return grupos.map(g => {
+    const meta = g.rows.reduce((s,r)=>s+(r.valor_meta_secao??0),0);
+    const real = g.rows.reduce((s,r)=>s+(r.valor_faturado_mes_atual??0),0);
+    const raf  = g.rows.reduce((s,r)=>s+(r.resta_a_fazer??0),0);
+    const nec  = g.rows.reduce((s,r)=>s+(r.necessidade_dia??0),0);
+    const dia  = g.rows.reduce((s,r)=>s+(r.nao_faturado_hoje??0),0);
+    const pct  = meta>0?(real/meta)*100:null;
+    const pctD = nec>0?(dia/nec)*100:null;
+    return (
+      <React.Fragment key={g.cod}>
+        <tr>
+          <td colSpan={99} style={{ padding:"3px 10px", background:"#F0F2F5",
+            borderTop:`2px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
+            fontSize:"11px", fontWeight:700, color:C.textSub, letterSpacing:"0.03em" }}>
+            {g.nome}
+            <span style={{ fontWeight:400, marginLeft:"8px", color:C.textSub }}>
+              ({g.rows.length} vendedores)
+            </span>
+          </td>
+        </tr>
+        {g.rows.map((row, idx) => (
+          <DataRow key={(row.cod_vendedor??"")+row.cod_secao+idx}
+            row={row} i={idx} showVendedor={true} isMobile={false}/>
+        ))}
+        <tr>
+          <td colSpan={2} style={{...tStyle, textAlign:"left"}}>TOTAL {g.nome.split(" ")[0]}</td>
+          <td style={tStyle}>{fmt(meta)}</td>
+          <td style={tStyle}>{fmt(real)}</td>
+          <td style={{...tStyle, textAlign:"center"}}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
+          <td style={{...tStyle, textAlign:"center"}}>{fmtPct(g.rows.reduce((s,r)=>s+(r.tendencia_pct??0),0)/Math.max(g.rows.length,1))}</td>
+          <td style={tStyle}>{fmt(raf)}</td>
+          <td style={tStyle}>{fmt(nec)}</td>
+          <td style={tStyle}>{fmt(dia)}</td>
+          <td style={{...tStyle, textAlign:"center"}}><span style={pctStyle(pctD)}>{fmtPct(pctD)}</span></td>
+          <td style={{...tStyle, textAlign:"center"}}/>
+        </tr>
+      </React.Fragment>
+    );
+  });
+}
+
+function buildTableRows(rows, showVendedor, isMobile) {
   const result = []; let idx = 0; const vistos = new Set();
   rows.forEach(row => {
     const g = getGrupo(row.cod_secao);
@@ -116,7 +204,7 @@ function buildTableRows(rows, showVendedor) {
         rows={rows.filter(r => getGrupo(r.cod_secao) === g)} showVendedor={showVendedor}/>);
     }
     result.push(<DataRow key={(row.cod_vendedor??"")+row.cod_secao+idx}
-      row={row} i={idx} showVendedor={showVendedor}/>);
+      row={row} i={idx} showVendedor={showVendedor} isMobile={isMobile}/>);
     idx++;
   });
   return result;
@@ -236,7 +324,8 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
       if (mode === "gerencial")               url += "/gerencial";
       if (mode === "equipe"     && activeCode) url += `/equipe/${activeCode}`;
       if (mode === "vendedor"   && activeCode) url += `/vendedor/${activeCode}`;
-      if (mode === "supervisor" && activeCode) url += `/supervisor/${activeCode}`;
+      if (mode === "supervisor" && !activeCode) url += "/gerencial";
+      if (mode === "supervisor" && activeCode)  url += `/equipe/${activeCode}`;
       url += `?data=${dataRef}`;
       const res  = await fetch(url, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status} — API offline?`);
@@ -261,9 +350,10 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
       const s = search.toLowerCase();
       r = r.filter(row =>
         (row.secao??"").toLowerCase().includes(s) ||
-        (row.nome_vendedor??"").toLowerCase().includes(s) ||
-        String(row.cod_secao??"").includes(s) ||
-        String(row.cod_vendedor??"").includes(s));
+        (row.nome_secao??"").toLowerCase().includes(s) ||
+        (row.descricao??"").toLowerCase().includes(s) ||
+        (row.nome_supervisor??"").toLowerCase().includes(s) ||
+        String(row.cod_secao??"").includes(s));
     }
     const grupoOrder = Object.keys(GRUPOS);
     const gIdx = cod => { const g=getGrupo(cod); if(!g) return 9999; const i=grupoOrder.indexOf(g); return i===-1?9999:i; };
@@ -290,8 +380,8 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
   const handleSort  = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
   const changeMode  = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
-  const showVendedor = mode === "todos" || mode === "equipe";
-  const needsSelect  = ["vendedor","supervisor","equipe"].includes(mode);
+  const showVendedor = mode === "todos" || mode === "equipe" || (mode === "supervisor" && !!activeCode);
+  const needsSelect  = ["vendedor","equipe"].includes(mode);
   const noData       = needsSelect && !activeCode;
   const nomeAtivo    = () => {
     if (mode==="vendedor") return vendedores.find(v=>v.cod===activeCode)?.nome;
@@ -463,13 +553,12 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
               FATURAMENTO SELL OUT
               {nomeAtivo() && <span style={{ fontWeight:400, fontSize:"11px", color:"rgba(255,255,255,.8)", marginLeft:"6px" }}>— {nomeAtivo()}</span>}
             </div>
-                  <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
-                Dias consultados: <b style={{color:"#fff"}}>{summary.dias_consulta}</b>
-                &nbsp;·&nbsp; Decorridos: <b style={{color:"#fff"}}>{summary.dias_decorridos}</b>
-                &nbsp;·&nbsp; Mes: <b style={{color:"#fff"}}>{summary.dias_mes}</b>
-                {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
-              </div>
-
+            <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
+              Dias consultados: <b style={{color:"#fff"}}>{summary.dias_consulta}</b>
+              &nbsp;·&nbsp; Decorridos: <b style={{color:"#fff"}}>{summary.dias_decorridos}</b>
+              &nbsp;·&nbsp; Mes: <b style={{color:"#fff"}}>{summary.dias_mes}</b>
+              {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
+            </div>
           </div>
         </div>
         <div style={{ display:"flex", gap:isMobile?"8px":"14px", alignItems:"center" }}>
@@ -483,6 +572,15 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
             <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
             {!isMobile && " Atualizar"}
           </button>
+          {rows.length > 0 && (
+            <button onClick={exportToPDF}
+              style={{ display:"flex", alignItems:"center", gap:"5px",
+                background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
+                color:"#fff", padding:isMobile?"6px":"6px 12px", borderRadius:"6px",
+                cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
+              <FileText size={13}/> {!isMobile && "Exportar PDF"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -549,7 +647,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
         {mode==="equipe"     && <Dropdown value={activeCode} onChange={setActiveCode} options={equipes}     placeholder="Selecione uma equipe..."/>}
         {mode==="vendedor"   && <Dropdown value={activeCode} onChange={setActiveCode} options={vendedores}  placeholder="Selecione um vendedor..."/>}
-        {mode==="supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..."/>}
+        {mode==="supervisor" && <Dropdown value={activeCode} onChange={v=>{setActiveCode(v);}} options={[{cod:null,nome:"Todos supervisores"},...supervisores]} placeholder="Todos supervisores"/>}
 
         {/* Busca */}
           <div style={{ display:"flex", alignItems:"center", gap:"6px",
@@ -623,6 +721,12 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
           <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:isMobile?"11px":"12px" }}>
               <thead>
+                {mode === "supervisor" && !activeCode ? (
+                  <tr>
+                    <th style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"left", border:`1px solid ${C.primaryDk}` }}>SUPERVISOR</th>
+                    <th colSpan={10} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"center", border:`1px solid ${C.primaryDk}` }}>INDICADORES (EQUIPE)</th>
+                  </tr>
+                ) : null}
                 {showVendedor && (
                   <tr>
                     <th colSpan={2} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"left", border:`1px solid ${C.primaryDk}` }}>VENDEDOR</th>
@@ -632,9 +736,9 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
                 <tr>
                   {showVendedor && <>
                     <Th label="RCA"       col="cod_vendedor"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
-                    <Th label="NOME"      col="nome_vendedor" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                    <Th label="NOME"      col="nome_vendedor" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sticky={isMobile}/>
                   </>}
-                  <Th label="FAMILIA"    col="secao"              sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                  <Th label="FAMILIA"    col="secao"              sortCol={sortCol} sortDir={sortDir} onSort={handleSort} sticky={isMobile && !showVendedor}/>
                   <Th label="OBJETIVO"   col="valor_meta_secao"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="REALIZADO"  col="valor_faturado_mes_atual"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="% ATING"    col="tendencia_pct"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
@@ -646,7 +750,9 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
                   <Th label="STATUS"     col="tendencia_pct"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                 </tr>
               </thead>
-              <tbody>{buildTableRows(rows, showVendedor)}</tbody>
+              <tbody>{mode === "supervisor" && !activeCode
+                ? rows.map((row,i) => <SupervisorTotalRow key={row.cod_supervisor??i} row={row} i={i}/>)
+                : buildTableRows(rows, showVendedor, isMobile)}</tbody>
               {rows.length > 0 && (
                 <tfoot>
                   <tr style={{ background:C.total, color:C.totalTxt, fontWeight:700 }}>
@@ -670,18 +776,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
         )}
       </div>
 
-      {/* Botao PDF */}
-      {rows.length > 0 && (
-        <div style={{ position:"fixed", bottom:"24px", right:"24px", zIndex:1000 }}>
-          <button onClick={exportToPDF}
-            style={{ display:"flex", alignItems:"center", gap:"8px", background:C.primary,
-                     border:"none", color:"#fff", padding:"10px 18px", borderRadius:"8px",
-                     cursor:"pointer", fontSize:"13px", fontFamily:C.sans, fontWeight:700,
-                     boxShadow:"0 4px 14px rgba(170,0,0,.45)" }}>
-            <FileText size={16}/> Exportar PDF
-          </button>
-        </div>
-      )}
+
     </>
   );
 }

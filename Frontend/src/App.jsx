@@ -11,20 +11,20 @@ import ModuleListaNegra   from "./modules/lista_negra";
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
-  BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings,
+  BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake,
   LogOut, Menu, X, ChevronRight,
 } from "lucide-react";
 
 // ── Registro de módulos ───────────────────────────────────────────────────────
 const BI_MODULES = [
-  { id:"faturamento",   label:"Faturamento",    icon:BarChart3,  component:ModuleFaturamento,  cargos:null },
-  { id:"ranking",       label:"Ranking",         icon:Star,       component:ModuleRanking,      cargos:["admin","gerencial","supervisor"] },
-  { id:"dist_numerica", label:"Dist. Numérica",  icon:TrendingUp, component:ModuleDistNumerica, cargos:null },
-  { id:"bateu_levou",   label:"Bateu Levou",     icon:Tag,        component:ModuleBateuLevou,   cargos:null },
-  { id:"estoque",       label:"Estoque",          icon:Package,    component:ModuleEstoque,      cargos:null },
-  { id:"chamados",      label:"Chamados Freezer", icon:Tag,        component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
-  { id:"lista_negra",   label:"Lista Negra",      icon:TrendingDown, component:ModuleListaNegra, cargos:["admin","gerencial","supervisor","vendedor"] },
-  { id:"admin",         label:"Admin",            icon:Settings,   component:ModuleAdmin,        cargos:["admin"] },
+  { id:"faturamento",   label:"Faturamento",     icon:BarChart3,   component:ModuleFaturamento,  cargos:null },
+  { id:"ranking",       label:"Ranking",          icon:Star,        component:ModuleRanking,      cargos:["admin","gerencial","supervisor"] },
+  { id:"dist_numerica", label:"Dist. Numérica",   icon:TrendingUp,  component:ModuleDistNumerica, cargos:null },
+  { id:"lista_negra",   label:"Lista Negra",       icon:TrendingDown,component:ModuleListaNegra,  cargos:["admin","gerencial","supervisor","vendedor","fornecedor"] },
+  { id:"bateu_levou",   label:"Bateu Levou",       icon:Tag,         component:ModuleBateuLevou,   cargos:null },
+  { id:"estoque",       label:"Estoque",           icon:Package,     component:ModuleEstoque,      cargos:null },
+  { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"admin",         label:"Admin",             icon:Settings,    component:ModuleAdmin,        cargos:["admin"] },
 ];
 
 const SIDEBAR_W     = 220;   // largura expandida
