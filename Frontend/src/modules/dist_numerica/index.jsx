@@ -297,7 +297,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
   const MODES_VISIVEIS = MODES.filter(m => {
     if (cargo === "gerencial" || cargo === "admin") return true;
-    if (cargo === "fornecedor") return ["gerencial","equipe","todos","vendedor","supervisor"].includes(m.id);
+    if (cargo === "fornecedor") return ["gerencial","todas_equipes","equipe","todos","vendedor","supervisor"].includes(m.id);
     if (cargo === "supervisor") return ["equipe","todos","vendedor","supervisor"].includes(m.id);
     if (cargo === "vendedor")   return m.id === "vendedor";
     return false;
@@ -367,6 +367,14 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Estados de filtro — precisam vir ANTES do useMemo de rows
+  const [consolidado,   setConsolidado]   = useState(false);
+  const [showFiltros,   setShowFiltros]   = useState(false);
+  const [filtroRcas,    setFiltroRcas]    = useState(new Set());
+  const [filtroDims,    setFiltroDims]    = useState(new Set());
+  const [buscaRca,      setBuscaRca]      = useState("");
+  const [buscaDim,      setBuscaDim]      = useState("");
+
   const rows = useMemo(() => {
     let r = [...data];
     if (search) {
@@ -385,7 +393,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       return sortDir==="asc"?(av<bv?-1:av>bv?1:0):(av>bv?-1:av<bv?1:0);
     });
     return r;
-  }, [data, search, sortCol, sortDir, colDimNome]);
+  }, [data, search, sortCol, sortDir, colDimNome, filtroRcas, filtroDims]);
 
   const tot = {
     meta:   rows.reduce((s,r)=>s+(r.qt_cli_meta??0),0),
@@ -397,12 +405,6 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
   const handleSort = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
   const changeMode = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
-  const [consolidado,   setConsolidado]   = useState(false);
-  const [showFiltros,   setShowFiltros]   = useState(false);
-  const [filtroRcas,    setFiltroRcas]    = useState(new Set()); // Set de cod_vendedor
-  const [filtroDims,    setFiltroDims]    = useState(new Set()); // Set de dim_id
-  const [buscaRca,      setBuscaRca]      = useState("");
-  const [buscaDim,      setBuscaDim]      = useState("");
 
   // Dimensões disponíveis do todosData
   const dimsDisponiveis = useMemo(() => {
