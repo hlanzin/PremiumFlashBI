@@ -236,8 +236,6 @@ def build_lista_negra_vendedor_sql(
         filtro_dim = f"AND PCPRODUT.CODSEC = {dim_id}"
 
     filtro_rca = f"AND PCNFSAID.CODUSUR = {cod_vendedor}" if cod_vendedor else ""
-
-    # mudanca_base: CODUSUR1 atual != vendedor que vendeu
     cod_ref = cod_vendedor or 0
 
     sql = f"""
@@ -251,9 +249,6 @@ WITH PARAMS AS (
         TRUNC(TO_DATE('{dr}','YYYY-MM-DD')) - 1                  AS DT_ONTEM
     FROM DUAL
 ),
-
--- Clientes do período da meta filtrados pelo RCA e fornecedor/seção
--- Estrutura de joins baseada no SQL da rotina 1464
 BASE_META AS (
     SELECT DISTINCT PCMOV.CODCLI
     FROM PCNFSAID
@@ -278,8 +273,6 @@ BASE_META AS (
       {filtro_dim}
       {filtro_rca}
 ),
-
--- Faturado esse mês (qualquer vendedor, mesmo fornecedor/seção)
 FAT_MES AS (
     SELECT DISTINCT PCMOV.CODCLI
     FROM PCNFSAID
@@ -288,8 +281,6 @@ FAT_MES AS (
         LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
         INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD      = PCMOV.CODPROD
         INNER JOIN PCUSUARI    ON PCUSUARI.CODUSUR      = PCNFSAID.CODUSUR
-        INNER JOIN PCSUPERV    ON PCSUPERV.CODSUPERVISOR =
-                                      NVL(PCNFSAID.CODSUPERVISOR, PCUSUARI.CODSUPERVISOR)
         CROSS JOIN PARAMS P
     WHERE PCMOV.DTMOV       BETWEEN P.DT_MES_INI AND P.DT_HOJE
       AND PCNFSAID.DTSAIDA  BETWEEN P.DT_MES_INI AND P.DT_HOJE
@@ -302,8 +293,53 @@ FAT_MES AS (
       AND PCNFSAID.DTCANCEL   IS NULL
       {filtro_dim}
 ),
-
--- Última compra do cliente no período da meta (data + valor total da NFSELECT
+CART_SEM AS (
+    SELECT DISTINCT PCPEDC.CODCLI
+    FROM PCPEDI
+        INNER JOIN PCPEDC   ON PCPEDC.NUMPED    = PCPEDI.NUMPED
+        INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
+        LEFT  JOIN PCPRODUT ON PCPRODUT.CODPROD = PCPEDI.CODPROD
+        CROSS JOIN PARAMS P
+    WHERE PCPEDC.DATA       BETWEEN P.DT_SEMANA_INI AND P.DT_ONTEM
+      AND PCPEDC.CODFILIAL   IN ('{FILIAL}')
+      AND PCPEDC.CONDVENDA   IN (1,2,3,7,9,14,15,17,18,19,98)
+      AND PCPEDC.POSICAO    <> 'F'
+      AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.DTCANCEL    IS NULL
+      AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+      {filtro_dim}
+),
+ULTIMA_COMPRA AS (
+    SELECT CODCLI, DT_ULTIMA_COMPRA, VL_ULTIMA_COMPRA
+    FROM (
+        SELECT
+            PCMOV.CODCLI,
+            PCNFSAID.DTSAIDA   AS DT_ULTIMA_COMPRA,
+            PCNFSAID.VLTOTAL   AS VL_ULTIMA_COMPRA,
+            ROW_NUMBER() OVER (
+                PARTITION BY PCMOV.CODCLI
+                ORDER BY PCNFSAID.DTSAIDA DESC, PCNFSAID.NUMTRANSVENDA DESC
+            ) AS RN
+        FROM PCNFSAID
+            INNER JOIN PCMOV       ON PCMOV.NUMTRANSVENDA  = PCNFSAID.NUMTRANSVENDA
+                                   AND PCMOV.CODFILIAL      = PCNFSAID.CODFILIAL
+            LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
+            INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD      = PCMOV.CODPROD
+            CROSS JOIN PARAMS P
+        WHERE PCMOV.DTMOV       BETWEEN P.DT_INI AND P.DT_HOJE
+          AND PCNFSAID.DTSAIDA  BETWEEN P.DT_INI AND P.DT_HOJE
+          AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+          AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+          AND PCMOV.CODOPER      NOT IN ('SR','SO')
+          AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+          AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+          AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+          AND PCNFSAID.DTCANCEL   IS NULL
+          {filtro_dim}
+          {filtro_rca}
+    ) WHERE RN = 1
+)
+SELECT
     B.CODCLI                                                        AS cod_cliente,
     C.CLIENTE                                                       AS razao_social,
     C.FANTASIA                                                      AS nome_fantasia,
@@ -313,13 +349,16 @@ FAT_MES AS (
     CASE WHEN {cod_ref} > 0
               AND NVL(C.CODUSUR1, -1) <> {cod_ref}
          THEN 1 ELSE 0 END                                          AS mudanca_base,
+    UC.DT_ULTIMA_COMPRA                                             AS dt_ultima_compra,
+    UC.VL_ULTIMA_COMPRA                                             AS vl_ultima_compra,
     CASE WHEN FM.CODCLI IS NOT NULL THEN 1 ELSE 0 END               AS pos_faturado,
     CASE WHEN CS.CODCLI IS NOT NULL THEN 1 ELSE 0 END               AS pos_nao_faturado
 FROM BASE_META B
-    INNER JOIN PCCLIENT  C  ON C.CODCLI   = B.CODCLI
-    LEFT  JOIN PCUSUARI  U1 ON U1.CODUSUR = C.CODUSUR1
-    LEFT  JOIN FAT_MES   FM ON FM.CODCLI  = B.CODCLI
-    LEFT  JOIN CART_SEM  CS ON CS.CODCLI  = B.CODCLI
+    INNER JOIN PCCLIENT      C  ON C.CODCLI    = B.CODCLI
+    LEFT  JOIN PCUSUARI      U1 ON U1.CODUSUR  = C.CODUSUR1
+    LEFT  JOIN ULTIMA_COMPRA UC ON UC.CODCLI   = B.CODCLI
+    LEFT  JOIN FAT_MES       FM ON FM.CODCLI   = B.CODCLI
+    LEFT  JOIN CART_SEM      CS ON CS.CODCLI   = B.CODCLI
 ORDER BY C.CODUSUR1, C.CLIENTE
 """
     return sql, []

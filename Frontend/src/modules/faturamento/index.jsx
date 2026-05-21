@@ -80,7 +80,7 @@ function GrupoRow({ nome, rows, showVendedor }) {
   );
 }
 
-function DataRow({ row, i, showVendedor, isMobile }) {
+function DataRow({ row, i, showVendedor, showSecao=true, showNomeVendedor=false, isMobile }) {
   const [hov, setHov] = useState(false);
   const pct    = row.valor_meta_secao > 0 ? (row.valor_faturado_mes_atual/row.valor_meta_secao)*100 : null;
   const tend   = row.tendencia_pct;
@@ -94,8 +94,11 @@ function DataRow({ row, i, showVendedor, isMobile }) {
         <td style={{ ...td, textAlign:"center", fontFamily:C.mono, fontWeight:600, color:C.primary, fontSize:"11px" }}>{row.cod_vendedor}</td>
         <td style={{ ...stickyTd, maxWidth:"140px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:"11px" }}>{row.nome_vendedor}</td>
       </>}
-      <td style={{ ...stickyTd, fontWeight:600, paddingLeft: getGrupo(row.cod_secao)?"18px":"8px",
-        left: showVendedor && isMobile ? "auto" : 0 }}>{row.secao??"—"}</td>
+      {!showVendedor && showNomeVendedor && (
+        <td style={{ ...td, fontWeight:500, fontSize:"11px" }}>{row.nome_vendedor ?? "—"}</td>
+      )}
+      {showSecao && <td style={{ ...stickyTd, fontWeight:600, paddingLeft: getGrupo(row.cod_secao)?"18px":"8px",
+        left: showVendedor && isMobile ? "auto" : 0 }}>{row.secao??"—"}</td>}
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmt(row.valor_meta_secao)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmt(row.valor_faturado_mes_atual)}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
@@ -250,12 +253,171 @@ function Dropdown({ value, onChange, options, placeholder }) {
 }
 
 const MODES = [
-  { id:"gerencial",  label:"Gerencial",  Icon:BarChart3 },
-  { id:"equipe",     label:"Equipe",     Icon:Shield    },
-  { id:"todos",      label:"Vendedores", Icon:Users     },
-  { id:"vendedor",   label:"Vendedor",   Icon:User      },
-  { id:"supervisor", label:"Supervisor", Icon:Building2 },
+  { id:"gerencial",     label:"Gerencial",     Icon:BarChart3 },
+  { id:"todas_equipes", label:"Todas Equipes", Icon:Users     },
+  { id:"equipe",        label:"Equipe",        Icon:Shield    },
+  { id:"todos",         label:"Vendedores",    Icon:Users     },
+  { id:"vendedor",      label:"Vendedor",      Icon:User      },
+  { id:"supervisor",    label:"Supervisor",    Icon:Building2 },
 ];
+
+// ── Card de equipe (para modo Todas Equipes) ──────────────────────────────────
+function EquipeCard({ supervisor, dataRef, token, sortCol, sortDir, onSort, isMobile, consolidado }) {
+  const [data,    setData]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
+  const [aberto,  setAberto]  = useState(true);
+  const headers = useMemo(() => ({ Authorization:`Bearer ${token}` }), [token]);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${API_BASE}/api/faturamento/equipe/${supervisor.cod}?data=${dataRef}`, { headers })
+      .then(r => r.json())
+      .then(j => { setData(j.dados ?? []); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [supervisor.cod, dataRef, headers]);
+
+  // Agrupa por vendedor (consolidado)
+  const rowsConsolidadas = useMemo(() => {
+    const map = new Map();
+    data.forEach(r => {
+      const key = r.cod_vendedor ?? "—";
+      if (!map.has(key)) {
+        map.set(key, {
+          cod_vendedor: r.cod_vendedor,
+          nome_vendedor: r.nome_vendedor,
+          valor_meta_secao: 0, valor_faturado_mes_atual: 0,
+          resta_a_fazer: 0, necessidade_dia: 0, nao_faturado_hoje: 0,
+          dias_uteis_decorridos: r.dias_uteis_decorridos,
+          dias_uteis_mes_atual: r.dias_uteis_mes_atual,
+          _tend_num: 0, _tend_count: 0,
+        });
+      }
+      const v = map.get(key);
+      v.valor_meta_secao        += r.valor_meta_secao        ?? 0;
+      v.valor_faturado_mes_atual += r.valor_faturado_mes_atual ?? 0;
+      v.resta_a_fazer            += r.resta_a_fazer            ?? 0;
+      v.necessidade_dia          += r.necessidade_dia          ?? 0;
+      v.nao_faturado_hoje        += r.nao_faturado_hoje        ?? 0;
+      if (r.tendencia_pct != null) { v._tend_num += r.tendencia_pct; v._tend_count++; }
+    });
+    return Array.from(map.values()).map(v => ({
+      ...v,
+      tendencia_pct: v._tend_count > 0 ? v._tend_num / v._tend_count : null,
+    })).sort((a,b) => (a.nome_vendedor??"").localeCompare(b.nome_vendedor??""));
+  }, [data]);
+
+  const displayRows = consolidado ? rowsConsolidadas : data;
+
+  const tot = {
+    meta: displayRows.reduce((s,r) => s+(r.valor_meta_secao??0), 0),
+    real: displayRows.reduce((s,r) => s+(r.valor_faturado_mes_atual??0), 0),
+    raf:  displayRows.reduce((s,r) => s+(r.resta_a_fazer??0), 0),
+    nec:  displayRows.reduce((s,r) => s+(r.necessidade_dia??0), 0),
+    dia:  displayRows.reduce((s,r) => s+(r.nao_faturado_hoje??0), 0),
+  };
+  const dias_dec  = displayRows[0]?.dias_uteis_decorridos ?? 0;
+  const dias_mes  = displayRows[0]?.dias_uteis_mes_atual  ?? 0;
+  const totPct    = tot.meta>0 ? (tot.real/tot.meta)*100 : 0;
+  const totTend   = tot.meta>0 && dias_dec>0 ? ((tot.real/dias_dec)*dias_mes/tot.meta)*100 : 0;
+  const totPctDia = tot.nec>0 ? (tot.dia/tot.nec)*100 : null;
+
+  return (
+    <div style={{ margin:"12px 16px", background:"#fff",
+      border:`1px solid ${C.border}`, borderRadius:"6px",
+      boxShadow:"0 1px 6px rgba(170,0,0,.1)", overflow:"hidden" }}>
+
+      {/* Cabeçalho do card */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+        padding:"8px 14px", background:`linear-gradient(90deg,${C.header},${C.primary})` }}>
+        <div onClick={() => setAberto(v => !v)}
+          style={{ display:"flex", alignItems:"center", gap:"10px", cursor:"pointer", flex:1 }}>
+          <Shield size={14} color={C.gold}/>
+          <span style={{ color:"#fff", fontWeight:700, fontSize:"13px" }}>
+            {supervisor.nome}
+          </span>
+          {!loading && (
+            <span style={{ fontSize:"11px", color:"rgba(255,255,255,.7)" }}>
+              {consolidado ? `${rowsConsolidadas.length} vendedores` : `${data.length} linhas`}
+            </span>
+          )}
+          {!loading && tot.meta > 0 && (
+            <span style={{ fontSize:"11px", color:pctStyle(totPct).color ?? "#fff", fontWeight:700, marginLeft:"8px" }}>
+              {fmtPct(totPct)} ating. · {fmt(tot.real)} / {fmt(tot.meta)}
+            </span>
+          )}
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
+          <ChevronDown size={14} color="#fff" onClick={() => setAberto(v => !v)}
+            style={{ cursor:"pointer", transform:aberto?"rotate(180deg)":"rotate(0deg)", transition:"transform .2s" }}/>
+        </div>
+      </div>
+
+      {/* Tabela */}
+      {aberto && (
+        <div style={{ overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+          {loading && (
+            <div style={{ padding:"20px", textAlign:"center", color:C.textSub, fontSize:"12px" }}>
+              Carregando...
+            </div>
+          )}
+          {error && (
+            <div style={{ padding:"20px", textAlign:"center", color:C.red, fontSize:"12px" }}>
+              {error}
+            </div>
+          )}
+          {!loading && !error && (
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:isMobile?"11px":"12px" }}>
+              <thead>
+                <tr>
+                  {!consolidado && <Th label="RCA"   col="cod_vendedor"  sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>}
+                  <Th label="VENDEDOR"    col="nome_vendedor"           sortCol={sortCol} sortDir={sortDir} onSort={onSort}/>
+                  {!consolidado && <Th label="FAMILIA" col="secao"       sortCol={sortCol} sortDir={sortDir} onSort={onSort}/>}
+                  <Th label="OBJETIVO"   col="valor_meta_secao"         sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                  <Th label="REALIZADO"  col="valor_faturado_mes_atual" sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                  <Th label="% ATING"    col="tendencia_pct"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
+                  <Th label="% TEND."    col="tendencia_pct"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
+                  <Th label="R.A.F"      col="resta_a_fazer"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                  <Th label="NECESS/DIA" col="necessidade_dia"          sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                  <Th label="REALIZ/DIA" col="nao_faturado_hoje"        sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                  <Th label="% DIA"      col="nao_faturado_hoje"        sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
+                  <Th label="STATUS"     col="tendencia_pct"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
+                </tr>
+              </thead>
+              <tbody>
+                {consolidado
+                  ? rowsConsolidadas.map((row, i) => (
+                      <DataRow key={row.cod_vendedor??i} row={row} i={i}
+                        showVendedor={false} showNomeVendedor={true} showSecao={false} isMobile={isMobile}/>
+                    ))
+                  : data.map((row, i) => (
+                      <DataRow key={(row.cod_vendedor??"")+"-"+(row.cod_secao??"")+i}
+                        row={row} i={i} showVendedor={true} showSecao={true} isMobile={isMobile}/>
+                    ))
+                }
+              </tbody>
+              <tfoot>
+                <tr style={{ background:C.total, color:C.totalTxt, fontWeight:700 }}>
+                  {!consolidado && <td style={{ padding:"5px 8px", border:"1px solid #880000" }}/>}
+                  <td colSpan={!consolidado ? 2 : 1} style={{ padding:"5px 8px", border:"1px solid #880000" }}>TOTAL</td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmt(tot.meta)}</td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmt(tot.real)}</td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"center" }}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"center" }}><span style={pctStyle(totTend)}>{fmtPct(totTend)}</span></td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmt(tot.raf)}</td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmt(tot.nec)}</td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmt(tot.dia)}</td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"center" }}><span style={pctStyle(totPctDia)}>{fmtPct(totPctDia)}</span></td>
+                  <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"center" }}>{arrow(totTend)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
   const cargo = userInfo.cargo ?? "gerencial";
@@ -263,8 +425,8 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
   // Abas visíveis por cargo
   const MODES_VISIVEIS = MODES.filter(m => {
-    if (cargo === "gerencial")  return true;
-    if (cargo === "fornecedor") return true; // todas as abas, dados filtrados por seção
+    if (cargo === "gerencial" || cargo === "admin") return true;
+    if (cargo === "fornecedor") return true;
     if (cargo === "supervisor") return ["equipe","todos","vendedor","supervisor"].includes(m.id);
     if (cargo === "vendedor")   return m.id === "vendedor";
     return false;
@@ -379,6 +541,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
   const handleSort  = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
   const changeMode  = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
+  const [consolidado, setConsolidado] = useState(false);
   const showVendedor = mode === "todos" || mode === "equipe";
   const needsSelect  = ["vendedor","equipe","supervisor"].includes(mode);
   const noData       = needsSelect && !activeCode;
@@ -686,7 +849,34 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
         )}
       </div>
 
-      {/* Tabela */}
+      {/* Modo Todas Equipes — um card por supervisor */}
+      {mode === "todas_equipes" && (
+        <div style={{ paddingBottom:"16px" }}>
+          {/* Botão global consolidar */}
+          <div style={{ display:"flex", justifyContent:"flex-end", padding:"8px 16px 0" }}>
+            <button onClick={() => setConsolidado(v => !v)}
+              style={{ padding:"5px 14px", borderRadius:"6px", border:`1.5px solid ${C.primary}`,
+                fontSize:"12px", fontWeight:700, cursor:"pointer",
+                background: consolidado ? C.primary : "#fff",
+                color: consolidado ? "#fff" : C.primary }}>
+              {consolidado ? "▦ Detalhado" : "▤ Consolidar"}
+            </button>
+          </div>
+          {supervisores.length === 0 && (
+            <div style={{ padding:"48px", textAlign:"center", color:C.textSub }}>
+              Carregando equipes...
+            </div>
+          )}
+          {supervisores.map(sup => (
+            <EquipeCard key={sup.cod} supervisor={sup} dataRef={dataRef}
+              token={token} sortCol={sortCol} sortDir={sortDir}
+              onSort={handleSort} isMobile={isMobile} consolidado={consolidado}/>
+          ))}
+        </div>
+      )}
+
+      {/* Tabela principal (outros modos) */}
+      {mode !== "todas_equipes" && (
       <div ref={tableRef} style={{ margin:isMobile?"8px":"12px 16px", background:"#fff",
                     border:`1px solid ${C.border}`, borderRadius:"4px",
                     overflow:"hidden", boxShadow:"0 1px 6px rgba(170,0,0,.12)" }}>
@@ -774,6 +964,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
           </div>
         )}
       </div>
+      )}
 
 
     </>
