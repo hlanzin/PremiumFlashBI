@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
-         ChevronDown, TrendingUp, TrendingDown, Menu, X } from "lucide-react";
+         ChevronDown, TrendingUp, TrendingDown, Menu, X, FileText, FileSpreadsheet } from "lucide-react";
 import { C, getToday } from "../../theme";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
@@ -121,6 +121,16 @@ function ClienteRow({ row, i, showVendedor, showSupervisor, showMudancaBase }) {
       </td>
       {showVendedor && <td style={{ ...td, fontSize:"11px", color:C.textSub }}>{row.nome_vendedor ?? "—"}</td>}
       {showSupervisor && <td style={{ ...td, fontSize:"11px", color:C.textSub }}>{row.cod_supervisor ?? "—"}</td>}
+      <td style={{ ...td, textAlign:"center", fontFamily:"monospace", fontSize:"11px" }}>
+        {row.dt_ultima_compra
+          ? String(row.dt_ultima_compra).split("T")[0].split("-").reverse().join("/")
+          : "—"}
+      </td>
+      <td style={{ ...td, textAlign:"right", fontFamily:"monospace", fontSize:"11px" }}>
+        {row.vl_ultima_compra != null
+          ? `R$ ${Number(row.vl_ultima_compra).toLocaleString("pt-BR",{minimumFractionDigits:2})}`
+          : "—"}
+      </td>
       <td style={{ ...td, textAlign:"center" }}>
         {row.pos_faturado ? <IconSim/> : <IconNao/>}
       </td>
@@ -184,7 +194,7 @@ function buildRows(rows, mode, showVendedor) {
 
 // ── Cabeçalho da tabela ───────────────────────────────────────────────────────
 function THead({ mode, sortCol, sortDir, onSort }) {
-  const showVendedor = ["gerencial","todos","equipe"].includes(mode);
+  const showVendedor = mode === "gerencial";
   const TH = ({ label, col, align="left" }) => {
     const active = sortCol === col;
     return (
@@ -204,7 +214,9 @@ function THead({ mode, sortCol, sortDir, onSort }) {
         <TH label="CÓD"           col="cod_cliente"   align="center"/>
         <TH label="CLIENTE"        col="razao_social"/>
         {showVendedor && <TH label="VENDEDOR" col="nome_vendedor"/>}
-        <TH label="POS. FATURADO"  align="center"/>
+        <TH label="ÚLT. COMPRA"   align="center"/>
+      <TH label="VL. ÚLT."      align="right"/>
+      <TH label="POS. FATURADO"  align="center"/>
         <TH label="POS. NÃO FAT."  align="center"/>
       </tr>
     </thead>
@@ -348,6 +360,66 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
   const noData       = needsSelect && !activeCode;
   const showVendedor = ["gerencial","todos","equipe"].includes(mode);
   const [showMenu, setShowMenu] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const tableRef = useRef(null);
+
+  // Label do modo atual para nome do arquivo
+  const nomeModo = MODES.find(m => m.id === mode)?.label ?? mode;
+  const nomeDim  = agrupamento === "fornecedor"
+    ? (fornecedores.find(f => f.id === dimId)?.nome ?? dimId)
+    : (secoes.find(s => s.id === dimId)?.nome ?? dimId);
+
+  const exportToPDF = async () => {
+    if (!tableRef.current) return;
+    setShowExportMenu(false);
+    const { jsPDF } = window.jspdf;
+    const canvas = await window.html2canvas(tableRef.current, {
+      scale:2, useCORS:true, backgroundColor:"#fff", logging:false,
+    });
+    const doc = new jsPDF({ orientation:"landscape", unit:"mm", format:"a4" });
+    doc.setFillColor(170,0,0); doc.rect(0,0,297,18,"F");
+    doc.setFont("helvetica","bold");
+    doc.setFontSize(13); doc.setTextColor(200,150,12);
+    doc.text("PREMIUM DISTRIBUIDORA", 10, 8);
+    doc.setFontSize(8); doc.setTextColor(255,220,180);
+    doc.text(`LISTA NEGRA — ${nomeModo} — ${nomeDim} — ${dataRef}`, 10, 14);
+    const margin=8, availW=297-margin*2, availH=210-22;
+    const imgW=canvas.width/2, imgH=canvas.height/2;
+    const ratio=Math.min(availW/imgW, availH/imgH);
+    const finalW=imgW*ratio, finalH=imgH*ratio;
+    const x=(297-finalW)/2;
+    doc.addImage(canvas.toDataURL("image/png"),"PNG",x,20,finalW,finalH);
+    doc.save(`ListaNegra_${nomeModo}_${nomeDim}_${dataRef}.pdf`);
+  };
+
+  const exportToExcel = () => {
+    if (!rows.length) return;
+    setShowExportMenu(false);
+    const cols = ["cod_cliente","razao_social","nome_fantasia","nome_vendedor",
+                  "cod_supervisor","dt_ultima_compra","vl_ultima_compra",
+                  "pos_faturado","pos_nao_faturado","mudanca_base"];
+    const headers = ["CÓD","RAZÃO SOCIAL","FANTASIA","VENDEDOR",
+                     "SUPERVISOR","ÚLT. COMPRA","VL. ÚLT.",
+                     "FATURADO","CARTEIRA","MUDANÇA BASE"];
+    let csv = headers.join(";") + "\n";
+    rows.forEach(r => {
+      csv += cols.map(c => {
+        const v = r[c];
+        if (c === "dt_ultima_compra" && v)
+          return String(v).split("T")[0].split("-").reverse().join("/");
+        if (c === "vl_ultima_compra" && v != null)
+          return Number(v).toFixed(2).replace(".",",");
+        if (c === "pos_faturado" || c === "pos_nao_faturado" || c === "mudanca_base")
+          return v ? "SIM" : "NÃO";
+        return `"${String(v ?? "").replace(/"/g,'""')}"`;
+      }).join(";") + "\n";
+    });
+    const blob = new Blob(["\uFEFF"+csv], { type:"text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `ListaNegra_${nomeModo}_${nomeDim}_${dataRef}.csv`;
+    a.click();
+  };
 
   return (<>
     {/* Header */}
@@ -362,6 +434,38 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
             letterSpacing:"0.14em" }}>DISTRIBUIDORA</div>
         </div>
         <div style={{ color:"#fff", fontWeight:700, fontSize:"14px" }}>LISTA NEGRA</div>
+
+        {/* Botão exportar */}
+        {rows.length > 0 && (
+          <div style={{ marginLeft:"auto", position:"relative" }}>
+            <button onClick={() => setShowExportMenu(v => !v)}
+              style={{ display:"flex", alignItems:"center", gap:"5px",
+                background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
+                color:"#fff", padding:"6px 12px", borderRadius:"6px",
+                cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
+              <FileText size={13}/> Exportar <ChevronDown size={11}/>
+            </button>
+            {showExportMenu && (
+              <div style={{ position:"absolute", right:0, top:"calc(100% + 4px)",
+                background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px",
+                boxShadow:"0 4px 12px rgba(0,0,0,.15)", zIndex:100, minWidth:"160px",
+                overflow:"hidden" }}>
+                <button onClick={exportToPDF}
+                  style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%",
+                    padding:"9px 14px", border:"none", borderBottom:`1px solid ${C.border}`,
+                    background:"#fff", cursor:"pointer", fontSize:"12px", textAlign:"left" }}>
+                  <FileText size={13} color={C.primary}/> Exportar PDF
+                </button>
+                <button onClick={exportToExcel}
+                  style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%",
+                    padding:"9px 14px", border:"none",
+                    background:"#fff", cursor:"pointer", fontSize:"12px", textAlign:"left" }}>
+                  <FileSpreadsheet size={13} color="#1D6F42"/> Exportar Excel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     )}
 
@@ -484,7 +588,7 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
     </div>
 
     {/* Conteúdo */}
-    <div style={{ overflowX:"auto", padding: isMobile?"0":"0 0 8px 0" }}>
+    <div ref={tableRef} style={{ overflowX:"auto", padding: isMobile?"0":"0 0 8px 0" }}>
       {!dimId && (
         <div style={{ padding:"48px", textAlign:"center", color:C.textSub }}>
           Selecione um fornecedor ou seção para carregar a lista.
