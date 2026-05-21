@@ -73,7 +73,7 @@ def get_por_vendedor(cod: int, data: Optional[str] = None, agrupamento: str = "f
 
 @router.get("/equipe/{cod}")
 def get_por_equipe(cod: int, data: Optional[str] = None, agrupamento: str = "fornecedor", u: CurrentUser = Depends(get_current_user)):
-    if u.is_vendedor or u.is_fornecedor:
+    if u.is_vendedor:
         raise FORBIDDEN
     if u.is_supervisor and u.cod_winthor != cod:
         raise FORBIDDEN
@@ -81,10 +81,12 @@ def get_por_equipe(cod: int, data: Optional[str] = None, agrupamento: str = "for
         dr = parse_data(data)
         sql, params = build_dn_query("equipe", filtro_id=cod, date_ref=dr, agrupamento=agrupamento)
         rows = execute_query(sql, params)
+        if u.is_fornecedor:
+            rows = _filtrar_fornecedor(rows, u.codfornecs)
         if not rows:
             raise HTTPException(404, f"Nenhum dado para supervisor {cod}.")
         return {"data_ref": dr, "cod_supervisor": cod,
-                "nome_supervisor": rows[0]["nome_supervisor"],
+                "nome_supervisor": rows[0]["nome_supervisor"] if rows else None,
                 "total_registros": len(rows), "dados": rows}
     except HTTPException:
         raise
@@ -94,7 +96,7 @@ def get_por_equipe(cod: int, data: Optional[str] = None, agrupamento: str = "for
 
 @router.get("/supervisor/{cod}")
 def get_por_supervisor(cod: int, data: Optional[str] = None, agrupamento: str = "fornecedor", u: CurrentUser = Depends(get_current_user)):
-    if u.is_vendedor or u.is_fornecedor:
+    if u.is_vendedor:
         raise FORBIDDEN
     if u.is_supervisor and u.cod_winthor != cod:
         raise FORBIDDEN
@@ -102,10 +104,12 @@ def get_por_supervisor(cod: int, data: Optional[str] = None, agrupamento: str = 
         dr = parse_data(data)
         sql, params = build_dn_query("supervisor", filtro_id=cod, date_ref=dr, agrupamento=agrupamento)
         rows = execute_query(sql, params)
+        if u.is_fornecedor:
+            rows = _filtrar_fornecedor(rows, u.codfornecs)
         if not rows:
             raise HTTPException(404, f"Supervisor {cod} sem dados.")
         return {"data_ref": dr, "cod_supervisor": cod,
-                "nome_supervisor": rows[0]["nome_supervisor"],
+                "nome_supervisor": rows[0]["nome_supervisor"] if rows else None,
                 "total_registros": len(rows), "dados": rows}
     except HTTPException:
         raise
