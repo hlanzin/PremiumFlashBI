@@ -324,8 +324,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
       if (mode === "gerencial")               url += "/gerencial";
       if (mode === "equipe"     && activeCode) url += `/equipe/${activeCode}`;
       if (mode === "vendedor"   && activeCode) url += `/vendedor/${activeCode}`;
-      if (mode === "supervisor" && !activeCode) url += "/gerencial";
-      if (mode === "supervisor" && activeCode)  url += `/equipe/${activeCode}`;
+      if (mode === "supervisor" && activeCode)  url += `/supervisor/${activeCode}`;
       url += `?data=${dataRef}`;
       const res  = await fetch(url, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status} — API offline?`);
@@ -380,8 +379,8 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
   const handleSort  = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
   const changeMode  = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
-  const showVendedor = mode === "todos" || mode === "equipe" || (mode === "supervisor" && !!activeCode);
-  const needsSelect  = ["vendedor","equipe"].includes(mode);
+  const showVendedor = mode === "todos" || mode === "equipe";
+  const needsSelect  = ["vendedor","equipe","supervisor"].includes(mode);
   const noData       = needsSelect && !activeCode;
   const nomeAtivo    = () => {
     if (mode==="vendedor") return vendedores.find(v=>v.cod===activeCode)?.nome;
@@ -647,7 +646,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
         {mode==="equipe"     && <Dropdown value={activeCode} onChange={setActiveCode} options={equipes}     placeholder="Selecione uma equipe..."/>}
         {mode==="vendedor"   && <Dropdown value={activeCode} onChange={setActiveCode} options={vendedores}  placeholder="Selecione um vendedor..."/>}
-        {mode==="supervisor" && <Dropdown value={activeCode} onChange={v=>{setActiveCode(v);}} options={[{cod:null,nome:"Todos supervisores"},...supervisores]} placeholder="Todos supervisores"/>}
+        {mode==="supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..."/>}
 
         {/* Busca */}
           <div style={{ display:"flex", alignItems:"center", gap:"6px",
