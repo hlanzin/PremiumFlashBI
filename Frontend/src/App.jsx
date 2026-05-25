@@ -8,6 +8,7 @@ import ModuleBateuLevou   from "./modules/bateu_levou";
 import ModuleAdmin        from "./modules/admin";
 import ModuleChamados     from "./modules/chamados";
 import ModuleListaNegra   from "./modules/lista_negra";
+import ModuleTroca        from "./modules/troca";
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
@@ -22,6 +23,7 @@ const BI_MODULES = [
   { id:"dist_numerica", label:"Dist. Numérica",   icon:TrendingUp,  component:ModuleDistNumerica, cargos:null },
   { id:"lista_negra",   label:"Lista Negra",       icon:TrendingDown,component:ModuleListaNegra,  cargos:["admin","gerencial","supervisor","vendedor","fornecedor"] },
   { id:"bateu_levou",   label:"Bateu Levou",       icon:Tag,         component:ModuleBateuLevou,   cargos:null },
+  { id:"troca",         label:"Troca",             icon:TrendingDown, component:ModuleTroca,       cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"estoque",       label:"Estoque",           icon:Package,     component:ModuleEstoque,      cargos:null },
   { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"admin",         label:"Admin",             icon:Settings,    component:ModuleAdmin,        cargos:["admin"] },
