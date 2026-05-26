@@ -63,6 +63,7 @@ def _col_nome(agrupamento):
 # ─────────────────────────────────────────────────────────────────────────────
 def _base_dn_sql(agrupamento="fornecedor"):
     col_id, col_nome_expr, join_dim, group_dim = _dim(agrupamento)
+    col_id_pr = col_id.replace("PCPRODUT", "PR")
     return (_PARAMS + f"""
 QT_CLI_META AS (
     SELECT
@@ -151,6 +152,25 @@ NAO_FAT_SEMANA AS (
       AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
       {{excl_usur}}
       {{filtro_nao_fat_semana}}
+      AND NOT EXISTS (
+          SELECT 1 FROM PCNFSAID NS
+              INNER JOIN PCMOV     MV ON MV.NUMTRANSVENDA = NS.NUMTRANSVENDA
+                                     AND MV.CODFILIAL     = NS.CODFILIAL
+              INNER JOIN PCPRODUT  PR ON PR.CODPROD        = MV.CODPROD
+              CROSS JOIN PARAMS    P2
+          WHERE MV.DTMOV      BETWEEN P2.DT_MES_INI AND P2.DT_HOJE
+            AND NS.DTSAIDA    BETWEEN P2.DT_MES_INI AND P2.DT_HOJE
+            AND MV.CODFILIAL   IN ('{FILIAL}')
+            AND NS.CODFILIAL   IN ('{FILIAL}')
+            AND MV.CODOPER    NOT IN ('SR','SO')
+            AND NVL(NS.TIPOVENDA,'X') NOT IN ('SR','DF')
+            AND NS.CODFISCAL  NOT IN (522,622,722,532,632,732)
+            AND NS.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+            AND NS.DTCANCEL    IS NULL
+            AND MV.CODCLI      = PCPEDC.CODCLI
+            AND NS.CODUSUR     = PCPEDC.CODUSUR
+            AND {col_id_pr}    = {col_id}
+      )
     GROUP BY PCUSUARI.CODUSUR, {col_id}
     HAVING COUNT(DISTINCT PCPEDC.CODCLI) > 0
 ),
@@ -218,6 +238,7 @@ FAT_HOJE AS (
 # ─────────────────────────────────────────────────────────────────────────────
 def _base_dn_sql_ger(agrupamento="fornecedor"):
     col_id, col_nome_expr, join_dim, group_dim = _dim(agrupamento)
+    col_id_pr = col_id.replace("PCPRODUT", "PR")
     dim_nome_col = "NOME_SECAO" if agrupamento == "secao" else "NOME_FORNECEDOR"
     return (_PARAMS + f"""
 QT_CLI_META AS (
@@ -278,6 +299,24 @@ NAO_FAT_SEMANA AS (
       AND NVL(PCPEDI.BONIFIC,'N') = 'N'
       AND PCPEDC.DTCANCEL    IS NULL
       AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+      AND NOT EXISTS (
+          SELECT 1 FROM PCNFSAID NS
+              INNER JOIN PCMOV    MV ON MV.NUMTRANSVENDA = NS.NUMTRANSVENDA
+                                    AND MV.CODFILIAL     = NS.CODFILIAL
+              INNER JOIN PCPRODUT PR ON PR.CODPROD        = MV.CODPROD
+              CROSS JOIN PARAMS   P2
+          WHERE MV.DTMOV      BETWEEN P2.DT_MES_INI AND P2.DT_HOJE
+            AND NS.DTSAIDA    BETWEEN P2.DT_MES_INI AND P2.DT_HOJE
+            AND MV.CODFILIAL   IN ('{FILIAL}')
+            AND NS.CODFILIAL   IN ('{FILIAL}')
+            AND MV.CODOPER    NOT IN ('SR','SO')
+            AND NVL(NS.TIPOVENDA,'X') NOT IN ('SR','DF')
+            AND NS.CODFISCAL  NOT IN (522,622,722,532,632,732)
+            AND NS.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+            AND NS.DTCANCEL    IS NULL
+            AND MV.CODCLI      = PCPEDC.CODCLI
+            AND {col_id_pr}    = {col_id}
+      )
     GROUP BY {col_id}
     HAVING COUNT(DISTINCT PCPEDC.CODCLI) > 0
 ),
