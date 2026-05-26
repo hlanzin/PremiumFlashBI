@@ -470,7 +470,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
             </div>
                   <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
                 Meta: <b style={{color:"#fff"}}>{fmtN(tot.meta)}</b>
-                &nbsp;·&nbsp; Total: <b style={{color:"#fff"}}>{fmtN(totRealGeral)}</b>
+                &nbsp;·&nbsp; Total: <b style={{color:"#fff"}}>{fmtN(totReal)}</b>
                 &nbsp;·&nbsp; <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
                 {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
               </div>
@@ -903,7 +903,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.meta)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(tot.mes)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.semana)}</td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtN(totRealGeral)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtN(totReal)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.dia)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>{arrow(totPct)}</td>
