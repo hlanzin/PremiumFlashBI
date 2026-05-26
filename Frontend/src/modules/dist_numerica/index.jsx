@@ -238,7 +238,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                   {!consolidado && <Th label={agrupamento==="secao"?"SEÇÃO":"FORNECEDOR"} col={colDimNome} sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>}
                   <Th label="META"        col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"    col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="CART. SEM"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="DN NOVA N FAT."   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="TOTAL"       col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="% ATING"     col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="REALIZ. DIA" col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
