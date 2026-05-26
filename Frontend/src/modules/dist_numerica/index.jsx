@@ -63,7 +63,8 @@ function buildDNBySupervisor(rows, colDimNome) {
     const sem  = g.rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_semana??0),0);
     const hoj  = g.rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_hoje??0),0);
     const raf  = meta - mes;
-    const pct  = meta>0 ? (mes/meta)*100 : null;
+    const tot2 = mes + sem;
+    const pct  = meta>0 ? (tot2/meta)*100 : null;
     return (
       <React.Fragment key={g.cod}>
         {g.rows.map((row,i) => (
@@ -73,10 +74,11 @@ function buildDNBySupervisor(rows, colDimNome) {
         <tr>
           <td style={{...totStyle, textAlign:"center"}}>{g.cod}</td>
           <td style={{...totStyle, textAlign:"left"}}>{g.nome}</td>
-          <td style={{...totStyle, textAlign:"left", fontSize:"10px", opacity:.8}}>TOTAL</td>
+          <td style={{...totStyle, textAlign:"left", fontSize:"10px", opacity:.8}}>SUBTOTAL</td>
           <td style={{...totStyle}}>{fmtN(meta)}</td>
           <td style={{...totStyle}}>{fmtN(mes)}</td>
           <td style={{...totStyle}}>{fmtN(sem)}</td>
+          <td style={{...totStyle}}>{fmtN(tot2)}</td>
           <td style={{...totStyle, textAlign:"center"}}>
             <span style={{color: pct==null?"#fff": pct>=90?"#86EFAC":pct>=70?"#FCD34D":"#FCA5A5"}}>
               {pct!=null?`${pct.toFixed(0)}%`:"—"}
@@ -92,7 +94,8 @@ function buildDNBySupervisor(rows, colDimNome) {
 
 function DataRow({ row, i, showVendedor, colDimNome }) {
   const [hov, setHov] = useState(false);
-  const pct = row.qt_cli_meta > 0 ? (row.qt_cli_mes / row.qt_cli_meta) * 100 : null;
+  const total = (row.qt_cli_mes??0) + (row.qt_cli_nao_fat_semana??0);
+  const pct = row.qt_cli_meta > 0 ? (total / row.qt_cli_meta) * 100 : null;
   const bg  = hov ? C.rowHover : i % 2 === 0 ? C.rowEven : C.rowOdd;
   const td  = { padding:"5px 8px", borderBottom:`1px solid ${C.border}`, verticalAlign:"middle", background:bg };
   return (
@@ -105,6 +108,7 @@ function DataRow({ row, i, showVendedor, colDimNome }) {
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_meta)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(row.qt_cli_mes)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_nao_fat_semana)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700, color:C.primary }}>{fmtN(total)}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary }}>{fmtN(row.qt_cli_nao_fat_hoje)}</td>
       <td style={{ ...td, textAlign:"center" }}>{arrow(pct)}</td>
@@ -192,7 +196,8 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
     semana: displayRows.reduce((s,r)=>s+(r.qt_cli_nao_fat_semana??0),0),
     dia:    displayRows.reduce((s,r)=>s+(r.qt_cli_nao_fat_hoje??0),0),
   };
-  const totPct = tot.meta > 0 ? (tot.mes / tot.meta) * 100 : 0;
+  const totReal = tot.mes + tot.semana;
+  const totPct = tot.meta > 0 ? (totReal / tot.meta) * 100 : 0;
 
   return (
     <div style={{ margin:"12px 16px", background:"#fff",
@@ -234,6 +239,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                   <Th label="META"        col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"    col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="CART. SEM"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="TOTAL"       col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="% ATING"     col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="REALIZ. DIA" col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="STATUS"      col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
@@ -243,7 +249,8 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                 {displayRows.map((row,i) => {
                   const td = { padding:"5px 8px", borderBottom:`1px solid ${C.border}`,
                     background:i%2===0?C.rowEven:C.rowOdd, verticalAlign:"middle" };
-                  const pct = row.qt_cli_meta>0?(row.qt_cli_mes/row.qt_cli_meta)*100:null;
+                  const rowTot = (row.qt_cli_mes??0)+(row.qt_cli_nao_fat_semana??0);
+                  const pct = row.qt_cli_meta>0?(rowTot/row.qt_cli_meta)*100:null;
                   return (
                     <tr key={`${row.cod_vendedor}-${row.dim_id??i}-${i}`}>
                       <td style={{ ...td, textAlign:"center", fontFamily:C.mono,
@@ -253,6 +260,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_meta)}</td>
                       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(row.qt_cli_mes)}</td>
                       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_nao_fat_semana)}</td>
+                      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700, color:C.primary }}>{fmtN(rowTot)}</td>
                       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
                       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_nao_fat_hoje)}</td>
                       <td style={{ ...td, textAlign:"center" }}>{arrow(pct)}</td>
@@ -269,6 +277,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.meta)}</td>
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.mes)}</td>
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.semana)}</td>
+                  <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtN(totReal)}</td>
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></td>
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.dia)}</td>
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>{arrow(totPct)}</td>
@@ -401,7 +410,8 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
     semana: rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_semana??0),0),
     dia:    rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_hoje??0),0),
   };
-  const totPct = tot.meta > 0 ? (tot.mes / tot.meta) * 100 : 0;
+  const totReal = tot.mes + tot.semana;
+  const totPct = tot.meta > 0 ? (totReal / tot.meta) * 100 : 0;
 
   const handleSort = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
   const changeMode = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
@@ -460,7 +470,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
             </div>
                   <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
                 Meta: <b style={{color:"#fff"}}>{fmtN(tot.meta)}</b>
-                &nbsp;·&nbsp; Faturado Mês: <b style={{color:"#fff"}}>{fmtN(tot.mes)}</b>
+                &nbsp;·&nbsp; Total: <b style={{color:"#fff"}}>{fmtN(totRealGeral)}</b>
                 &nbsp;·&nbsp; <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
                 {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
               </div>
@@ -871,6 +881,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                   <Th label="META"           col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"       col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="CART. SEMANA"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="TOTAL"          col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="% ATING"        col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="REALIZ. DIA"    col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="STATUS"         col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
@@ -892,6 +903,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.meta)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(tot.mes)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.semana)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtN(totRealGeral)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.dia)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>{arrow(totPct)}</td>
