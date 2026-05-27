@@ -62,7 +62,6 @@ function buildDNBySupervisor(rows, colDimNome) {
     const mes  = g.rows.reduce((s,r)=>s+(r.qt_cli_mes??0),0);
     const sem  = g.rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_semana??0),0);
     const hoj  = g.rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_hoje??0),0);
-    const raf  = meta - mes;
     const tot2 = mes + sem;
     const pct  = meta>0 ? (tot2/meta)*100 : null;
     return (
@@ -169,7 +168,6 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
     });
   }, [data, filtroRcas, filtroDims, sortCol, sortDir]);
 
-  // Consolidado: agrega por vendedor
   const rowsConsolidadas = useMemo(() => {
     const map = new Map();
     data.forEach(r => {
@@ -238,7 +236,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                   {!consolidado && <Th label={agrupamento==="secao"?"SEÇÃO":"FORNECEDOR"} col={colDimNome} sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>}
                   <Th label="META"        col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"    col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="DN NOVA N FAT."   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="CART. SEM"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="TOTAL"       col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="% ATING"     col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="REALIZ. DIA" col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
@@ -268,7 +266,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                   );
                 })}
                 {displayRows.length === 0 && (
-                  <tr><td colSpan={consolidado?8:9} style={{ padding:"24px", textAlign:"center", color:C.textSub }}>Nenhum dado.</td></tr>
+                  <tr><td colSpan={consolidado?9:10} style={{ padding:"24px", textAlign:"center", color:C.textSub }}>Nenhum dado.</td></tr>
                 )}
               </tbody>
               <tfoot>
@@ -319,7 +317,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
   const [activeCode, setActiveCode] = useState(
     (cargo === "supervisor" || cargo === "vendedor") ? codUser : null
   );
-  const [agrupamento, setAgrupamento] = useState("fornecedor"); // "fornecedor" | "secao"
+  const [agrupamento, setAgrupamento] = useState("fornecedor");
   const [data,       setData]       = useState([]);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState(null);
@@ -352,8 +350,6 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
   const equipes = useMemo(() => supervisores.filter(s => EQUIPE_CODES.includes(s.cod)), [supervisores]);
 
-  // coluna dinâmica conforme agrupamento
-  const colDimId   = agrupamento === "secao" ? "dim_id"     : "dim_id";
   const colDimNome = agrupamento === "secao" ? "nome_secao" : "nome_fornecedor";
 
   const fetchData = useCallback(async () => {
@@ -368,7 +364,6 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       const res = await fetch(url, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData((await res.json()).dados ?? []);
-      // Resetar coluna de ordenação ao trocar agrupamento
       setSortCol(agrupamento === "secao" ? "nome_secao" : "nome_fornecedor");
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
@@ -376,7 +371,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Estados de filtro — precisam vir ANTES do useMemo de rows
+  // Estados de filtro — ANTES do useMemo de rows
   const [consolidado,   setConsolidado]   = useState(false);
   const [showFiltros,   setShowFiltros]   = useState(false);
   const [filtroRcas,    setFiltroRcas]    = useState(new Set());
@@ -411,12 +406,11 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
     dia:    rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_hoje??0),0),
   };
   const totReal = tot.mes + tot.semana;
-  const totPct = tot.meta > 0 ? (totReal / tot.meta) * 100 : 0;
+  const totPct  = tot.meta > 0 ? (totReal / tot.meta) * 100 : 0;
 
   const handleSort = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
   const changeMode = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
 
-  // Dimensões disponíveis do todosData
   const dimsDisponiveis = useMemo(() => {
     const map = new Map();
     todosData.forEach(r => {
@@ -428,18 +422,11 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       .sort((a,b) => a.nome.localeCompare(b.nome));
   }, [todosData, colDimNome]);
 
-  const toggleRca = cod => setFiltroRcas(prev => {
-    const s = new Set(prev);
-    s.has(cod) ? s.delete(cod) : s.add(cod);
-    return s;
-  });
-  const toggleDim = id => setFiltroDims(prev => {
-    const s = new Set(prev);
-    s.has(id) ? s.delete(id) : s.add(id);
-    return s;
-  });
+  const toggleRca = cod => setFiltroRcas(prev => { const s=new Set(prev); s.has(cod)?s.delete(cod):s.add(cod); return s; });
+  const toggleDim = id  => setFiltroDims(prev => { const s=new Set(prev); s.has(id)?s.delete(id):s.add(id); return s; });
   const limparFiltros = () => { setFiltroRcas(new Set()); setFiltroDims(new Set()); };
   const totalFiltros = filtroRcas.size + filtroDims.size;
+
   const showVendedor = mode==="todos"||mode==="equipe";
   const needsSelect  = ["vendedor","equipe","supervisor"].includes(mode);
   const noData       = needsSelect && !activeCode;
@@ -468,12 +455,14 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
               DISTRIBUICAO NUMERICA
               {nomeAtivo() && <span style={{ fontWeight:400, fontSize:"11px", color:"rgba(255,255,255,.8)", marginLeft:"6px" }}>— {nomeAtivo()}</span>}
             </div>
-                  <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
-                Meta: <b style={{color:"#fff"}}>{fmtN(tot.meta)}</b>
-                &nbsp;·&nbsp; Total: <b style={{color:"#fff"}}>{fmtN(totReal)}</b>
-                &nbsp;·&nbsp; <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
-                {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
-              </div>
+            <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
+              Meta: <b style={{color:"#fff"}}>{fmtN(tot.meta)}</b>
+              &nbsp;·&nbsp; Fat. Mês: <b style={{color:"#fff"}}>{fmtN(tot.mes)}</b>
+              &nbsp;·&nbsp; Cart: <b style={{color:"#fff"}}>{fmtN(tot.semana)}</b>
+              &nbsp;·&nbsp; Total: <b style={{color:"#fff"}}>{fmtN(totReal)}</b>
+              &nbsp;·&nbsp; <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
+              {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
+            </div>
           </div>
         </div>
         <button onClick={fetchData} disabled={loading}
@@ -491,7 +480,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                       padding:"6px 12px", display:"flex", gap:"12px",
                       fontSize:"11px", color:C.textSub, overflowX:"auto" }}>
           <span>Meta: <b style={{color:C.text}}>{fmtN(tot.meta)}</b></span>
-          <span>Mes: <b style={{color:C.text}}>{fmtN(tot.mes)}</b></span>
+          <span>Total: <b style={{color:C.text}}>{fmtN(totReal)}</b></span>
           <span style={{marginLeft:"auto"}}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></span>
         </div>
       )}
@@ -501,7 +490,6 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                     padding:isMobile?"6px 12px":"8px 20px",
                     display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
 
-        {/* Toggle Fornecedor / Seção */}
         <div style={{ display:"flex", border:`1px solid ${C.border}`, borderRadius:"6px", overflow:"hidden" }}>
           {[["fornecedor","Fornecedor"],["secao","Seção"]].map(([id,label]) => (
             <button key={id} onClick={() => setAgrupamento(id)}
@@ -559,14 +547,14 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
         {mode==="vendedor"   && <Dropdown value={activeCode} onChange={setActiveCode} options={vendedores}  placeholder="Selecione um vendedor..."/>}
         {mode==="supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..."/>}
 
-          <div style={{ display:"flex", alignItems:"center", gap:"6px",
-                        border:`1px solid ${C.border}`, borderRadius:"6px",
-                        padding:"5px 10px", background:C.bg }}>
-            <Search size={12} style={{ color:C.textSub }}/>
-            <input placeholder="Filtrar..." value={search} onChange={e=>setSearch(e.target.value)}
-              style={{ border:"none", background:"transparent", fontSize:"12px",
-                       width:"120px", outline:"none", color:C.text, fontFamily:C.sans }}/>
-          </div>
+        <div style={{ display:"flex", alignItems:"center", gap:"6px",
+                      border:`1px solid ${C.border}`, borderRadius:"6px",
+                      padding:"5px 10px", background:C.bg }}>
+          <Search size={12} style={{ color:C.textSub }}/>
+          <input placeholder="Filtrar..." value={search} onChange={e=>setSearch(e.target.value)}
+            style={{ border:"none", background:"transparent", fontSize:"12px",
+                     width:"120px", outline:"none", color:C.text, fontFamily:C.sans }}/>
+        </div>
 
         <div style={{ display:"flex", alignItems:"center", gap:"6px",
                       border:`1px solid ${C.border}`, borderRadius:"6px",
@@ -592,7 +580,6 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                      color:C.text, fontFamily:C.sans, background:C.bg }}/>
         )}
 
-        {/* Botão filtros avançados — todos exceto vendedor */}
         {cargo !== "vendedor" && mode !== "todas_equipes" && (
           <div style={{ position:"relative", marginLeft:"auto" }}>
             <button onClick={() => setShowFiltros(v=>!v)}
@@ -645,7 +632,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                       {agrupamento==="secao"?"SEÇÃO":"FORNECEDOR"} {filtroDims.size>0 && <span style={{ color:C.primary }}>({filtroDims.size})</span>}
                     </div>
                     <div style={{ padding:"6px 8px", borderBottom:`1px solid ${C.border}` }}>
-                      <input value={buscaDim} onChange={e=>setBuscaDim(e.target.value)} placeholder={`Buscar...`}
+                      <input value={buscaDim} onChange={e=>setBuscaDim(e.target.value)} placeholder="Buscar..."
                         style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`, borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
                     </div>
                     <div style={{ overflowY:"auto", maxHeight:"250px" }}>
@@ -668,127 +655,77 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       {/* Modo Todas Equipes */}
       {mode === "todas_equipes" && (
         <div style={{ paddingBottom:"16px" }}>
-
-          {/* Barra de ações */}
-          <div style={{ display:"flex", alignItems:"center", gap:"8px",
-            padding:"8px 16px 0", flexWrap:"wrap" }}>
-
-            {/* Botão filtros */}
+          <div style={{ display:"flex", alignItems:"center", gap:"8px", padding:"8px 16px 0", flexWrap:"wrap" }}>
             <div style={{ position:"relative" }}>
               <button onClick={() => setShowFiltros(v=>!v)}
-                style={{ padding:"5px 14px", borderRadius:"6px",
-                  border:`1.5px solid ${C.border}`, fontSize:"12px",
-                  fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:"6px",
-                  background: totalFiltros>0 ? C.primary : "#fff",
-                  color: totalFiltros>0 ? "#fff" : C.text }}>
+                style={{ padding:"5px 14px", borderRadius:"6px", border:`1.5px solid ${C.border}`,
+                  fontSize:"12px", fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:"6px",
+                  background: totalFiltros>0 ? C.primary : "#fff", color: totalFiltros>0 ? "#fff" : C.text }}>
                 ⚙ Filtros {totalFiltros>0 && `(${totalFiltros})`}
               </button>
-
               {showFiltros && (
-                <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0,
-                  background:"#fff", border:`1px solid ${C.border}`, borderRadius:"8px",
-                  boxShadow:"0 6px 20px rgba(0,0,0,.15)", zIndex:200,
-                  width: isMobile?"calc(100vw - 32px)":"560px",
-                  maxHeight:"420px", overflow:"hidden",
-                  display:"flex", flexDirection:"column" }}>
-
-                  {/* Header painel */}
+                <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, background:"#fff",
+                  border:`1px solid ${C.border}`, borderRadius:"8px", boxShadow:"0 6px 20px rgba(0,0,0,.15)",
+                  zIndex:200, width:isMobile?"calc(100vw - 32px)":"560px", maxHeight:"420px",
+                  overflow:"hidden", display:"flex", flexDirection:"column" }}>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                    padding:"10px 14px", borderBottom:`1px solid ${C.border}`,
-                    background:"#FAFAFA" }}>
-                    <span style={{ fontWeight:700, fontSize:"12px", color:C.text }}>
-                      Filtros Avançados
-                    </span>
+                    padding:"10px 14px", borderBottom:`1px solid ${C.border}`, background:"#FAFAFA" }}>
+                    <span style={{ fontWeight:700, fontSize:"12px", color:C.text }}>Filtros Avançados</span>
                     <div style={{ display:"flex", gap:"8px" }}>
-                      {totalFiltros>0 && (
-                        <button onClick={limparFiltros}
-                          style={{ fontSize:"11px", color:C.red, background:"none",
-                            border:"none", cursor:"pointer", fontWeight:700 }}>
-                          Limpar tudo
-                        </button>
-                      )}
+                      {totalFiltros>0 && <button onClick={limparFiltros}
+                        style={{ fontSize:"11px", color:C.red, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>Limpar tudo</button>}
                       <button onClick={() => setShowFiltros(false)}
-                        style={{ background:"none", border:"none", cursor:"pointer",
-                          fontSize:"16px", color:C.textSub, lineHeight:1 }}>×</button>
+                        style={{ background:"none", border:"none", cursor:"pointer", fontSize:"16px", color:C.textSub, lineHeight:1 }}>×</button>
                     </div>
                   </div>
-
-                  {/* Colunas de filtro */}
                   <div style={{ display:"flex", overflow:"hidden", flex:1 }}>
-
-                    {/* RCA */}
-                    <div style={{ flex:1, borderRight:`1px solid ${C.border}`,
-                      display:"flex", flexDirection:"column", overflow:"hidden" }}>
-                      <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`,
-                        fontSize:"11px", fontWeight:700, color:C.textSub, background:"#FAFAFA" }}>
+                    <div style={{ flex:1, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column" }}>
+                      <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, fontSize:"11px", fontWeight:700, color:C.textSub, background:"#FAFAFA" }}>
                         VENDEDOR {filtroRcas.size>0 && <span style={{ color:C.primary }}>({filtroRcas.size})</span>}
                       </div>
                       <div style={{ padding:"6px 8px", borderBottom:`1px solid ${C.border}` }}>
-                        <input value={buscaRca} onChange={e=>setBuscaRca(e.target.value)}
-                          placeholder="Buscar RCA..."
-                          style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`,
-                            borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
+                        <input value={buscaRca} onChange={e=>setBuscaRca(e.target.value)} placeholder="Buscar RCA..."
+                          style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`, borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
                       </div>
                       <div style={{ overflowY:"auto", maxHeight:"250px" }}>
-                        {vendedores
-                          .filter(v => (v.nome??"").toLowerCase().includes(buscaRca.toLowerCase()))
-                          .map(v => (
-                            <label key={v.cod} style={{ display:"flex", alignItems:"center",
-                              gap:"8px", padding:"5px 12px", cursor:"pointer",
-                              background: filtroRcas.has(v.cod) ? "#FFF0F0" : "transparent",
-                              borderBottom:`1px solid #F5F5F5` }}>
-                              <input type="checkbox" checked={filtroRcas.has(v.cod)}
-                                onChange={() => toggleRca(v.cod)}
-                                style={{ accentColor:C.primary }}/>
-                              <span style={{ fontSize:"11px", color:C.text }}>{v.nome}</span>
-                            </label>
-                          ))}
+                        {vendedores.filter(v=>(v.nome??"").toLowerCase().includes(buscaRca.toLowerCase())).map(v=>(
+                          <label key={v.cod} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"5px 12px",
+                            cursor:"pointer", background:filtroRcas.has(v.cod)?"#FFF0F0":"transparent", borderBottom:`1px solid #F5F5F5` }}>
+                            <input type="checkbox" checked={filtroRcas.has(v.cod)} onChange={()=>toggleRca(v.cod)} style={{ accentColor:C.primary }}/>
+                            <span style={{ fontSize:"11px", color:C.text }}>{v.nome}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
-
-                    {/* Dimensão */}
-                    <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-                      <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`,
-                        fontSize:"11px", fontWeight:700, color:C.textSub, background:"#FAFAFA" }}>
+                    <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+                      <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, fontSize:"11px", fontWeight:700, color:C.textSub, background:"#FAFAFA" }}>
                         {agrupamento==="secao"?"SEÇÃO":"FORNECEDOR"} {filtroDims.size>0 && <span style={{ color:C.primary }}>({filtroDims.size})</span>}
                       </div>
                       <div style={{ padding:"6px 8px", borderBottom:`1px solid ${C.border}` }}>
                         <input value={buscaDim} onChange={e=>setBuscaDim(e.target.value)}
                           placeholder={`Buscar ${agrupamento==="secao"?"seção":"fornecedor"}...`}
-                          style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`,
-                            borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
+                          style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`, borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
                       </div>
                       <div style={{ overflowY:"auto", maxHeight:"250px" }}>
-                        {dimsDisponiveis
-                          .filter(d => (d.nome??"").toLowerCase().includes(buscaDim.toLowerCase()))
-                          .map(d => (
-                            <label key={d.id} style={{ display:"flex", alignItems:"center",
-                              gap:"8px", padding:"5px 12px", cursor:"pointer",
-                              background: filtroDims.has(d.id) ? "#FFF0F0" : "transparent",
-                              borderBottom:`1px solid #F5F5F5` }}>
-                              <input type="checkbox" checked={filtroDims.has(d.id)}
-                                onChange={() => toggleDim(d.id)}
-                                style={{ accentColor:C.primary }}/>
-                              <span style={{ fontSize:"11px", color:C.text }}>{d.nome}</span>
-                            </label>
-                          ))}
+                        {dimsDisponiveis.filter(d=>(d.nome??"").toLowerCase().includes(buscaDim.toLowerCase())).map(d=>(
+                          <label key={d.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"5px 12px",
+                            cursor:"pointer", background:filtroDims.has(d.id)?"#FFF0F0":"transparent", borderBottom:`1px solid #F5F5F5` }}>
+                            <input type="checkbox" checked={filtroDims.has(d.id)} onChange={()=>toggleDim(d.id)} style={{ accentColor:C.primary }}/>
+                            <span style={{ fontSize:"11px", color:C.text }}>{d.nome}</span>
+                          </label>
+                        ))}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
             </div>
-
-            {/* Botão consolidar */}
             <button onClick={() => setConsolidado(v => !v)}
               style={{ padding:"5px 14px", borderRadius:"6px", border:`1.5px solid ${C.primary}`,
                 fontSize:"12px", fontWeight:700, cursor:"pointer",
-                background: consolidado ? C.primary : "#fff",
-                color: consolidado ? "#fff" : C.primary }}>
+                background: consolidado ? C.primary : "#fff", color: consolidado ? "#fff" : C.primary }}>
               {consolidado ? "▦ Detalhado" : "▤ Consolidar"}
             </button>
-
-            {/* Badges de filtros ativos */}
             {totalFiltros > 0 && (
               <div style={{ display:"flex", gap:"4px", flexWrap:"wrap" }}>
                 {Array.from(filtroRcas).map(cod => {
@@ -816,16 +753,13 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
               </div>
             )}
           </div>
-
           {supervisores.length === 0 && (
-            <div style={{ padding:"48px", textAlign:"center", color:C.textSub }}>
-              Carregando equipes...
-            </div>
+            <div style={{ padding:"48px", textAlign:"center", color:C.textSub }}>Carregando equipes...</div>
           )}
           {supervisores.map(sup => (
             <EquipeDNCard key={`${sup.cod}-${agrupamento}`} supervisor={sup} dataRef={dataRef}
-              agrupamento={agrupamento} token={token}
-              colDimNome={colDimNome} isMobile={isMobile} consolidado={consolidado}
+              agrupamento={agrupamento} token={token} colDimNome={colDimNome}
+              isMobile={isMobile} consolidado={consolidado}
               filtroRcas={filtroRcas} filtroDims={filtroDims}/>
           ))}
         </div>
@@ -868,32 +802,30 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                 {showVendedor && (
                   <tr>
                     <th colSpan={2} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"left", border:`1px solid ${C.primaryDk}` }}>VENDEDOR</th>
-                    <th colSpan={7} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"center", border:`1px solid ${C.primaryDk}` }}>INDICADORES</th>
+                    <th colSpan={8} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"center", border:`1px solid ${C.primaryDk}` }}>INDICADORES</th>
                   </tr>
                 )}
                 <tr>
                   {showVendedor && <>
-                    <Th label="RCA"          col="cod_vendedor"          sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
-                    <Th label="NOME"         col="nome_vendedor"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                    <Th label="RCA"             col="cod_vendedor"          sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
+                    <Th label="NOME"            col="nome_vendedor"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
                   </>}
                   <Th label={agrupamento === "secao" ? "SEÇÃO" : "FORNECEDOR"}
-                      col={colDimNome}             sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
-                  <Th label="META"           col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="FAT. MES"       col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="DN NOVA N. FAT"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="TOTAL"          col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="% ATING"        col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
-                  <Th label="REALIZ. DIA"    col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="STATUS"         col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
+                      col={colDimNome}               sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                  <Th label="META"               col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="FAT. MES"           col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="CART. SEM"          col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="TOTAL"              col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="% ATING"            col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
+                  <Th label="REALIZ. DIA"        col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="STATUS"             col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                 </tr>
               </thead>
               <tbody>
-                {(mode==="supervisor"&&!activeCode)
-                  ? buildDNBySupervisor(rows, colDimNome)
-                  : rows.map((row,i) => (
-                    <DataRow key={`${row.cod_vendedor}-${row.dim_id}-${i}`}
-                      row={row} i={i} showVendedor={showVendedor} colDimNome={colDimNome}/>
-                  ))}
+                {rows.map((row,i) => (
+                  <DataRow key={`${row.cod_vendedor}-${row.dim_id}-${i}`}
+                    row={row} i={i} showVendedor={showVendedor} colDimNome={colDimNome}/>
+                ))}
               </tbody>
               {rows.length > 0 && (
                 <tfoot>

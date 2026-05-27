@@ -45,14 +45,20 @@ function Dropdown({ value, onChange, options, placeholder }) {
 
 // ── Linha de vendedor (agrupador) ─────────────────────────────────────────────
 function VendedorRow({ nome, rows }) {
-  const fat = rows.filter(r => r.pos_faturado).length;
-  const nft = rows.filter(r => r.pos_nao_faturado && !r.pos_faturado).length;
-  const sem = rows.filter(r => !r.pos_faturado && !r.pos_nao_faturado).length;
+  const fat     = rows.filter(r => r.pos_faturado).length;
+  const nft     = rows.filter(r => r.pos_nao_faturado && !r.pos_faturado).length;
+  const sem     = rows.filter(r => !r.pos_faturado && !r.pos_nao_faturado).length;
+  const cidades = [...new Set(rows.map(r => r.nome_cidade).filter(Boolean))].sort();
   const td  = { padding:"4px 8px", background:C.subHeader, color:"#fff",
                 fontSize:"11px", fontWeight:700, borderBottom:`2px solid ${C.primaryDk}` };
   return (
     <tr>
       <td colSpan={2} style={{ ...td, textAlign:"left" }}>{nome}</td>
+      <td style={{ ...td, textAlign:"left", fontWeight:400, fontSize:"10px", maxWidth:"160px",
+        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+        opacity:.85 }} title={cidades.join(", ")}>
+        {cidades.length > 0 ? cidades.join(", ") : "—"}
+      </td>
       <td style={{ ...td, textAlign:"center" }}>{rows.length} clientes</td>
       <td style={{ ...td, textAlign:"center" }}>
         <span style={{ color:"#86EFAC" }}>✔ {fat}</span>
@@ -74,7 +80,7 @@ function SupervisorRow({ nome, rows }) {
   const sem = rows.filter(r => !r.pos_faturado && !r.pos_nao_faturado).length;
   return (
     <tr>
-      <td colSpan={6} style={{ padding:"3px 10px", background:"#F0F2F5",
+      <td colSpan={8} style={{ padding:"3px 10px", background:"#F0F2F5",
         borderTop:`2px solid ${C.border}`, borderBottom:`1px solid ${C.border}`,
         fontSize:"11px", fontWeight:700, color:"#374151" }}>
         {nome}
@@ -121,6 +127,7 @@ function ClienteRow({ row, i, showVendedor, showSupervisor, showMudancaBase }) {
       </td>
       {showVendedor && <td style={{ ...td, fontSize:"11px", color:C.textSub }}>{row.nome_vendedor ?? "—"}</td>}
       {showSupervisor && <td style={{ ...td, fontSize:"11px", color:C.textSub }}>{row.cod_supervisor ?? "—"}</td>}
+      <td style={{ ...td, fontSize:"11px", color:C.textSub, whiteSpace:"nowrap" }}>{row.nome_cidade ?? "—"}</td>
       <td style={{ ...td, textAlign:"center", fontFamily:"monospace", fontSize:"11px" }}>
         {row.dt_ultima_compra
           ? String(row.dt_ultima_compra).split("T")[0].split("-").reverse().join("/")
@@ -213,6 +220,7 @@ function THead({ mode, sortCol, sortDir, onSort }) {
       <tr>
         <TH label="CÓD"           col="cod_cliente"   align="center"/>
         <TH label="CLIENTE"        col="razao_social"/>
+        <TH label="CIDADE"         col="nome_cidade"/>
         {showVendedor && <TH label="VENDEDOR" col="nome_vendedor"/>}
         <TH label="ÚLT. COMPRA"   align="center"/>
       <TH label="VL. ÚLT."      align="right"/>
