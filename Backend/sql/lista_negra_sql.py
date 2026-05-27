@@ -149,6 +149,7 @@ SELECT
     B.CODCLI                                                        AS cod_cliente,
     C.CLIENTE                                                       AS razao_social,
     C.FANTASIA                                                      AS nome_fantasia,
+    CD.NOMECIDADE                                                   AS nome_cidade,
     C.CODUSUR1                                                      AS cod_vendedor,
     U1.NOME                                                         AS nome_vendedor,
     U1.CODSUPERVISOR                                                AS cod_supervisor,
@@ -162,6 +163,7 @@ SELECT
 FROM BASE_META B
     INNER JOIN PCCLIENT  C  ON C.CODCLI   = B.CODCLI
     LEFT  JOIN PCUSUARI  U1 ON U1.CODUSUR = C.CODUSUR1
+    LEFT  JOIN PCCIDADE  CD ON CD.CODCIDADE = C.CODCIDADE
     LEFT  JOIN ULTIMA_COMPRA UC ON UC.CODCLI  = B.CODCLI
     LEFT  JOIN FAT_MES   FM ON FM.CODCLI  = B.CODCLI
     LEFT  JOIN CART_SEM  CS ON CS.CODCLI  = B.CODCLI
@@ -343,6 +345,7 @@ SELECT
     B.CODCLI                                                        AS cod_cliente,
     C.CLIENTE                                                       AS razao_social,
     C.FANTASIA                                                      AS nome_fantasia,
+    CD.NOMECIDADE                                                   AS nome_cidade,
     C.CODUSUR1                                                      AS cod_vendedor,
     U1.NOME                                                         AS nome_vendedor,
     U1.CODSUPERVISOR                                                AS cod_supervisor,
@@ -356,6 +359,7 @@ SELECT
 FROM BASE_META B
     INNER JOIN PCCLIENT      C  ON C.CODCLI    = B.CODCLI
     LEFT  JOIN PCUSUARI      U1 ON U1.CODUSUR  = C.CODUSUR1
+    LEFT  JOIN PCCIDADE      CD ON CD.CODCIDADE = C.CODCIDADE
     LEFT  JOIN ULTIMA_COMPRA UC ON UC.CODCLI   = B.CODCLI
     LEFT  JOIN FAT_MES       FM ON FM.CODCLI   = B.CODCLI
     LEFT  JOIN CART_SEM      CS ON CS.CODCLI   = B.CODCLI
