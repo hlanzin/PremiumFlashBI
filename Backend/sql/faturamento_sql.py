@@ -199,7 +199,8 @@ NAO_FATURADO_SEMANA AS (
       AND PCPEDI.CODPROD=PCPRODUT.CODPROD(+) AND PCPRODUT.CODEPTO=PCDEPTO.CODEPTO(+)
       AND PCPRODUT.CODSEC=PCSECAO.CODSEC(+) AND PCPRODUT.CODFORNEC=PCFORNEC.CODFORNEC(+)
       AND PCPEDC.CODFILIAL IN ('{FILIAL}') AND PCPEDC.CONDVENDA IN (1,2,3,7,9,14,15,17,18,19,98)
-      AND PCPEDC.DATA BETWEEN P.DT_SEMANA_INI AND P.DT_ONTEM
+      AND PCPEDC.DATA BETWEEN TO_DATE('{NF_DATA_INI}','YYYY-MM-DD') AND TO_DATE('{NF_DATA_FIM}','YYYY-MM-DD')
+      AND {NF_ATIVO}
       AND PCPEDC.POSICAO<>'F' AND NVL(PCPEDI.BONIFIC,'N')='N'
       AND PCPEDC.DTCANCEL IS NULL AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
       {excl_usur}
@@ -433,8 +434,37 @@ def build_query(modo: str, filtro_id: Optional[int] = None, date_ref: Optional[s
         sel = SELECT_LINHAS
 
     dr = date_ref or parse_data(None)
+
+    # Calcula período do NF e verifica se é mês atual — tudo em Python, sem SYSDATE no Oracle
+    from datetime import date, timedelta
+    dr_date = date.fromisoformat(dr)
+    hoje    = date.today()
+
+    mes_atual = (dr_date.year == hoje.year and dr_date.month == hoje.month)
+
+    if mes_atual:
+        # Início do mês atual
+        mes_ini   = dr_date.replace(day=1)
+        # weekday(): Monday=0, Sunday=6
+        dias_ate_dom = (dr_date.weekday() + 1) % 7  # dias desde último domingo
+        ultimo_dom   = dr_date - timedelta(days=dias_ate_dom)
+        nf_ini = max(mes_ini, ultimo_dom)            # último domingo (igual a DT_SEMANA_INI do 1464)
+        nf_fim = dr_date - timedelta(days=1)         # ontem (igual a DT_ONTEM do 1464)
+        nf_ativo = "1=1"
+    else:
+        # Mês passado: NF zerado
+        nf_ini   = dr_date
+        nf_fim   = dr_date
+        nf_ativo = "1=0"
+
+    nf_ini_str = nf_ini.strftime("%Y-%m-%d")
+    nf_fim_str = nf_fim.strftime("%Y-%m-%d")
+
     sql = (BASE_SQL
-           .replace("{DATE_REF}", dr)
+           .replace("{DATE_REF}",    dr)
+           .replace("{NF_DATA_INI}", nf_ini_str)
+           .replace("{NF_DATA_FIM}", nf_fim_str)
+           .replace("{NF_ATIVO}",    nf_ativo)
            .format(
                excl_usur=excl_usur,       excl_devol=excl_devol,
                filtro_vendas=fv,          filtro_devolucoes=fd,

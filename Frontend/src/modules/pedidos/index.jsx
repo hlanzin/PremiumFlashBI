@@ -295,7 +295,15 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
     });
   };
 
-  // Filtro local por texto + posicao
+  const [sortCol, setSortCol] = useState("dt_pedido");
+  const [sortDir, setSortDir] = useState("desc");
+  const handleSort = col => {
+    setSortCol(col);
+    setSortDir(prev => sortCol === col && prev === "desc" ? "asc" : "desc");
+    setPagina(1);
+  };
+
+  // Filtro local por texto + posicao + ordenação
   const rows = useMemo(() => {
     let r = [...pedidos];
     if (busca) {
@@ -309,8 +317,16 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
     }
     if (filtroStatus.size > 0)
       r = r.filter(p => filtroStatus.has(p.posicao));
+    r.sort((a,b) => {
+      let av = a[sortCol], bv = b[sortCol];
+      if (av == null) return 1; if (bv == null) return -1;
+      if (typeof av === "number") return sortDir==="asc" ? av-bv : bv-av;
+      return sortDir==="asc"
+        ? String(av).localeCompare(String(bv), "pt-BR")
+        : String(bv).localeCompare(String(av), "pt-BR");
+    });
     return r;
-  }, [pedidos, busca, filtroStatus]);
+  }, [pedidos, busca, filtroStatus, sortCol, sortDir]);
 
   // Só a página atual — limita o DOM a PAGE_SIZE linhas
   const totalPaginas = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -342,11 +358,16 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
       .sort((a,b) => b.vl_total - a.vl_total);
   }, [rows]);
 
-  const TH = ({ label, align="left", w }) => (
-    <th style={{ padding:"6px 8px", background:C.subHeader, color:"#fff",
-      fontSize:"10px", fontWeight:700, textAlign:align, whiteSpace:"nowrap",
-      border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em",
-      ...(w ? { width:w } : {}) }}>{label}</th>
+  const TH = ({ label, col, align="left", w }) => (
+    <th onClick={() => col && handleSort(col)}
+      style={{ padding:"6px 8px", color:"#fff", fontSize:"10px", fontWeight:700,
+        textAlign:align, whiteSpace:"nowrap", border:`1px solid ${C.primaryDk}`,
+        letterSpacing:"0.04em", userSelect:"none",
+        cursor: col ? "pointer" : "default",
+        background: col && sortCol===col ? C.primaryDk : C.subHeader,
+        ...(w ? { width:w } : {}) }}>
+      {label}{col && sortCol===col ? (sortDir==="asc" ? " ↑" : " ↓") : ""}
+    </th>
   );
 
   return (<>
@@ -507,14 +528,14 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
               <thead style={{ position:"sticky", top:0, zIndex:2 }}>
                 <tr>
                   <TH label="" w="28px"/>
-                  <TH label="PEDIDO"   w="80px"/>
-                  <TH label="NOTA"     w="70px"/>
-                  <TH label="DATA"     w="90px"/>
-                  <TH label="COD. CLI" w="75px" align="center"/>
-                  <TH label="CLIENTE"/>
-                  {showVendedor && <TH label="VENDEDOR" w="140px"/>}
-                  <TH label="SITUAÇÃO" align="center" w="110px"/>
-                  <TH label="VALOR"    align="right"  w="120px"/>
+                  <TH label="PEDIDO"   col="numped"      w="80px"/>
+                  <TH label="NOTA"     col="num_nota"    w="70px"/>
+                  <TH label="DATA"     col="dt_pedido"   w="90px"/>
+                  <TH label="COD. CLI" col="codcli"      w="75px" align="center"/>
+                  <TH label="CLIENTE"  col="razao_social"/>
+                  {showVendedor && <TH label="VENDEDOR"  col="nome_vendedor" w="140px"/>}
+                  <TH label="SITUAÇÃO" col="posicao"     align="center" w="110px"/>
+                  <TH label="VALOR"    col="vl_total"    align="right"  w="120px"/>
                 </tr>
               </thead>
               <tbody>

@@ -422,6 +422,7 @@ function EquipeCard({ supervisor, dataRef, token, sortCol, sortDir, onSort, isMo
 export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
   const cargo = userInfo.cargo ?? "gerencial";
   const codUser = userInfo.cod_winthor ?? null;
+  const isAdmin = cargo === "admin";
 
   // Abas visíveis por cargo
   const MODES_VISIVEIS = MODES.filter(m => {
@@ -446,6 +447,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
   const [summary,     setSummary]     = useState({});
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState(null);
+  const [showDebug,   setShowDebug]   = useState(false);
   const [sortCol,     setSortCol]     = useState("secao");
   const [sortDir,     setSortDir]     = useState("asc");
   const [search,      setSearch]      = useState("");
@@ -734,6 +736,15 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
             <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
             {!isMobile && " Atualizar"}
           </button>
+          {isAdmin && (
+            <button onClick={() => setShowDebug(v=>!v)}
+              style={{ padding:"5px 10px", borderRadius:"6px", fontSize:"11px", fontWeight:700,
+                cursor:"pointer", border:`1.5px solid ${showDebug?"#7C3AED":"rgba(255,255,255,.4)"}`,
+                background: showDebug?"#7C3AED":"rgba(255,255,255,.15)",
+                color:"#fff" }}>
+              🔬 Debug SQL
+            </button>
+          )}
           {rows.length > 0 && (
             <button onClick={exportToPDF}
               style={{ display:"flex", alignItems:"center", gap:"5px",
@@ -966,6 +977,66 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
       </div>
       )}
 
+
+    {/* Tabela debug — só admin */}
+    {isAdmin && showDebug && rows.length > 0 && (
+      <div style={{ margin:"0 16px 16px", background:"#fff", border:"1.5px solid #7C3AED",
+        borderRadius:"6px", overflow:"hidden", boxShadow:"0 1px 6px rgba(124,58,237,.15)" }}>
+        <div style={{ padding:"8px 14px", background:"#7C3AED", color:"#fff",
+          fontWeight:700, fontSize:"12px" }}>
+          🔬 Debug SQL — colunas intermediárias (admin)
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"11px" }}>
+            <thead>
+              <tr>
+                {["VENDEDOR","SEÇÃO",
+                  "FAT.HIST.(meta base)","META CALC.",
+                  "FAT.MÊS PURO","CART.SEMANA","FAT.MÊS ATUAL",
+                  "RESTA","NECESS/DIA",
+                  "FAT.HOJE","NÃO FAT.HOJE","REALIZ.DIA",
+                  "% TEND.","DU CONSULT.","DU MÊS","DU DECORR."].map(h => (
+                  <th key={h} style={{ padding:"4px 7px", background:"#EDE9FE", color:"#4C1D95",
+                    fontSize:"10px", fontWeight:700, whiteSpace:"nowrap",
+                    border:"1px solid #C4B5FD",
+                    textAlign: ["VENDEDOR","SEÇÃO"].includes(h) ? "left" : "right" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r,i) => {
+                const fmtV = v => v == null ? "—" : `R$ ${Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2})}`;
+                const fmtN = v => v == null ? "—" : Number(v).toLocaleString("pt-BR");
+                const bg = i%2===0 ? "#FAF5FF" : "#fff";
+                const td = { padding:"4px 7px", border:"1px solid #E9D5FF", background:bg };
+                return (
+                  <tr key={`${r.cod_vendedor}-${r.cod_secao??i}`}>
+                    <td style={{ ...td, fontWeight:500, whiteSpace:"nowrap" }}>{r.nome_vendedor}</td>
+                    <td style={{ ...td, whiteSpace:"nowrap" }}>{r.secao ?? r.familia ?? "—"}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.valor_faturado_secao)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtV(r.valor_meta_secao)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.faturado_mes_puro)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.nao_faturado_semana)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700, color:"#7C3AED" }}>{fmtV(r.valor_faturado_mes_atual)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color: (r.resta_a_fazer??0)<0 ? C.green : C.red }}>{fmtV(r.resta_a_fazer)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.necessidade_dia)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.green }}>{fmtV(r.faturado_hoje)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.nao_faturado_hoje)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtV(r.realizado_dia)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color: (r.tendencia_pct??0)>=100?C.green:(r.tendencia_pct??0)>=90?C.amber:C.red }}>
+                      {r.tendencia_pct != null ? `${Number(r.tendencia_pct).toFixed(1)}%` : "—"}
+                    </td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{fmtN(r.dias_uteis_consultados)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{fmtN(r.dias_uteis_mes_atual)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{fmtN(r.dias_uteis_decorridos)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
 
     </>
   );

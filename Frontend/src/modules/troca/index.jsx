@@ -20,11 +20,19 @@ const pctFlexTroca = v => {
   return         { label:`${v.toFixed(1)}%`, style:{ color:"#fff", background:C.green, borderRadius:"3px", padding:"1px 5px", fontWeight:600 } };
 };
 
-const TH = ({ label, align="right" }) => (
-  <th style={{ padding:"6px 8px", background:C.subHeader, color:"#fff", fontSize:"10px",
-    fontWeight:700, textAlign:align, whiteSpace:"nowrap",
-    border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em" }}>{label}</th>
-);
+function TH({ label, col, align="right", sortCol, sortDir, onSort }) {
+  const active = col && sortCol === col;
+  return (
+    <th onClick={() => col && onSort && onSort(col)}
+      style={{ padding:"6px 8px", color:"#fff", fontSize:"10px",
+        fontWeight:700, textAlign:align, whiteSpace:"nowrap",
+        border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em",
+        cursor: col && onSort ? "pointer" : "default", userSelect:"none",
+        background: active ? C.primaryDk : C.subHeader }}>
+      {label}{active ? (sortDir==="asc" ? " ↑" : " ↓") : ""}
+    </th>
+  );
+}
 
 // ── Linha de dados ────────────────────────────────────────────────────────────
 function DataRow({ row, i, showVendedor }) {
@@ -133,7 +141,9 @@ const MODES = [
 export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
   const cargo   = userInfo.cargo ?? "gerencial";
   const codUser = userInfo.cod_winthor ?? null;
+  const isAdmin = cargo === "admin";
   const headers = useMemo(() => ({ Authorization:`Bearer ${token}` }), [token]);
+  const [showDebug, setShowDebug] = useState(false);
 
   const MODES_VIS = MODES.filter(m => {
     if (cargo === "gerencial" || cargo === "admin") return true;
@@ -179,13 +189,28 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // Rows filtradas para modos não-todas_equipes
+  const [sortCol, setSortCol] = useState("nome_vendedor");
+  const [sortDir, setSortDir] = useState("asc");
+  const handleSort = col => {
+    setSortCol(col);
+    setSortDir(prev => sortCol === col && prev === "asc" ? "desc" : "asc");
+  };
+
   const rows = useMemo(() => {
     let r = [...data];
     if (mode === "equipe"     && activeCode) r = r.filter(x => x.cod_supervisor === activeCode);
     if (mode === "supervisor" && activeCode) r = r.filter(x => x.cod_supervisor === activeCode);
     if (mode === "vendedor"   && activeCode) r = r.filter(x => x.cod_vendedor   === activeCode);
+    r.sort((a,b) => {
+      let av = a[sortCol], bv = b[sortCol];
+      if (av == null) return 1; if (bv == null) return -1;
+      if (typeof av === "number") return sortDir==="asc" ? av-bv : bv-av;
+      return sortDir==="asc"
+        ? String(av).localeCompare(String(bv),"pt-BR")
+        : String(bv).localeCompare(String(av),"pt-BR");
+    });
     return r;
-  }, [data, mode, activeCode]);
+  }, [data, mode, activeCode, sortCol, sortDir]);
 
   const tot = { plf_fat:0, plf_cart:0, plf_total:0, troca:0, flex:0 };
   rows.forEach(r => { tot.plf_fat+=r.plf_fat??0; tot.plf_cart+=r.plf_cart??0; tot.plf_total+=r.plf_total??0; tot.troca+=r.troca??0; tot.flex+=r.flex??0; });
@@ -262,6 +287,16 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
           padding:"6px 8px", borderRadius:"6px", cursor:"pointer", display:"flex", alignItems:"center" }}>
         <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
       </button>
+
+      {isAdmin && (
+        <button onClick={() => setShowDebug(v=>!v)}
+          style={{ padding:"5px 10px", borderRadius:"6px", fontSize:"11px", fontWeight:700,
+            cursor:"pointer", border:`1.5px solid ${showDebug?"#7C3AED":"#CBD5E1"}`,
+            background: showDebug?"#7C3AED":"#fff",
+            color: showDebug?"#fff":"#64748b" }}>
+          🔬 Debug SQL
+        </button>
+      )}
 
       {isMobile ? (<>
         <button onClick={()=>setShowMenu(v=>!v)}
@@ -348,12 +383,12 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:isMobile?"11px":"12px" }}>
               <thead>
                 <tr>
-                  {showVendedor && <><TH label="RCA" align="center"/><TH label="VENDEDOR" align="left"/></>}
-                  <TH label="PLF TOTAL"/>
-                  <TH label="TROCA"/>
-                  <TH label="% TROCA"       align="center"/>
-                  <TH label="FLEX"/>
-                  <TH label="% TROCA - FLEX" align="center"/>
+                  {showVendedor && <><TH label="RCA"  col="cod_vendedor"  align="center" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/><TH label="VENDEDOR" col="nome_vendedor" align="left" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/></>}
+                  <TH label="PLF TOTAL"      col="plf_total"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                  <TH label="TROCA"          col="troca"          sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                  <TH label="% TROCA"        col="pct_troca"      align="center" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                  <TH label="FLEX"           col="flex"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                  <TH label="% TROCA - FLEX" col="pct_flex_troca" align="center" sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
                 </tr>
               </thead>
               <tbody>
@@ -380,6 +415,45 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
             </table>
           </div>
         )}
+      </div>
+    )}
+
+    {/* Tabela debug — só admin */}
+    {isAdmin && showDebug && rows.length > 0 && (
+      <div style={{ margin:"0 16px 16px", background:"#fff", border:"1.5px solid #7C3AED",
+        borderRadius:"6px", overflow:"hidden", boxShadow:"0 1px 6px rgba(124,58,237,.15)" }}>
+        <div style={{ padding:"8px 14px", background:"#7C3AED", color:"#fff",
+          fontWeight:700, fontSize:"12px", display:"flex", alignItems:"center", gap:"8px" }}>
+          🔬 Debug SQL — valores intermediários (visível apenas para admin)
+        </div>
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"11px" }}>
+            <thead>
+              <tr>
+                {["VENDEDOR","PLF FAT BRUTO","PLF DEVOL","PLF FAT LÍQ","PLF CART","PLF TOTAL","TROCA","FLEX BRUTA","FLEX × -1"].map(h => (
+                  <th key={h} style={{ padding:"5px 8px", background:"#EDE9FE", color:"#4C1D95",
+                    fontSize:"10px", fontWeight:700, whiteSpace:"nowrap",
+                    border:"1px solid #C4B5FD", textAlign: h==="VENDEDOR"?"left":"right" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r,i) => (
+                <tr key={r.cod_vendedor??i} style={{ background:i%2===0?"#FAF5FF":"#fff" }}>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", fontWeight:500 }}>{r.nome_vendedor}</td>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono }}>{fmtR(r.dbg_plf_fat_bruto)}</td>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:"#DC2626" }}>{fmtR(r.dbg_plf_devol)}</td>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtR(r.plf_fat)}</td>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono }}>{fmtR(r.dbg_plf_cart)}</td>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, fontWeight:700, color:"#7C3AED" }}>{fmtR(r.plf_total)}</td>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:C.red }}>{fmtR(r.dbg_troca_bruta)}</td>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:"#92400E" }}>{fmtR(r.dbg_flex_bruta)}</td>
+                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:C.amber }}>{fmtR(r.flex)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     )}
   </>);
