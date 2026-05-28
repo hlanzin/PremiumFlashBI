@@ -205,12 +205,12 @@ SELECT
     ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2)
       + NVL(C.VL_PLF_CART, 0)                                    AS plf_total,
     NVL(T.VL_TROCA,    0)                                        AS troca,
-    CASE WHEN (NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0)) > 0
-         THEN ROUND(NVL(T.VL_TROCA,0) / (NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0)) * 100, 2)
+    CASE WHEN (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) > 0
+         THEN ROUND(NVL(T.VL_TROCA,0) / (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) * 100, 2)
          ELSE NULL END                                            AS pct_troca,
     NVL(X.VL_FLEX,     0) * -1                                   AS flex,
-    CASE WHEN (NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0)) > 0
-         THEN ROUND((NVL(T.VL_TROCA,0) - (NVL(X.VL_FLEX,0) * -1)) / (NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0)) * 100, 2)
+    CASE WHEN (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) > 0
+         THEN ROUND((NVL(T.VL_TROCA,0) - (NVL(X.VL_FLEX,0) * -1)) / (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) * 100, 2)
          ELSE NULL END                                            AS pct_flex_troca,
     -- Colunas de debug (visíveis para admin)
     NVL(F.VL_PLF_FAT,  0)                                        AS dbg_plf_fat_bruto,

@@ -16,8 +16,9 @@ const pctTroca = v => {
 
 const pctFlexTroca = v => {
   if (v == null) return { label:"—", style:{ color:C.textSub } };
-  if (v > 2) return { label:`${v.toFixed(1)}%`, style:{ color:"#fff", background:C.red,   borderRadius:"3px", padding:"1px 5px", fontWeight:600 } };
-  return         { label:`${v.toFixed(1)}%`, style:{ color:"#fff", background:C.green, borderRadius:"3px", padding:"1px 5px", fontWeight:600 } };
+  const val = Math.max(0, v);
+  if (val > 2) return { label:`${val.toFixed(1)}%`, style:{ color:"#fff", background:C.red,   borderRadius:"3px", padding:"1px 5px", fontWeight:600 } };
+  return         { label:`${val.toFixed(1)}%`, style:{ color:"#fff", background:C.green, borderRadius:"3px", padding:"1px 5px", fontWeight:600 } };
 };
 
 function TH({ label, col, align="right", sortCol, sortDir, onSort }) {
@@ -70,8 +71,8 @@ function EquipeTrocaCard({ supervisor, rows, isMobile }) {
     tot.troca     += r.troca     ?? 0;
     tot.flex      += r.flex      ?? 0;
   });
-  const totPct = tot.plf_fat   > 0 ? tot.troca/tot.plf_fat*100 : null;
-  const totPft = tot.plf_fat   > 0 ? (tot.troca - tot.flex)/tot.plf_fat*100 : null;
+  const totPct = tot.plf_total > 0 ? tot.troca/tot.plf_total*100 : null;
+  const totPft = tot.plf_total > 0 ? (tot.troca - tot.flex)/tot.plf_total*100 : null;
   const pt  = pctTroca(totPct);
   const pft = pctFlexTroca(totPft);
 
@@ -214,8 +215,8 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
 
   const tot = { plf_fat:0, plf_cart:0, plf_total:0, troca:0, flex:0 };
   rows.forEach(r => { tot.plf_fat+=r.plf_fat??0; tot.plf_cart+=r.plf_cart??0; tot.plf_total+=r.plf_total??0; tot.troca+=r.troca??0; tot.flex+=r.flex??0; });
-  const totPct = tot.plf_fat > 0 ? tot.troca/tot.plf_fat*100 : null;
-  const totPft = tot.plf_fat > 0 ? (tot.troca-tot.flex)/tot.plf_fat*100 : null;
+  const totPct = tot.plf_total > 0 ? tot.troca/tot.plf_total*100 : null;
+  const totPft = tot.plf_total > 0 ? (tot.troca-tot.flex)/tot.plf_total*100 : null;
   const totPt  = pctTroca(totPct);
   const totPftS= pctFlexTroca(totPft);
 
