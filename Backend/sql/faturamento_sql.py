@@ -380,8 +380,28 @@ def build_ranking_query(filtro_supervisor: Optional[int] = None,
         params = []
 
     dr = date_ref or parse_data(None)
+
+    from datetime import date, timedelta
+    dr_date  = date.fromisoformat(dr)
+    hoje     = date.today()
+    mes_atual = (dr_date.year == hoje.year and dr_date.month == hoje.month)
+
+    if mes_atual:
+        mes_ini      = dr_date.replace(day=1)
+        dias_ate_dom = (dr_date.weekday() + 1) % 7
+        ultimo_dom   = dr_date - timedelta(days=dias_ate_dom)
+        nf_ini       = max(mes_ini, ultimo_dom)
+        nf_fim       = dr_date - timedelta(days=1)
+        nf_ativo     = "1=1"
+    else:
+        nf_ini = nf_fim = dr_date
+        nf_ativo = "1=0"
+
     sql = (BASE_SQL
-           .replace("{DATE_REF}", dr)
+           .replace("{DATE_REF}",    dr)
+           .replace("{NF_DATA_INI}", nf_ini.strftime("%Y-%m-%d"))
+           .replace("{NF_DATA_FIM}", nf_fim.strftime("%Y-%m-%d"))
+           .replace("{NF_ATIVO}",    nf_ativo)
            .format(
                excl_usur=excl_usur,       excl_devol=excl_devol,
                filtro_vendas=fv,          filtro_devolucoes=fd,
