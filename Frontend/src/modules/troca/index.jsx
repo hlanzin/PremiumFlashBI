@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { RefreshCw, Users, User, Building2, Shield,
-         ChevronDown, Menu, X, FileText } from "lucide-react";
+         ChevronDown, Menu, X, FileText, Banknote } from "lucide-react";
 import { C, getToday } from "../../theme";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
@@ -51,7 +51,7 @@ function DataRow({ row, i, showVendedor }) {
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtR(row.plf_total)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.red, fontWeight:600 }}>{fmtR(row.troca)}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pt.style}>{pt.label}</span></td>
-      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.amber }}>{fmtR(row.flex)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.amber }}>{fmtR(row.flex_total)}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pft.style}>{pft.label}</span></td>
     </tr>
   );
@@ -63,16 +63,18 @@ function EquipeTrocaCard({ supervisor, rows, isMobile }) {
   const supRows = rows.filter(r => r.cod_supervisor === supervisor.cod);
   if (!supRows.length) return null;
 
-  const tot = { plf_fat:0, plf_cart:0, plf_total:0, troca:0, flex:0 };
+  const tot = { plf_fat:0, plf_cart:0, plf_total:0, troca:0, flex:0, flex_cart:0, flex_total:0 };
   supRows.forEach(r => {
-    tot.plf_fat   += r.plf_fat   ?? 0;
-    tot.plf_cart  += r.plf_cart  ?? 0;
-    tot.plf_total += r.plf_total ?? 0;
-    tot.troca     += r.troca     ?? 0;
-    tot.flex      += r.flex      ?? 0;
+    tot.plf_fat   += r.plf_fat    ?? 0;
+    tot.plf_cart  += r.plf_cart   ?? 0;
+    tot.plf_total += r.plf_total  ?? 0;
+    tot.troca     += r.troca      ?? 0;
+    tot.flex      += r.flex       ?? 0;
+    tot.flex_cart += r.flex_cart  ?? 0;
+    tot.flex_total+= r.flex_total ?? 0;
   });
   const totPct = tot.plf_total > 0 ? tot.troca/tot.plf_total*100 : null;
-  const totPft = tot.plf_total > 0 ? (tot.troca - tot.flex)/tot.plf_total*100 : null;
+  const totPft = tot.plf_total > 0 ? Math.max(0, (tot.troca-tot.flex_total)/tot.plf_total*100) : null;
   const pt  = pctTroca(totPct);
   const pft = pctFlexTroca(totPft);
 
@@ -120,7 +122,7 @@ function EquipeTrocaCard({ supervisor, rows, isMobile }) {
                 <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmtR(tot.plf_total)}</td>
                 <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmtR(tot.troca)}</td>
                 <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"center" }}><span style={pt.style}>{pt.label}</span></td>
-                <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmtR(tot.flex)}</td>
+                <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmtR(tot.flex_total)}</td>
                 <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"center" }}><span style={pft.style}>{pft.label}</span></td>
               </tr>
             </tfoot>
@@ -213,10 +215,18 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
     return r;
   }, [data, mode, activeCode, sortCol, sortDir]);
 
-  const tot = { plf_fat:0, plf_cart:0, plf_total:0, troca:0, flex:0 };
-  rows.forEach(r => { tot.plf_fat+=r.plf_fat??0; tot.plf_cart+=r.plf_cart??0; tot.plf_total+=r.plf_total??0; tot.troca+=r.troca??0; tot.flex+=r.flex??0; });
+  const tot = { plf_fat:0, plf_cart:0, plf_total:0, troca:0, flex:0, flex_cart:0, flex_total:0 };
+  rows.forEach(r => {
+    tot.plf_fat   += r.plf_fat    ?? 0;
+    tot.plf_cart  += r.plf_cart   ?? 0;
+    tot.plf_total += r.plf_total  ?? 0;
+    tot.troca     += r.troca      ?? 0;
+    tot.flex      += r.flex       ?? 0;
+    tot.flex_cart += r.flex_cart  ?? 0;
+    tot.flex_total+= r.flex_total ?? 0;
+  });
   const totPct = tot.plf_total > 0 ? tot.troca/tot.plf_total*100 : null;
-  const totPft = tot.plf_total > 0 ? (tot.troca-tot.flex)/tot.plf_total*100 : null;
+  const totPft = tot.plf_total > 0 ? Math.max(0, (tot.troca-tot.flex_total)/tot.plf_total*100) : null;
   const totPt  = pctTroca(totPct);
   const totPftS= pctFlexTroca(totPft);
 
@@ -263,7 +273,9 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
           <div style={{ fontWeight:900, fontSize:"20px", color:"#fff", letterSpacing:"0.06em", lineHeight:1 }}>PREMIUM</div>
           <div style={{ fontWeight:700, fontSize:"9px", color:C.gold, letterSpacing:"0.14em" }}>DISTRIBUIDORA</div>
         </div>
-        <div style={{ color:"#fff", fontWeight:700, fontSize:"14px" }}>TROCA</div>
+        <div style={{ color:"#fff", fontWeight:700, fontSize:"14px", display:"flex", alignItems:"center", gap:"6px" }}>
+          <Banknote size={16} color={C.gold}/> TROCA
+        </div>
         {rows.length > 0 && mode !== "todas_equipes" && (
           <button onClick={exportToPDF}
             style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:"5px",
@@ -354,7 +366,7 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
             <span>PLF: <b style={{color:C.primary}}>{fmtR(tot.plf_total)}</b></span>
             <span>Troca: <b style={{color:C.red}}>{fmtR(tot.troca)}</b></span>
             <span>% Troca: <b><span style={totPt.style}>{totPt.label}</span></b></span>
-            <span>Flex: <b style={{color:C.amber}}>{fmtR(tot.flex)}</b></span>
+            <span>Flex: <b style={{color:C.amber}}>{fmtR(tot.flex_total)}</b></span>
           </div>
         )}
       </div>
@@ -408,7 +420,7 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
                     <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmtR(tot.plf_total)}</td>
                     <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmtR(tot.troca)}</td>
                     <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"center" }}><span style={totPt.style}>{totPt.label}</span></td>
-                    <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmtR(tot.flex)}</td>
+                    <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"right", fontFamily:C.mono }}>{fmtR(tot.flex_total)}</td>
                     <td style={{ padding:"5px 8px", border:"1px solid #880000", textAlign:"center" }}><span style={totPftS.style}>{totPftS.label}</span></td>
                   </tr>
                 </tfoot>
@@ -431,7 +443,8 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"11px" }}>
             <thead>
               <tr>
-                {["VENDEDOR","PLF FAT BRUTO","PLF DEVOL","PLF FAT LÍQ","PLF CART","PLF TOTAL","TROCA","FLEX BRUTA","FLEX × -1"].map(h => (
+                {["VENDEDOR","PLF FAT BRUTO","PLF DEVOL","PLF FAT LÍQ","PLF CART","PLF TOTAL",
+                  "TROCA","FLEX FAT","FLEX SEMANA","FLEX TOTAL","% TROCA","% TROCA-FLEX"].map(h => (
                   <th key={h} style={{ padding:"5px 8px", background:"#EDE9FE", color:"#4C1D95",
                     fontSize:"10px", fontWeight:700, whiteSpace:"nowrap",
                     border:"1px solid #C4B5FD", textAlign: h==="VENDEDOR"?"left":"right" }}>{h}</th>
@@ -439,19 +452,26 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r,i) => (
-                <tr key={r.cod_vendedor??i} style={{ background:i%2===0?"#FAF5FF":"#fff" }}>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", fontWeight:500 }}>{r.nome_vendedor}</td>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono }}>{fmtR(r.dbg_plf_fat_bruto)}</td>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:"#DC2626" }}>{fmtR(r.dbg_plf_devol)}</td>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtR(r.plf_fat)}</td>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono }}>{fmtR(r.dbg_plf_cart)}</td>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, fontWeight:700, color:"#7C3AED" }}>{fmtR(r.plf_total)}</td>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:C.red }}>{fmtR(r.dbg_troca_bruta)}</td>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:"#92400E" }}>{fmtR(r.dbg_flex_bruta)}</td>
-                  <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:C.amber }}>{fmtR(r.flex)}</td>
-                </tr>
-              ))}
+              {rows.map((r,i) => {
+                const pt  = pctTroca(r.pct_troca);
+                const pft = pctFlexTroca(r.pct_flex_troca);
+                return (
+                  <tr key={r.cod_vendedor??i} style={{ background:i%2===0?"#FAF5FF":"#fff" }}>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", fontWeight:500 }}>{r.nome_vendedor}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono }}>{fmtR(r.dbg_plf_fat_bruto)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:"#DC2626" }}>{fmtR(r.dbg_plf_devol)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtR(r.plf_fat)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono }}>{fmtR(r.dbg_plf_cart)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, fontWeight:700, color:"#7C3AED" }}>{fmtR(r.plf_total)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:C.red }}>{fmtR(r.dbg_troca_bruta)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:C.amber }}>{fmtR(r.flex)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, color:C.amber }}>{fmtR(r.flex_cart)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"right", fontFamily:C.mono, fontWeight:700, color:C.amber }}>{fmtR(r.flex_total)}</td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"center" }}><span style={pt.style}>{pt.label}</span></td>
+                    <td style={{ padding:"4px 8px", border:"1px solid #E9D5FF", textAlign:"center" }}><span style={pft.style}>{pft.label}</span></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

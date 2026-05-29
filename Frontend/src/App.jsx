@@ -15,6 +15,7 @@ import { useIsMobile }   from "./hooks";
 import {
   BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart,
   LogOut, Menu, X, ChevronRight,
+  Banknote,
 } from "lucide-react";
 
 // ── Registro de módulos ───────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ const BI_MODULES = [
   { id:"dist_numerica", label:"Dist. Numérica",   icon:TrendingUp,  component:ModuleDistNumerica, cargos:null },
   { id:"lista_negra",   label:"Lista Negra",       icon:TrendingDown,component:ModuleListaNegra,  cargos:["admin","gerencial","supervisor","vendedor","fornecedor"] },
   { id:"bateu_levou",   label:"Bateu Levou",       icon:Tag,         component:ModuleBateuLevou,   cargos:null },
-  { id:"troca",         label:"Troca",             icon:TrendingDown, component:ModuleTroca,       cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"troca",         label:"Troca",             icon:Banknote, component:ModuleTroca,       cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"pedidos",       label:"Pedidos",           icon:ShoppingCart, component:ModulePedidos,     cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"estoque",       label:"Estoque",           icon:Package,     component:ModuleEstoque,      cargos:null },
   { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },

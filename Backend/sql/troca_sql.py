@@ -181,7 +181,7 @@ PLF_DEVOL AS (
     GROUP BY PCNFENT.CODUSURDEVOL
 ),
 
--- FLEX: verba abaixo da tabela dos fornecedores PMU
+-- FLEX: verba abaixo da tabela dos fornecedores PMU (faturado no mês)
 FLEX AS (
     SELECT
         a.codusur AS CODUSUR,
@@ -193,6 +193,30 @@ FLEX AS (
     WHERE a.dtmov     BETWEEN P.DT_MES_INI AND P.DT_HOJE
       AND a.CODFORNEC IN ({FLEX_FORNECS})
     GROUP BY a.codusur
+),
+
+-- FLEX carteira da semana (pedidos CONDVENDA 5/11 dos fornecedores PMU, domingo até hoje)
+FLEX_CART AS (
+    SELECT
+        PCUSUARI.CODUSUR,
+        SUM(ROUND(NVL(PCPEDI.QT,0) * (NVL(PCPEDI.PVENDA,0)
+            + NVL(PCPEDI.VLOUTRASDESP,0)
+            + NVL(PCPEDI.VLFRETE,0)), 2))  AS VL_FLEX_CART
+    FROM PCPEDI
+        INNER JOIN PCPEDC   ON PCPEDC.NUMPED    = PCPEDI.NUMPED
+        INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
+        LEFT  JOIN PCPRODUT ON PCPRODUT.CODPROD = PCPEDI.CODPROD
+        CROSS JOIN PARAMS P
+    WHERE PCPEDC.DATA       BETWEEN P.DT_SEM_INI AND P.DT_HOJE
+      AND PCPEDC.CODFILIAL   IN ('{FILIAL}')
+      AND PCPEDC.CONDVENDA   IN (5,11)
+      AND PCPRODUT.CODFORNEC IN ({FLEX_FORNECS})
+      AND PCPEDC.POSICAO    <> 'F'
+      AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.DTCANCEL    IS NULL
+      AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+      AND PCUSUARI.CODUSUR       NOT IN (2,160,180)
+    GROUP BY PCUSUARI.CODUSUR
 )
 
 SELECT
@@ -209,8 +233,10 @@ SELECT
          THEN ROUND(NVL(T.VL_TROCA,0) / (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) * 100, 2)
          ELSE NULL END                                            AS pct_troca,
     NVL(X.VL_FLEX,     0) * -1                                   AS flex,
+    NVL(FC.VL_FLEX_CART, 0)                                      AS flex_cart,
+    (NVL(X.VL_FLEX, 0) * -1) + NVL(FC.VL_FLEX_CART, 0)         AS flex_total,
     CASE WHEN (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) > 0
-         THEN ROUND((NVL(T.VL_TROCA,0) - (NVL(X.VL_FLEX,0) * -1)) / (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) * 100, 2)
+         THEN ROUND(GREATEST((NVL(T.VL_TROCA,0) - ((NVL(X.VL_FLEX,0) * -1) + NVL(FC.VL_FLEX_CART,0))), 0) / (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) * 100, 2)
          ELSE NULL END                                            AS pct_flex_troca,
     -- Colunas de debug (visíveis para admin)
     NVL(F.VL_PLF_FAT,  0)                                        AS dbg_plf_fat_bruto,
@@ -219,12 +245,13 @@ SELECT
     NVL(T.VL_TROCA,    0)                                        AS dbg_troca_bruta,
     NVL(X.VL_FLEX,     0)                                        AS dbg_flex_bruta
 FROM PCUSUARI U
-    LEFT JOIN PCSUPERV  S ON S.CODSUPERVISOR = U.CODSUPERVISOR
-    LEFT JOIN PLF_FAT   F ON F.CODUSUR = U.CODUSUR
-    LEFT JOIN PLF_DEVOL D ON D.CODUSUR = U.CODUSUR
-    LEFT JOIN PLF_CART  C ON C.CODUSUR = U.CODUSUR
-    LEFT JOIN TROCA     T ON T.CODUSUR = U.CODUSUR
-    LEFT JOIN FLEX      X ON X.CODUSUR = U.CODUSUR
+    LEFT JOIN PCSUPERV  S  ON S.CODSUPERVISOR = U.CODSUPERVISOR
+    LEFT JOIN PLF_FAT   F  ON F.CODUSUR = U.CODUSUR
+    LEFT JOIN PLF_DEVOL D  ON D.CODUSUR = U.CODUSUR
+    LEFT JOIN PLF_CART  C  ON C.CODUSUR = U.CODUSUR
+    LEFT JOIN TROCA     T  ON T.CODUSUR = U.CODUSUR
+    LEFT JOIN FLEX      X  ON X.CODUSUR = U.CODUSUR
+    LEFT JOIN FLEX_CART FC ON FC.CODUSUR = U.CODUSUR
 WHERE U.NOME LIKE 'PMU%'
   AND U.CODSUPERVISOR NOT IN ('9999','999999')
   AND U.CODUSUR NOT IN (2, 160, 180)
