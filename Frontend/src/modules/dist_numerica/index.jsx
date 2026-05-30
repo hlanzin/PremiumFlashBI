@@ -319,6 +319,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
   );
   const [agrupamento, setAgrupamento] = useState("fornecedor");
   const [data,       setData]       = useState([]);
+  const [totaisDist, setTotaisDist] = useState({});
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState(null);
   const [sortCol,    setSortCol]    = useState("nome_fornecedor");
@@ -363,7 +364,9 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       url += `?data=${dataRef}&agrupamento=${agrupamento}`;
       const res = await fetch(url, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setData((await res.json()).dados ?? []);
+      const json = await res.json();
+      setData(json.dados ?? []);
+      setTotaisDist(json.totais_distintos ?? {});
       setSortCol(agrupamento === "secao" ? "nome_secao" : "nome_fornecedor");
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
@@ -837,13 +840,22 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                 <tfoot>
                   <tr style={{ background:C.total, color:C.totalTxt, fontWeight:700 }}>
                     {showVendedor && <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }} colSpan={2}>{rows.length} linhas</td>}
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }}>TOTAL</td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.meta)}</td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(tot.mes)}</td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.semana)}</td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtN(totReal)}</td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.dia)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }}>
+                      TOTAL
+                      <span style={{ fontSize:"9px", fontWeight:400, marginLeft:"4px", opacity:.7 }}>
+                        clientes únicos
+                      </span>
+                    </td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(totaisDist.qt_total_meta ?? tot.meta)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(totaisDist.qt_total_mes ?? tot.mes)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(totaisDist.qt_total_semana ?? tot.semana)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>
+                      {fmtN((totaisDist.qt_total_mes ?? tot.mes) + (totaisDist.qt_total_semana ?? tot.semana))}
+                    </td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>
+                      <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
+                    </td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(totaisDist.qt_total_hoje ?? tot.dia)}</td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>{arrow(totPct)}</td>
                   </tr>
                 </tfoot>

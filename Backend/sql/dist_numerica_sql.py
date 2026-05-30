@@ -483,3 +483,136 @@ def build_dn_query(modo: str, filtro_id: Optional[int] = None,
                filtro_fat_hoje=ffh,        select_final=sel,
            ))
     return sql, params
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# build_dn_total_query — COUNT DISTINCT sem agrupar por dimensão
+# Retorna os totais reais (cliente pode aparecer em vários fornecedores)
+# ─────────────────────────────────────────────────────────────────────────────
+_TOTAL_SQL = f"""
+WITH PARAMS AS (
+    SELECT
+        ADD_MONTHS(TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD'),'MM'),-3)  AS DT_INI,
+        LAST_DAY(ADD_MONTHS(TO_DATE('{{dr}}','YYYY-MM-DD'),-1))    AS DT_FIM,
+        TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD'),'MM')                 AS DT_MES_INI,
+        TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD'))                      AS DT_HOJE,
+        TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD'),'DAY')               AS DT_SEMANA_INI,
+        TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD')) - 1                  AS DT_ONTEM
+    FROM DUAL
+)
+SELECT
+    (SELECT COUNT(DISTINCT PCMOV.CODCLI)
+       FROM PCNFSAID
+       INNER JOIN PCMOV    ON PCMOV.NUMTRANSVENDA = PCNFSAID.NUMTRANSVENDA
+                          AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+       INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR    = PCNFSAID.CODUSUR
+       CROSS JOIN PARAMS P
+      WHERE PCMOV.DTMOV      BETWEEN P.DT_INI AND P.DT_FIM
+        AND PCNFSAID.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
+        AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+        AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+        AND PCMOV.CODOPER NOT IN ('SR','SO')
+        AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+        AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+        AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+        AND PCNFSAID.DTCANCEL   IS NULL
+        {{excl_usur}} {{f_meta}}
+    ) AS QT_TOTAL_META,
+    (SELECT COUNT(DISTINCT PCMOV.CODCLI)
+       FROM PCNFSAID
+       INNER JOIN PCMOV    ON PCMOV.NUMTRANSVENDA = PCNFSAID.NUMTRANSVENDA
+                          AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+       INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR    = PCNFSAID.CODUSUR
+       CROSS JOIN PARAMS P
+      WHERE PCMOV.DTMOV      BETWEEN P.DT_MES_INI AND P.DT_HOJE
+        AND PCNFSAID.DTSAIDA BETWEEN P.DT_MES_INI AND P.DT_HOJE
+        AND PCMOV.CODFILIAL    IN ('{FILIAL}')
+        AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
+        AND PCMOV.CODOPER NOT IN ('SR','SO')
+        AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
+        AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
+        AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+        AND PCNFSAID.DTCANCEL   IS NULL
+        {{excl_usur}} {{f_mes}}
+    ) AS QT_TOTAL_MES,
+    (SELECT COUNT(DISTINCT PCPEDC.CODCLI)
+       FROM PCPEDI
+       INNER JOIN PCPEDC   ON PCPEDC.NUMPED    = PCPEDI.NUMPED
+       INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
+       CROSS JOIN PARAMS P
+      WHERE PCPEDC.DATA      BETWEEN P.DT_SEMANA_INI AND P.DT_ONTEM
+        AND PCPEDC.CODFILIAL  IN ('{FILIAL}')
+        AND PCPEDC.CONDVENDA  IN (1,2,3,7,9,14,15,17,18,19,98)
+        AND PCPEDC.POSICAO   <> 'F'
+        AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+        AND PCPEDC.DTCANCEL   IS NULL
+        AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+        {{excl_usur}} {{f_semana}}
+        AND NOT EXISTS (
+            SELECT 1 FROM PCNFSAID NS
+                INNER JOIN PCMOV MV ON MV.NUMTRANSVENDA = NS.NUMTRANSVENDA
+                                   AND MV.CODFILIAL     = NS.CODFILIAL
+                CROSS JOIN PARAMS P2
+             WHERE MV.DTMOV      BETWEEN P2.DT_MES_INI AND P2.DT_HOJE
+               AND NS.DTSAIDA    BETWEEN P2.DT_MES_INI AND P2.DT_HOJE
+               AND MV.CODFILIAL   IN ('{FILIAL}')
+               AND NS.CODFILIAL   IN ('{FILIAL}')
+               AND MV.CODOPER    NOT IN ('SR','SO')
+               AND NVL(NS.TIPOVENDA,'X') NOT IN ('SR','DF')
+               AND NS.CODFISCAL  NOT IN (522,622,722,532,632,732)
+               AND NS.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+               AND NS.DTCANCEL    IS NULL
+               AND MV.CODCLI      = PCPEDC.CODCLI
+               AND NS.CODUSUR     = PCPEDC.CODUSUR
+        )
+    ) AS QT_TOTAL_SEMANA,
+    (SELECT COUNT(DISTINCT PCPEDC.CODCLI)
+       FROM PCPEDI
+       INNER JOIN PCPEDC   ON PCPEDC.NUMPED    = PCPEDI.NUMPED
+       INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
+       CROSS JOIN PARAMS P
+      WHERE PCPEDC.DATA     = P.DT_HOJE
+        AND PCPEDC.CODFILIAL IN ('{FILIAL}')
+        AND PCPEDC.CONDVENDA IN (1,2,3,7,9,14,15,17,18,19,98)
+        AND PCPEDC.POSICAO  <> 'F'
+        AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+        AND PCPEDC.DTCANCEL  IS NULL
+        AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
+        {{excl_usur}} {{f_hoje}}
+    ) AS QT_TOTAL_HOJE
+FROM DUAL
+""".replace("{FILIAL}", FILIAL)
+
+
+def build_dn_total_query(modo: str, filtro_id: Optional[int] = None,
+                         date_ref: Optional[str] = None) -> tuple:
+    """Retorna SQL + params para contagem DISTINTA de clientes (sem agrupar por dim)."""
+    from database import parse_data
+    dr = date_ref or parse_data(None)
+
+    if modo == "gerencial":
+        excl = fm = fms = fnfs = fnfh = ""
+        params = []
+    else:
+        excl = "AND PCUSUARI.CODUSUR NOT IN (2,10,160,180)"
+        if modo == "vendedor" and filtro_id is not None:
+            fm   = "AND PCNFSAID.CODUSUR = :p1"
+            fms  = "AND PCNFSAID.CODUSUR = :p2"
+            fnfs = "AND PCUSUARI.CODUSUR = :p3"
+            fnfh = "AND PCUSUARI.CODUSUR = :p4"
+            params = [filtro_id] * 4
+        elif modo in ("equipe", "supervisor") and filtro_id is not None:
+            fm   = "AND NVL(PCNFSAID.CODSUPERVISOR,PCUSUARI.CODSUPERVISOR) = :p1"
+            fms  = "AND NVL(PCNFSAID.CODSUPERVISOR,PCUSUARI.CODSUPERVISOR) = :p2"
+            fnfs = "AND PCUSUARI.CODSUPERVISOR = :p3"
+            fnfh = "AND PCUSUARI.CODSUPERVISOR = :p4"
+            params = [filtro_id] * 4
+        else:
+            fm = fms = fnfs = fnfh = ""
+            params = []
+
+    sql = _TOTAL_SQL.format(
+        dr=dr, excl_usur=excl,
+        f_meta=fm, f_mes=fms, f_semana=fnfs, f_hoje=fnfh
+    )
+    return sql, params

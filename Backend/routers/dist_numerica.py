@@ -1,7 +1,7 @@
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends
 from database import execute_query, parse_data
-from sql.dist_numerica_sql import build_dn_query
+from sql.dist_numerica_sql import build_dn_query, build_dn_total_query
 from routers.auth import get_current_user, CurrentUser
 
 router = APIRouter(prefix="/api/dn", tags=["Dist. Numerica"])
@@ -28,7 +28,10 @@ def get_todos(data: Optional[str] = None, agrupamento: str = "fornecedor", u: Cu
             rows = [r for r in rows if r.get("cod_supervisor") == u.cod_winthor]
         if u.is_fornecedor:
             rows = _filtrar_fornecedor(rows, u.codfornecs)
-        return {"data_ref": dr, "total_registros": len(rows), "dados": rows}
+        sql_t, p_t = build_dn_total_query("todos", date_ref=dr)
+        tot = execute_query(sql_t, p_t)
+        totais = tot[0] if tot else {}
+        return {"data_ref": dr, "total_registros": len(rows), "dados": rows, "totais_distintos": totais}
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -43,7 +46,10 @@ def get_gerencial(data: Optional[str] = None, agrupamento: str = "fornecedor", u
         rows = execute_query(sql, params)
         if u.is_fornecedor:
             rows = _filtrar_fornecedor(rows, u.codfornecs)
-        return {"data_ref": dr, "total_registros": len(rows), "dados": rows}
+        sql_t, p_t = build_dn_total_query("gerencial", date_ref=dr)
+        tot = execute_query(sql_t, p_t)
+        totais = tot[0] if tot else {}
+        return {"data_ref": dr, "total_registros": len(rows), "dados": rows, "totais_distintos": totais}
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -62,9 +68,12 @@ def get_por_vendedor(cod: int, data: Optional[str] = None, agrupamento: str = "f
             raise HTTPException(404, f"Vendedor {cod} sem dados.")
         if u.is_supervisor and rows[0].get("cod_supervisor") != u.cod_winthor:
             raise FORBIDDEN
+        sql_t, p_t = build_dn_total_query("vendedor", filtro_id=cod, date_ref=dr)
+        tot = execute_query(sql_t, p_t)
+        totais = tot[0] if tot else {}
         return {"data_ref": dr, "cod_vendedor": cod,
                 "nome_vendedor": rows[0]["nome_vendedor"],
-                "total_registros": len(rows), "dados": rows}
+                "total_registros": len(rows), "dados": rows, "totais_distintos": totais}
     except HTTPException:
         raise
     except Exception as e:
@@ -85,9 +94,12 @@ def get_por_equipe(cod: int, data: Optional[str] = None, agrupamento: str = "for
             rows = _filtrar_fornecedor(rows, u.codfornecs)
         if not rows:
             raise HTTPException(404, f"Nenhum dado para supervisor {cod}.")
+        sql_t, p_t = build_dn_total_query("equipe", filtro_id=cod, date_ref=dr)
+        tot = execute_query(sql_t, p_t)
+        totais = tot[0] if tot else {}
         return {"data_ref": dr, "cod_supervisor": cod,
                 "nome_supervisor": rows[0]["nome_supervisor"] if rows else None,
-                "total_registros": len(rows), "dados": rows}
+                "total_registros": len(rows), "dados": rows, "totais_distintos": totais}
     except HTTPException:
         raise
     except Exception as e:
@@ -108,9 +120,12 @@ def get_por_supervisor(cod: int, data: Optional[str] = None, agrupamento: str = 
             rows = _filtrar_fornecedor(rows, u.codfornecs)
         if not rows:
             raise HTTPException(404, f"Supervisor {cod} sem dados.")
+        sql_t, p_t = build_dn_total_query("supervisor", filtro_id=cod, date_ref=dr)
+        tot = execute_query(sql_t, p_t)
+        totais = tot[0] if tot else {}
         return {"data_ref": dr, "cod_supervisor": cod,
                 "nome_supervisor": rows[0]["nome_supervisor"] if rows else None,
-                "total_registros": len(rows), "dados": rows}
+                "total_registros": len(rows), "dados": rows, "totais_distintos": totais}
     except HTTPException:
         raise
     except Exception as e:
