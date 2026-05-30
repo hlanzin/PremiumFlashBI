@@ -19,3 +19,6 @@ FILIAL = os.getenv("FILIAL", "3")
 # ── Auth ──────────────────────────────────────────────────────────────────────
 SECRET_KEY         = os.getenv("SECRET_KEY",         "premium-flash-secret-2026")
 TOKEN_EXPIRE_HOURS = int(os.getenv("TOKEN_EXPIRE_HOURS", "720"))  # 30 dias
+
+# ── Conta Corrente: supervisor → conta RCA própria ────────────────────────────
+SUP_TO_RCA = {2: 2, 8: 160, 9: 180}

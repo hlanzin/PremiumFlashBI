@@ -236,7 +236,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                   {!consolidado && <Th label={agrupamento==="secao"?"SEÇÃO":"FORNECEDOR"} col={colDimNome} sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>}
                   <Th label="META"        col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"    col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="CART. SEM"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="DN NOVA"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="TOTAL"       col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="% ATING"     col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="REALIZ. DIA" col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
@@ -389,15 +389,18 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
         (row.nome_fornecedor??"").toLowerCase().includes(s) ||
         (row.descricao??"").toLowerCase().includes(s));
     }
-    if (filtroRcas.size > 0) r = r.filter(row => filtroRcas.has(row.cod_vendedor));
-    if (filtroDims.size > 0) r = r.filter(row => filtroDims.has(row.dim_id));
+    // filtroRcas só faz sentido em modos com vendedor
+    if (filtroRcas.size > 0 && mode !== "gerencial")
+      r = r.filter(row => filtroRcas.has(row.cod_vendedor));
+    if (filtroDims.size > 0)
+      r = r.filter(row => filtroDims.has(row.dim_id));
     r.sort((a,b) => {
       let av=a[sortCol]??0, bv=b[sortCol]??0;
       if (typeof av==="string"){av=av.toLowerCase();bv=bv.toLowerCase();}
       return sortDir==="asc"?(av<bv?-1:av>bv?1:0):(av>bv?-1:av<bv?1:0);
     });
     return r;
-  }, [data, search, sortCol, sortDir, colDimNome, filtroRcas, filtroDims]);
+  }, [data, search, sortCol, sortDir, colDimNome, filtroRcas, filtroDims, mode]);
 
   const tot = {
     meta:   rows.reduce((s,r)=>s+(r.qt_cli_meta??0),0),
@@ -814,7 +817,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                       col={colDimNome}               sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
                   <Th label="META"               col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"           col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="CART. SEM"          col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="DN NOVA"          col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="TOTAL"              col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="% ATING"            col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="REALIZ. DIA"        col="qt_cli_nao_fat_hoje"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
@@ -822,10 +825,13 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row,i) => (
-                  <DataRow key={`${row.cod_vendedor}-${row.dim_id}-${i}`}
-                    row={row} i={i} showVendedor={showVendedor} colDimNome={colDimNome}/>
-                ))}
+                {(mode==="supervisor" && !activeCode)
+                  ? buildDNBySupervisor(rows, colDimNome)
+                  : rows.map((row,i) => (
+                    <DataRow key={`${row.cod_vendedor ?? "ger"}-${row.dim_id ?? i}-${i}`}
+                      row={row} i={i} showVendedor={showVendedor} colDimNome={colDimNome}/>
+                  ))
+                }
               </tbody>
               {rows.length > 0 && (
                 <tfoot>

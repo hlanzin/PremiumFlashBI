@@ -21,6 +21,22 @@ def execute_query(sql: str, params: list) -> List[Dict[str, Any]]:
         conn.close()
 
 
+def execute_dml(statements: list) -> None:
+    """Executa múltiplos DML statements em uma única transação.
+    statements: lista de (sql, params)"""
+    conn = get_connection()
+    try:
+        cursor = conn.cursor()
+        for sql, params in statements:
+            cursor.execute(sql, params)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def parse_data(data_str: Optional[str]) -> str:
     """Converte string YYYY-MM-DD em string validada. Futuro -> hoje."""
     hoje = date.today()

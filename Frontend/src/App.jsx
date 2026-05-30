@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import Login          from "./auth/Login";
 import ModuleFaturamento  from "./modules/faturamento";
 import ModuleDistNumerica from "./modules/dist_numerica";
@@ -9,13 +9,14 @@ import ModuleAdmin        from "./modules/admin";
 import ModuleChamados     from "./modules/chamados";
 import ModuleListaNegra   from "./modules/lista_negra";
 import ModuleTroca        from "./modules/troca";
-import ModulePedidos      from "./modules/pedidos";
+import ModuleContaCorrente from "./modules/conta_corrente";
+const ModulePedidos = lazy(() => import("./modules/pedidos"));
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
-  BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart,
+  BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, Banknote, Wallet,
   LogOut, Menu, X, ChevronRight,
-  Banknote,
+  BanknoteArrowDown,
 } from "lucide-react";
 
 // ── Registro de módulos ───────────────────────────────────────────────────────
@@ -25,8 +26,9 @@ const BI_MODULES = [
   { id:"dist_numerica", label:"Dist. Numérica",   icon:TrendingUp,  component:ModuleDistNumerica, cargos:null },
   { id:"lista_negra",   label:"Lista Negra",       icon:TrendingDown,component:ModuleListaNegra,  cargos:["admin","gerencial","supervisor","vendedor","fornecedor"] },
   { id:"bateu_levou",   label:"Bateu Levou",       icon:Tag,         component:ModuleBateuLevou,   cargos:null },
-  { id:"troca",         label:"Troca",             icon:Banknote, component:ModuleTroca,       cargos:["admin","gerencial","supervisor","vendedor"] },
-  { id:"pedidos",       label:"Pedidos",           icon:ShoppingCart, component:ModulePedidos,     cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"troca",         label:"Troca",             icon:BanknoteArrowDown,     component:ModuleTroca,       cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"pedidos",       label:"Pedidos",           icon:ShoppingCart,  component:ModulePedidos,       cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"conta_corrente",label:"Conta Corrente",    icon:Wallet,        component:ModuleContaCorrente, cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"estoque",       label:"Estoque",           icon:Package,     component:ModuleEstoque,      cargos:null },
   { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"admin",         label:"Admin",             icon:Settings,    component:ModuleAdmin,        cargos:["admin"] },
@@ -265,12 +267,18 @@ export default function App() {
 
         {/* Módulo ativo */}
         <div style={{ flex:1 }}>
-          <ActiveModule
-            key={activeModule}
-            isMobile={isMobile}
-            token={auth.token}
-            userInfo={auth.userInfo}
-          />
+          <Suspense fallback={
+            <div style={{ padding:"48px", textAlign:"center", color:C.textSub }}>
+              Carregando...
+            </div>
+          }>
+            <ActiveModule
+              key={activeModule}
+              isMobile={isMobile}
+              token={auth.token}
+              userInfo={auth.userInfo}
+            />
+          </Suspense>
         </div>
       </div>
     </div>
