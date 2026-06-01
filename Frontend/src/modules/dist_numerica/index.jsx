@@ -842,20 +842,32 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                     {showVendedor && <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }} colSpan={2}>{rows.length} linhas</td>}
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }}>
                       TOTAL
-                      <span style={{ fontSize:"9px", fontWeight:400, marginLeft:"4px", opacity:.7 }}>
-                        clientes únicos
-                      </span>
+                      {mode === "gerencial" && (
+                        <span style={{ fontSize:"9px", fontWeight:400, marginLeft:"4px", opacity:.7 }}>
+                          clientes únicos
+                        </span>
+                      )}
                     </td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(totaisDist.qt_total_meta ?? tot.meta)}</td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(totaisDist.qt_total_mes ?? tot.mes)}</td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(totaisDist.qt_total_semana ?? tot.semana)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>
+                      {fmtN(mode === "gerencial" ? (totaisDist.qt_total_meta ?? tot.meta) : tot.meta)}
+                    </td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>
+                      {fmtN(mode === "gerencial" ? (totaisDist.qt_total_mes ?? tot.mes) : tot.mes)}
+                    </td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>
+                      {fmtN(mode === "gerencial" ? (totaisDist.qt_total_semana ?? tot.semana) : tot.semana)}
+                    </td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>
-                      {fmtN((totaisDist.qt_total_mes ?? tot.mes) + (totaisDist.qt_total_semana ?? tot.semana))}
+                      {fmtN(mode === "gerencial"
+                        ? (totaisDist.qt_total_mes ?? tot.mes) + (totaisDist.qt_total_semana ?? tot.semana)
+                        : totReal)}
                     </td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>
                       <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
                     </td>
-                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(totaisDist.qt_total_hoje ?? tot.dia)}</td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>
+                      {fmtN(mode === "gerencial" ? (totaisDist.qt_total_hoje ?? tot.dia) : tot.dia)}
+                    </td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>{arrow(totPct)}</td>
                   </tr>
                 </tfoot>
