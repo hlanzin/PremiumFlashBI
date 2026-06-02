@@ -10,13 +10,13 @@ import ModuleChamados     from "./modules/chamados";
 import ModuleListaNegra   from "./modules/lista_negra";
 import ModuleTroca        from "./modules/troca";
 import ModuleContaCorrente from "./modules/conta_corrente";
+import ModuleClientesForn  from "./modules/clientes_fornecedor";
 const ModulePedidos = lazy(() => import("./modules/pedidos"));
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
-  BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, Banknote, Wallet,
+  BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, Banknote, Wallet, Users,
   LogOut, Menu, X, ChevronRight,
-  BanknoteArrowDown,
 } from "lucide-react";
 
 // ── Registro de módulos ───────────────────────────────────────────────────────
@@ -26,9 +26,10 @@ const BI_MODULES = [
   { id:"dist_numerica", label:"Dist. Numérica",   icon:TrendingUp,  component:ModuleDistNumerica, cargos:null },
   { id:"lista_negra",   label:"Lista Negra",       icon:TrendingDown,component:ModuleListaNegra,  cargos:["admin","gerencial","supervisor","vendedor","fornecedor"] },
   { id:"bateu_levou",   label:"Bateu Levou",       icon:Tag,         component:ModuleBateuLevou,   cargos:null },
-  { id:"troca",         label:"Troca",             icon:BanknoteArrowDown,     component:ModuleTroca,       cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"troca",         label:"Troca",             icon:Banknote,     component:ModuleTroca,       cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"pedidos",       label:"Pedidos",           icon:ShoppingCart,  component:ModulePedidos,       cargos:["admin","gerencial","supervisor","vendedor"] },
-  { id:"conta_corrente",label:"Conta Corrente",    icon:Wallet,        component:ModuleContaCorrente, cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"conta_corrente",    label:"Conta Corrente",    icon:Wallet,   component:ModuleContaCorrente, cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"clientes_forn",    label:"Clientes",           icon:Users,    component:ModuleClientesForn,  cargos:["admin","gerencial","fornecedor"] },
   { id:"estoque",       label:"Estoque",           icon:Package,     component:ModuleEstoque,      cargos:null },
   { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"admin",         label:"Admin",             icon:Settings,    component:ModuleAdmin,        cargos:["admin"] },
