@@ -10,12 +10,13 @@ import ModuleChamados     from "./modules/chamados";
 import ModuleListaNegra   from "./modules/lista_negra";
 import ModuleTroca        from "./modules/troca";
 import ModuleContaCorrente from "./modules/conta_corrente";
-import ModuleClientesForn  from "./modules/clientes_fornecedor";
+import ModuleClientesForn   from "./modules/clientes_fornecedor";
+import ModuleVendasProduto  from "./modules/vendas_produto_forn";
 const ModulePedidos = lazy(() => import("./modules/pedidos"));
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
-  BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, Banknote, Wallet, Users,
+  BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, ShoppingBag, Banknote, Wallet, Users,
   LogOut, Menu, X, ChevronRight,
 } from "lucide-react";
 
@@ -29,7 +30,8 @@ const BI_MODULES = [
   { id:"troca",         label:"Troca",             icon:Banknote,     component:ModuleTroca,       cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"pedidos",       label:"Pedidos",           icon:ShoppingCart,  component:ModulePedidos,       cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"conta_corrente",    label:"Conta Corrente",    icon:Wallet,   component:ModuleContaCorrente, cargos:["admin","gerencial","supervisor","vendedor"] },
-  { id:"clientes_forn",    label:"Clientes",           icon:Users,    component:ModuleClientesForn,  cargos:["admin","gerencial","fornecedor"] },
+  { id:"clientes_forn",   label:"Clientes",          icon:Users,        component:ModuleClientesForn,  cargos:["admin","gerencial","fornecedor"] },
+  { id:"vendas_produto",  label:"Vendas Produto",     icon:ShoppingBag,  component:ModuleVendasProduto, cargos:["admin","gerencial","fornecedor"] },
   { id:"estoque",       label:"Estoque",           icon:Package,     component:ModuleEstoque,      cargos:null },
   { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"admin",         label:"Admin",             icon:Settings,    component:ModuleAdmin,        cargos:["admin"] },
