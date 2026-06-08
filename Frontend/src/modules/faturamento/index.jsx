@@ -31,7 +31,7 @@ const arrow = (p) => {
 
 const agg = (rows) => {
   const meta   = rows.reduce((s,r) => s+(r.valor_meta_secao  ??0), 0);
-  const real   = rows.reduce((s,r) => s+(r.valor_faturado_mes_atual ??0), 0);
+  const real   = rows.reduce((s,r) => s+Math.max(0, r.valor_faturado_mes_atual??0), 0);
   const raf    = rows.reduce((s,r) => s+(r.resta_a_fazer     ??0), 0);
   const nec    = rows.reduce((s,r) => s+(r.necessidade_dia   ??0), 0);
   const dia    = rows.reduce((s,r) => s+(r.nao_faturado_hoje ??0), 0);
@@ -82,7 +82,7 @@ function GrupoRow({ nome, rows, showVendedor }) {
 
 function DataRow({ row, i, showVendedor, showSecao=true, showNomeVendedor=false, isMobile }) {
   const [hov, setHov] = useState(false);
-  const pct    = row.valor_meta_secao > 0 ? (row.valor_faturado_mes_atual/row.valor_meta_secao)*100 : null;
+  const pct    = row.valor_meta_secao > 0 ? (Math.max(0, row.valor_faturado_mes_atual??0)/row.valor_meta_secao)*100 : null;
   const tend   = row.tendencia_pct;
   const pctDia = row.necessidade_dia  > 0 ? (row.nao_faturado_hoje/row.necessidade_dia)*100  : null;
   const bg     = hov ? C.rowHover : i%2===0 ? C.rowEven : C.rowOdd;
@@ -100,7 +100,7 @@ function DataRow({ row, i, showVendedor, showSecao=true, showNomeVendedor=false,
       {showSecao && <td style={{ ...stickyTd, fontWeight:600, paddingLeft: getGrupo(row.cod_secao)?"18px":"8px",
         left: showVendedor && isMobile ? "auto" : 0 }}>{row.secao??"—"}</td>}
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmt(row.valor_meta_secao)}</td>
-      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmt(row.valor_faturado_mes_atual)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmt(Math.max(0, row.valor_faturado_mes_atual??0))}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(tend)}>{fmtPct(tend)}</span></td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:(row.resta_a_fazer??0)<=0?C.green:C.red }}>{fmt(row.resta_a_fazer)}</td>
@@ -115,7 +115,7 @@ function DataRow({ row, i, showVendedor, showSecao=true, showNomeVendedor=false,
 
 function SupervisorTotalRow({ row, i }) {
   const pct    = (row.valor_meta_secao??0) > 0
-    ? (row.valor_faturado_mes_atual/row.valor_meta_secao)*100 : null;
+    ? (Math.max(0, row.valor_faturado_mes_atual??0)/row.valor_meta_secao)*100 : null;
   const tend   = row.tendencia_pct;
   const pctDia = (row.necessidade_dia??0) > 0
     ? (row.nao_faturado_hoje/row.necessidade_dia)*100 : null;
@@ -128,7 +128,7 @@ function SupervisorTotalRow({ row, i }) {
         {row.nome_supervisor ?? "—"}
       </td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmt(row.valor_meta_secao)}</td>
-      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmt(row.valor_faturado_mes_atual)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmt(Math.max(0, row.valor_faturado_mes_atual??0))}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(tend)}>{fmtPct(tend)}</span></td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:(row.resta_a_fazer??0)<=0?C.green:C.red }}>{fmt(row.resta_a_fazer)}</td>
@@ -158,7 +158,7 @@ function buildTableRowsBySupervisor(rows) {
 
   return grupos.map(g => {
     const meta = g.rows.reduce((s,r)=>s+(r.valor_meta_secao??0),0);
-    const real = g.rows.reduce((s,r)=>s+(r.valor_faturado_mes_atual??0),0);
+    const real = g.rows.reduce((s,r)=>s+Math.max(0, r.valor_faturado_mes_atual??0),0);
     const raf  = g.rows.reduce((s,r)=>s+(r.resta_a_fazer??0),0);
     const nec  = g.rows.reduce((s,r)=>s+(r.necessidade_dia??0),0);
     const dia  = g.rows.reduce((s,r)=>s+(r.nao_faturado_hoje??0),0);
@@ -295,7 +295,7 @@ function EquipeCard({ supervisor, dataRef, token, sortCol, sortDir, onSort, isMo
       }
       const v = map.get(key);
       v.valor_meta_secao        += r.valor_meta_secao        ?? 0;
-      v.valor_faturado_mes_atual += r.valor_faturado_mes_atual ?? 0;
+      Math.max(0, v.valor_faturado_mes_atual??0) += Math.max(0, r.valor_faturado_mes_atual??0) ?? 0;
       v.resta_a_fazer            += r.resta_a_fazer            ?? 0;
       v.necessidade_dia          += r.necessidade_dia          ?? 0;
       v.nao_faturado_hoje        += r.nao_faturado_hoje        ?? 0;
@@ -311,7 +311,7 @@ function EquipeCard({ supervisor, dataRef, token, sortCol, sortDir, onSort, isMo
 
   const tot = {
     meta: displayRows.reduce((s,r) => s+(r.valor_meta_secao??0), 0),
-    real: displayRows.reduce((s,r) => s+(r.valor_faturado_mes_atual??0), 0),
+    real: displayRows.reduce((s,r) => s+Math.max(0, r.valor_faturado_mes_atual??0), 0),
     raf:  displayRows.reduce((s,r) => s+(r.resta_a_fazer??0), 0),
     nec:  displayRows.reduce((s,r) => s+(r.necessidade_dia??0), 0),
     dia:  displayRows.reduce((s,r) => s+(r.nao_faturado_hoje??0), 0),
@@ -532,7 +532,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
   const tot = {
     meta: rows.reduce((s,r) => s+(r.valor_meta_secao  ??0), 0),
-    real: rows.reduce((s,r) => s+(r.valor_faturado_mes_atual ??0), 0),
+    real: rows.reduce((s,r) => s+Math.max(0, r.valor_faturado_mes_atual??0), 0),
     raf:  rows.reduce((s,r) => s+(r.resta_a_fazer     ??0), 0),
     nec:  rows.reduce((s,r) => s+(r.necessidade_dia   ??0), 0),
     dia:  rows.reduce((s,r) => s+(r.nao_faturado_hoje ??0), 0),
@@ -614,7 +614,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
     // Linhas de dados
     rows.forEach((row, i) => {
-      const pct    = row.valor_meta_secao > 0 ? (row.valor_faturado_mes_atual / row.valor_meta_secao) * 100 : null;
+      const pct    = row.valor_meta_secao > 0 ? (Math.max(0, row.valor_faturado_mes_atual??0) / row.valor_meta_secao) * 100 : null;
       const tend   = row.tendencia_pct;
       const pctDia = row.necessidade_dia  > 0 ? (row.nao_faturado_hoje / row.necessidade_dia)  * 100 : null;
       const rafCol = (row.resta_a_fazer ?? 0) <= 0 ? "#16a34a" : "#dc2626";
@@ -626,7 +626,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
       }
       html += `<td style="${TD(i,"font-weight:600")}">${row.secao ?? "—"}</td>`;
       html += `<td style="${TD(i,"text-align:right;font-family:monospace")}">${fmt(row.valor_meta_secao)}</td>`;
-      html += `<td style="${TD(i,"text-align:right;font-family:monospace;font-weight:600")}">${fmt(row.valor_faturado_mes_atual)}</td>`;
+      html += `<td style="${TD(i,"text-align:right;font-family:monospace;font-weight:600")}">${fmt(Math.max(0, row.valor_faturado_mes_atual??0))}</td>`;
       html += `<td style="${TD(i,"text-align:center")}">${badge(pct)}</td>`;
       html += `<td style="${TD(i,"text-align:center")}">${badge(tend)}</td>`;
       html += `<td style="${TD(i,`text-align:right;font-family:monospace;color:${rafCol}`)}">${fmt(row.resta_a_fazer)}</td>`;
@@ -1017,7 +1017,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtV(r.valor_meta_secao)}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.faturado_mes_puro)}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.nao_faturado_semana)}</td>
-                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700, color:"#7C3AED" }}>{fmtV(r.valor_faturado_mes_atual)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700, color:"#7C3AED" }}>{fmtV(Math.max(0, r.valor_faturado_mes_atual??0))}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color: (r.resta_a_fazer??0)<0 ? C.green : C.red }}>{fmtV(r.resta_a_fazer)}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.necessidade_dia)}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.green }}>{fmtV(r.faturado_hoje)}</td>
