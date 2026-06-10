@@ -49,8 +49,10 @@ function Dropdown({ value, onChange, options, placeholder }) {
 export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
   const cargo   = userInfo.cargo ?? "gerencial";
   const codUser = userInfo.cod_winthor ?? null;
+  const isAdmin = cargo === "admin";
 
   const [rows,       setRows]       = useState([]);
+  const [showDebug,  setShowDebug]  = useState(false);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState(null);
   const [supervisores, setSupervisores] = useState([]);
@@ -93,7 +95,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
     const enriched = rows.map(r => ({
       ...r,
       pct_ating: r.valor_meta_secao > 0
-        ? (r.valor_faturado_mes_atual / r.valor_meta_secao) * 100 : null,
+        ? (Math.max(0, r.valor_faturado_mes_atual??0) / r.valor_meta_secao) * 100 : null,
       pct_dia: r.necessidade_dia > 0
         ? (r.nao_faturado_hoje / r.necessidade_dia) * 100 : null,
     }));
@@ -174,7 +176,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
     rows.forEach((row, i) => {
       const pos    = i + 1;
       const m      = medal(pos);
-      const pct    = row.valor_meta_secao > 0 ? (row.valor_faturado_mes_atual / row.valor_meta_secao) * 100 : null;
+      const pct    = row.valor_meta_secao > 0 ? (Math.max(0, row.valor_faturado_mes_atual??0) / row.valor_meta_secao) * 100 : null;
       const tend   = row.tendencia_pct;
       const pctDia = row.necessidade_dia  > 0 ? (row.nao_faturado_hoje / row.necessidade_dia) * 100 : null;
       const rafCol = (row.resta_a_fazer ?? 0) <= 0 ? "#16a34a" : "#dc2626";
@@ -183,7 +185,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
         <td style="${TD(i,m,"font-weight:600")}">${row.nome_vendedor}<div style="font-size:10px;color:#475569;font-family:monospace">#${row.cod_vendedor}</div></td>
         ${cargo === "gerencial" ? `<td style="${TD(i,m,"font-size:11px;color:#475569")}">${row.nome_supervisor}</td>` : ""}
         <td style="${TD(i,m,"text-align:right;font-family:monospace")}">${fmt(row.valor_meta_secao)}</td>
-        <td style="${TD(i,m,"text-align:right;font-family:monospace;font-weight:600")}">${fmt(row.valor_faturado_mes_atual)}</td>
+        <td style="${TD(i,m,"text-align:right;font-family:monospace;font-weight:600")}">${fmt(Math.max(0, row.valor_faturado_mes_atual??0))}</td>
         <td style="${TD(i,m,"text-align:center")}">${badge(pct)}</td>
         <td style="${TD(i,m,"text-align:center")}">${badge(tend)}</td>
         <td style="${TD(i,m,`text-align:right;font-family:monospace;color:${rafCol}`)}">${fmt(row.resta_a_fazer)}</td>
@@ -330,6 +332,17 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
             </button>
           )}
         </div>
+
+        {isAdmin && rows.length > 0 && (
+          <button onClick={() => setShowDebug(v => !v)}
+            style={{ padding:"6px 11px", borderRadius:"6px", cursor:"pointer",
+              fontSize:"12px", fontWeight:700,
+              border:`1.5px solid ${showDebug ? "#7C3AED" : "rgba(0,0,0,.2)"}`,
+              background: showDebug ? "#7C3AED" : "rgba(0,0,0,.07)",
+              color: showDebug ? "#fff" : C.text }}>
+            🔬 Debug SQL
+          </button>
+        )}
       </div>
 
       {/* Tabela */}
@@ -374,7 +387,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                 {sortedRows.map((row, i) => {
                   const pos    = i + 1;
                   const m      = medal(pos);
-                  const pct    = row.valor_meta_secao > 0 ? (row.valor_faturado_mes_atual / row.valor_meta_secao) * 100 : null;
+                  const pct    = row.valor_meta_secao > 0 ? (Math.max(0, row.valor_faturado_mes_atual??0) / row.valor_meta_secao) * 100 : null;
                   const tend   = row.tendencia_pct;
                   const pctDia = row.necessidade_dia > 0 ? (row.nao_faturado_hoje / row.necessidade_dia) * 100 : null;
                   const rafCol = (row.resta_a_fazer ?? 0) <= 0 ? C.green : C.red;
@@ -420,7 +433,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                       )}
 
                       <td style={td({ textAlign:"right", fontFamily:C.mono })}>{fmt(row.valor_meta_secao)}</td>
-                      <td style={td({ textAlign:"right", fontFamily:C.mono, fontWeight:600 })}>{fmt(row.valor_faturado_mes_atual)}</td>
+                      <td style={td({ textAlign:"right", fontFamily:C.mono, fontWeight:600 })}>{fmt(Math.max(0, row.valor_faturado_mes_atual??0))}</td>
                       <td style={td({ textAlign:"center" })}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
                       <td style={td({ textAlign:"center" })}><span style={pctStyle(tend)}>{fmtPct(tend)}</span></td>
                       <td style={td({ textAlign:"right", fontFamily:C.mono, color:rafCol })}>{fmt(row.resta_a_fazer)}</td>
@@ -462,6 +475,66 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
         )}
       </div>
 
+      {isAdmin && showDebug && rows.length > 0 && (
+        <div style={{ margin:"0 16px 16px", background:"#fff", border:"1.5px solid #7C3AED",
+          borderRadius:"6px", overflow:"hidden", boxShadow:"0 1px 6px rgba(124,58,237,.15)" }}>
+          <div style={{ padding:"8px 14px", background:"#7C3AED", color:"#fff",
+            fontWeight:700, fontSize:"12px" }}>
+            🔬 Debug SQL — colunas intermediárias do ranking (admin)
+          </div>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"11px" }}>
+              <thead>
+                <tr>
+                  {["VENDEDOR","CÓD",
+                    "FAT.HIST.(meta base)","META CALC.",
+                    "FAT.MÊS PURO","CART.SEMANA","FAT.MÊS ATUAL",
+                    "RESTA","NECESS/DIA",
+                    "FAT.HOJE","NÃO FAT.HOJE",
+                    "% ATING.","% TEND.",
+                    "DU CONSULT.","DU MÊS","DU DECORR."].map(h => (
+                    <th key={h} style={{ padding:"4px 7px", background:"#EDE9FE", color:"#4C1D95",
+                      fontSize:"10px", fontWeight:700, whiteSpace:"nowrap",
+                      border:"1px solid #C4B5FD",
+                      textAlign:["VENDEDOR"].includes(h)?"left":"right" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r,i) => {
+                  const fmtV = v => v==null?"—":`R$ ${Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2})}`;
+                  const fmtP = v => v==null?"—":`${Number(v).toFixed(1)}%`;
+                  const fmtN = v => v==null?"—":Number(v).toLocaleString("pt-BR");
+                  const bg   = i%2===0?"#FAF5FF":"#fff";
+                  const td   = { padding:"4px 7px", border:"1px solid #E9D5FF", background:bg, textAlign:"right", fontFamily:C.mono };
+                  const pct  = r.valor_meta_secao>0 ? (r.valor_faturado_mes_atual/r.valor_meta_secao)*100 : null;
+                  const tend = r.tendencia_pct;
+                  return (
+                    <tr key={`dbg-${r.cod_vendedor}-${i}`}>
+                      <td style={{ ...td, textAlign:"left", fontFamily:"inherit", fontWeight:500, whiteSpace:"nowrap" }}>{r.nome_vendedor}</td>
+                      <td style={{ ...td, color:C.primary, fontWeight:600 }}>{r.cod_vendedor}</td>
+                      <td style={{ ...td }}>{fmtV(r.valor_faturado_secao)}</td>
+                      <td style={{ ...td, fontWeight:700 }}>{fmtV(r.valor_meta_secao)}</td>
+                      <td style={{ ...td }}>{fmtV(r.faturado_mes_puro)}</td>
+                      <td style={{ ...td }}>{fmtV(r.nao_faturado_semana)}</td>
+                      <td style={{ ...td, fontWeight:700, color:"#7C3AED" }}>{fmtV(r.valor_faturado_mes_atual)}</td>
+                      <td style={{ ...td, color:(r.resta_a_fazer??0)<0?C.green:C.red }}>{fmtV(r.resta_a_fazer)}</td>
+                      <td style={{ ...td }}>{fmtV(r.necessidade_dia)}</td>
+                      <td style={{ ...td, color:C.green }}>{fmtV(r.faturado_hoje)}</td>
+                      <td style={{ ...td }}>{fmtV(r.nao_faturado_hoje)}</td>
+                      <td style={{ ...td, fontWeight:700, color:pct!=null&&pct>=100?C.green:pct!=null&&pct>=80?C.amber:C.red }}>{fmtP(pct)}</td>
+                      <td style={{ ...td, color:tend!=null&&tend>=100?C.green:tend!=null&&tend>=80?C.amber:C.red }}>{fmtP(tend)}</td>
+                      <td style={{ ...td, color:C.textSub }}>{fmtN(r.dias_uteis_consultados)}</td>
+                      <td style={{ ...td, color:C.textSub }}>{fmtN(r.dias_uteis_mes_atual)}</td>
+                      <td style={{ ...td, color:C.textSub }}>{fmtN(r.dias_uteis_decorridos)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
     </>
   );

@@ -455,7 +455,6 @@ def build_query(modo: str, filtro_id: Optional[int] = None, date_ref: Optional[s
 
     dr = date_ref or parse_data(None)
 
-    # Calcula período do NF e verifica se é mês atual — tudo em Python, sem SYSDATE no Oracle
     from datetime import date, timedelta
     dr_date = date.fromisoformat(dr)
     hoje    = date.today()
@@ -463,16 +462,13 @@ def build_query(modo: str, filtro_id: Optional[int] = None, date_ref: Optional[s
     mes_atual = (dr_date.year == hoje.year and dr_date.month == hoje.month)
 
     if mes_atual:
-        # Início do mês atual
         mes_ini   = dr_date.replace(day=1)
-        # weekday(): Monday=0, Sunday=6
-        dias_ate_dom = (dr_date.weekday() + 1) % 7  # dias desde último domingo
+        dias_ate_dom = (dr_date.weekday() + 1) % 7
         ultimo_dom   = dr_date - timedelta(days=dias_ate_dom)
-        nf_ini = max(mes_ini, ultimo_dom)            # último domingo (igual a DT_SEMANA_INI do 1464)
-        nf_fim = dr_date - timedelta(days=1)         # ontem (igual a DT_ONTEM do 1464)
+        nf_ini = max(mes_ini, ultimo_dom)
+        nf_fim = dr_date - timedelta(days=1)
         nf_ativo = "1=1"
     else:
-        # Mês passado: NF zerado
         nf_ini   = dr_date
         nf_fim   = dr_date
         nf_ativo = "1=0"
