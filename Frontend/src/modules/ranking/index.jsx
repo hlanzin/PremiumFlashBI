@@ -376,9 +376,9 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                   <TH label="REALIZADO"  align="right"  col="valor_faturado_mes_atual"/>
                   <TH label="% ATING"    align="center" col="pct_ating"/>
                   <TH label="% TEND."    align="center" col="tendencia_pct"/>
-                  <TH label="R.A.F"      align="right"  col="resta_a_fazer"/>
                   <TH label="NECESS/DIA" align="right"  col="necessidade_dia"/>
                   <TH label="REALIZ/DIA" align="right"  col="nao_faturado_hoje"/>
+                  <TH label="R.A.F"      align="right"  col="resta_a_fazer"/>
                   <TH label="% DIA"      align="center" col="pct_dia"/>
                   <TH label="STATUS"     align="center"/>
                 </tr>
@@ -436,9 +436,9 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                       <td style={td({ textAlign:"right", fontFamily:C.mono, fontWeight:600 })}>{fmt(Math.max(0, row.valor_faturado_mes_atual??0))}</td>
                       <td style={td({ textAlign:"center" })}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
                       <td style={td({ textAlign:"center" })}><span style={pctStyle(tend)}>{fmtPct(tend)}</span></td>
-                      <td style={td({ textAlign:"right", fontFamily:C.mono, color:rafCol })}>{fmt(row.resta_a_fazer)}</td>
                       <td style={td({ textAlign:"right", fontFamily:C.mono })}>{fmt(row.necessidade_dia)}</td>
                       <td style={td({ textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary })}>{fmt(row.nao_faturado_hoje)}</td>
+                      <td style={td({ textAlign:"right", fontFamily:C.mono, color:rafCol })}>{fmt(row.resta_a_fazer)}</td>
                       <td style={td({ textAlign:"center" })}><span style={pctStyle(pctDia)}>{fmtPct(pctDia)}</span></td>
                       <td style={td({ textAlign:"center" })}>{arrow(tend)}</td>
                     </tr>
@@ -519,11 +519,11 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                       <td style={{ ...td }}>{fmtV(r.nao_faturado_semana)}</td>
                       <td style={{ ...td, fontWeight:700, color:"#7C3AED" }}>{fmtV(r.valor_faturado_mes_atual)}</td>
                       <td style={{ ...td, color:(r.resta_a_fazer??0)<0?C.green:C.red }}>{fmtV(r.resta_a_fazer)}</td>
-                      <td style={{ ...td }}>{fmtV(r.necessidade_dia)}</td>
                       <td style={{ ...td, color:C.green }}>{fmtV(r.faturado_hoje)}</td>
                       <td style={{ ...td }}>{fmtV(r.nao_faturado_hoje)}</td>
                       <td style={{ ...td, fontWeight:700, color:pct!=null&&pct>=100?C.green:pct!=null&&pct>=80?C.amber:C.red }}>{fmtP(pct)}</td>
                       <td style={{ ...td, color:tend!=null&&tend>=100?C.green:tend!=null&&tend>=80?C.amber:C.red }}>{fmtP(tend)}</td>
+                      <td style={{ ...td }}>{fmtV(r.necessidade_dia)}</td>
                       <td style={{ ...td, color:C.textSub }}>{fmtN(r.dias_uteis_consultados)}</td>
                       <td style={{ ...td, color:C.textSub }}>{fmtN(r.dias_uteis_mes_atual)}</td>
                       <td style={{ ...td, color:C.textSub }}>{fmtN(r.dias_uteis_decorridos)}</td>
