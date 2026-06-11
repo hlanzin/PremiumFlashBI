@@ -457,9 +457,9 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                     <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmt(tot.real)}</td>
                     <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}><span style={pctStyle(totPct)}>{fmtPct(totPct)}</span></td>
                     <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}><span style={pctStyle(totTend)}>{fmtPct(totTend)}</span></td>
-                    <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmt(tot.raf)}</td>
                     <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmt(tot.nec)}</td>
                     <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmt(tot.dia)}</td>
+                    <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmt(tot.raf)}</td>
                     <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}><span style={pctStyle(totPctDia)}>{fmtPct(totPctDia)}</span></td>
                     <td style={{ padding:"7px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"center" }}>{arrow(totTend)}</td>
                   </tr>
