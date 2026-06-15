@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
-         ChevronDown, TrendingUp, TrendingDown, Menu, X, FileText, FileSpreadsheet } from "lucide-react";
+         ChevronDown, TrendingUp, TrendingDown, Menu, X, FileText, FileSpreadsheet, Filter } from "lucide-react";
 import { C, getToday } from "../../theme";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
@@ -277,6 +277,9 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
   const [sortDir, setSortDir] = useState("asc");
   const [filtroVendedor, setFiltroVendedor] = useState(null);
   const [apenasNaoComprou, setApenasNaoComprou] = useState(false);
+  const [cidadesSel, setCidadesSel] = useState(new Set());  // filtro avançado de cidade
+  const [showCidadeFiltro, setShowCidadeFiltro] = useState(false);
+  const [buscaCidade, setBuscaCidade] = useState("");
 
   // Supervisores e vendedores para dropdowns
   const supervisores = useMemo(() => {
@@ -297,6 +300,18 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
     });
     return Array.from(map.entries()).map(([cod, nome]) => ({ cod, nome }))
       .sort((a,b) => a.nome.localeCompare(b.nome));
+  }, [data]);
+
+  // Cidades disponíveis (com contagem de clientes) para o filtro avançado
+  const cidadesDisponiveis = useMemo(() => {
+    const map = new Map();
+    data.forEach(r => {
+      const c = r.nome_cidade;
+      if (c) map.set(c, (map.get(c) ?? 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([nome, qt]) => ({ nome, qt }))
+      .sort((a,b) => a.nome.localeCompare(b.nome, "pt-BR"));
   }, [data]);
 
   const equipes = useMemo(() =>
@@ -342,6 +357,7 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
     // modo "vendedor": dados já vêm filtrados pelo servidor via /vendedor — não filtra aqui
     if (mode === "gerencial"  && filtroVendedor) r = r.filter(x => x.cod_vendedor === filtroVendedor);
     if (apenasNaoComprou) r = r.filter(x => !x.pos_faturado && !x.pos_nao_faturado);
+    if (cidadesSel.size > 0) r = r.filter(x => cidadesSel.has(x.nome_cidade));
     if (search.trim()) {
       const s = search.toLowerCase();
       r = r.filter(x =>
@@ -357,7 +373,7 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
         : String(bv).localeCompare(String(av), "pt-BR", { numeric:true });
     });
     return r;
-  }, [data, mode, activeCode, filtroVendedor, apenasNaoComprou, search, sortCol, sortDir]);
+  }, [data, mode, activeCode, filtroVendedor, apenasNaoComprou, cidadesSel, search, sortCol, sortDir]);
 
   // Totais
   const totFat = rows.filter(r => r.pos_faturado).length;
@@ -404,10 +420,10 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
     if (!rows.length) return;
     setShowExportMenu(false);
     const cols = ["cod_cliente","razao_social","nome_fantasia","nome_vendedor",
-                  "cod_supervisor","dt_ultima_compra","vl_ultima_compra",
+                  "cod_supervisor","nome_cidade","dt_ultima_compra","vl_ultima_compra",
                   "pos_faturado","pos_nao_faturado","mudanca_base"];
     const headers = ["CÓD","RAZÃO SOCIAL","FANTASIA","VENDEDOR",
-                     "SUPERVISOR","ÚLT. COMPRA","VL. ÚLT.",
+                     "SUPERVISOR","CIDADE","ÚLT. COMPRA","VL. ÚLT.",
                      "FATURADO","CARTEIRA","MUDANÇA BASE"];
     let csv = headers.join(";") + "\n";
     rows.forEach(r => {
@@ -572,6 +588,97 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
                  color:apenasNaoComprou?"#fff":C.red, flexShrink:0 }}>
         ✖ Só sem compra
       </button>
+
+      {/* Filtro avançado de cidade */}
+      <div style={{ position:"relative", flexShrink:0 }}>
+        <button onClick={() => setShowCidadeFiltro(v => !v)}
+          style={{ padding:"6px 12px", borderRadius:"6px", cursor:"pointer", fontSize:"12px",
+                   fontWeight:cidadesSel.size>0?700:400,
+                   border:`1.5px solid ${C.primary}`,
+                   background:cidadesSel.size>0?C.primary:"#fff",
+                   color:cidadesSel.size>0?"#fff":C.primary,
+                   display:"flex", alignItems:"center", gap:"6px" }}>
+          <Filter size={12}/>
+          Cidade{cidadesSel.size > 0 ? ` (${cidadesSel.size})` : ""}
+          <ChevronDown size={11}/>
+        </button>
+
+        {showCidadeFiltro && (
+          <>
+            {/* Backdrop para fechar ao clicar fora */}
+            <div onClick={() => setShowCidadeFiltro(false)}
+              style={{ position:"fixed", inset:0, zIndex:40 }}/>
+            <div style={{ position:"absolute", top:"calc(100% + 4px)", left:0, zIndex:41,
+              background:"#fff", border:`1px solid ${C.border}`, borderRadius:"8px",
+              boxShadow:"0 4px 16px rgba(0,0,0,.18)", width:"260px",
+              maxHeight:"360px", display:"flex", flexDirection:"column" }}>
+
+              {/* Header do painel */}
+              <div style={{ padding:"10px 12px", borderBottom:`1px solid ${C.border}`,
+                display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                <span style={{ fontSize:"12px", fontWeight:700, color:C.text }}>
+                  Filtrar por cidade
+                </span>
+                {cidadesSel.size > 0 && (
+                  <button onClick={() => setCidadesSel(new Set())}
+                    style={{ background:"none", border:"none", color:C.red,
+                      cursor:"pointer", fontSize:"11px", fontWeight:600 }}>
+                    Limpar ({cidadesSel.size})
+                  </button>
+                )}
+              </div>
+
+              {/* Busca de cidade */}
+              <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}` }}>
+                <div style={{ position:"relative" }}>
+                  <Search size={12} style={{ position:"absolute", left:"8px", top:"50%",
+                    transform:"translateY(-50%)", color:C.textSub }}/>
+                  <input value={buscaCidade} onChange={e => setBuscaCidade(e.target.value)}
+                    placeholder="Buscar cidade..." autoFocus
+                    style={{ width:"100%", padding:"6px 8px 6px 26px",
+                      border:`1px solid ${C.border}`, borderRadius:"6px",
+                      fontSize:"12px", outline:"none", boxSizing:"border-box" }}/>
+                </div>
+              </div>
+
+              {/* Lista de cidades com checkbox */}
+              <div style={{ overflowY:"auto", flex:1, padding:"4px 0" }}>
+                {cidadesDisponiveis
+                  .filter(c => c.nome.toLowerCase().includes(buscaCidade.toLowerCase()))
+                  .map(c => {
+                    const checked = cidadesSel.has(c.nome);
+                    return (
+                      <label key={c.nome}
+                        style={{ display:"flex", alignItems:"center", gap:"8px",
+                          padding:"6px 12px", cursor:"pointer", fontSize:"12px",
+                          background: checked ? "#FCE7E7" : "transparent" }}
+                        onMouseEnter={e => { if(!checked) e.currentTarget.style.background = C.bg; }}
+                        onMouseLeave={e => { if(!checked) e.currentTarget.style.background = "transparent"; }}>
+                        <input type="checkbox" checked={checked}
+                          onChange={() => setCidadesSel(prev => {
+                            const next = new Set(prev);
+                            if (next.has(c.nome)) next.delete(c.nome);
+                            else next.add(c.nome);
+                            return next;
+                          })}
+                          style={{ accentColor:C.primary, cursor:"pointer" }}/>
+                        <span style={{ flex:1, color:C.text, whiteSpace:"nowrap",
+                          overflow:"hidden", textOverflow:"ellipsis" }}>{c.nome}</span>
+                        <span style={{ color:C.textSub, fontSize:"10px",
+                          fontFamily:C.mono }}>{c.qt}</span>
+                      </label>
+                    );
+                  })}
+                {cidadesDisponiveis.filter(c =>
+                  c.nome.toLowerCase().includes(buscaCidade.toLowerCase())).length === 0 && (
+                  <div style={{ padding:"16px", textAlign:"center", color:C.textSub,
+                    fontSize:"11px" }}>Nenhuma cidade encontrada.</div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Totais */}
       {rows.length > 0 && (

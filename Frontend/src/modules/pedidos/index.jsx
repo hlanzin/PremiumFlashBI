@@ -13,6 +13,7 @@ const fmtN = v => v == null ? "—" : Number(v).toLocaleString("pt-BR");
 // Apenas as 5 situações usadas, na ordem certa
 const POSICAO = {
   B:{ label:"Bloqueado", bg:"#FEE2E2", color:"#991B1B" },
+  P:{ label:"Pendente", bg:"#FEE2E2", color:"#991B1B" },
   L:{ label:"Liberado",  bg:"#F0FDF4", color:"#166534" },
   M:{ label:"Montado",   bg:"#FEF9C3", color:"#854D0E" },
   F:{ label:"Faturado",  bg:"#DBEAFE", color:"#1E40AF" },
@@ -36,7 +37,7 @@ function PosicaoBadge({ posicao }) {
 }
 
 // ── Linha de itens expandida ──────────────────────────────────────────────────
-function ItensRow({ numped, token, isMobile }) {
+function ItensRow({ numped, token, isMobile, showCorte }) {
   const [itens,   setItens]   = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -74,6 +75,12 @@ function ItensRow({ numped, token, isMobile }) {
               <span>Qt: <b style={{color:C.text}}>{fmtN(item.qt)} {item.embalagem}</b></span>
               <span>Preço: <b style={{color:C.text}}>{fmtR(item.pvenda)}</b></span>
               <span>Subtotal: <b style={{color:C.primary}}>{fmtR(item.subtotal)}</b></span>
+              {showCorte && (item.qt_cortada ?? 0) > 0 && (
+                <span>Corte: <b style={{color:C.red}}>{fmtN(item.qt_cortada)} ({fmtR(item.valor_cortado)})</b></span>
+              )}
+              {showCorte && (item.qt_falta ?? 0) > 0 && (
+                <span>Falta: <b style={{color:C.amber}}>{fmtN(item.qt_falta)} ({fmtR(item.valor_falta)})</b></span>
+              )}
               {item.perdesc > 0 && <span style={{color:C.red}}>Desc: {item.perdesc?.toFixed(1)}%</span>}
             </div>
             <div style={{ fontSize:"10px", color:C.textSub, marginTop:"2px" }}>{item.fornecedor}</div>
@@ -91,9 +98,12 @@ function ItensRow({ numped, token, isMobile }) {
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"11px" }}>
             <thead>
               <tr>
-                {["Cód","Produto","Emb.","Fornecedor","Qt","Preço","Subtotal","% Desc","B"].map(h => (
+                {["Cód","Produto","Emb.","Fornecedor","Qt","Preço","Subtotal",
+                  ...(showCorte ? ["Corte","Falta"] : []),
+                  "% Desc","B"].map(h => (
                   <th key={h} style={{ padding:"4px 8px", background:"#E5E7EB", color:"#374151",
-                    fontSize:"10px", fontWeight:600, textAlign:h==="Qt"||h==="B"?"center":"left",
+                    fontSize:"10px", fontWeight:600,
+                    textAlign:h==="Qt"||h==="B"?"center":(h==="Corte"||h==="Falta")?"right":"left",
                     whiteSpace:"nowrap", borderBottom:`1px solid ${C.border}` }}>{h}</th>
                 ))}
               </tr>
@@ -112,6 +122,18 @@ function ItensRow({ numped, token, isMobile }) {
                   <td style={{ ...tdI, textAlign:"center", fontFamily:C.mono }}>{fmtN(item.qt)}</td>
                   <td style={{ ...tdI, textAlign:"right", fontFamily:C.mono }}>{fmtR(item.pvenda)}</td>
                   <td style={{ ...tdI, textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary }}>{fmtR(item.subtotal)}</td>
+                  {showCorte && <td style={{ ...tdI, textAlign:"right", fontFamily:C.mono,
+                    color: (item.qt_cortada ?? 0) > 0 ? C.red : C.textSub }}>
+                    {(item.qt_cortada ?? 0) > 0
+                      ? `${fmtN(item.qt_cortada)} (${fmtR(item.valor_cortado)})`
+                      : "—"}
+                  </td>}
+                  {showCorte && <td style={{ ...tdI, textAlign:"right", fontFamily:C.mono,
+                    color: (item.qt_falta ?? 0) > 0 ? C.amber : C.textSub }}>
+                    {(item.qt_falta ?? 0) > 0
+                      ? `${fmtN(item.qt_falta)} (${fmtR(item.valor_falta)})`
+                      : "—"}
+                  </td>}
                   <td style={{ ...tdI, textAlign:"right", fontFamily:C.mono,
                     color: item.perdesc > 0 ? C.red : C.textSub }}>
                     {item.perdesc > 0 ? `${item.perdesc.toFixed(1)}%` : "—"}
@@ -122,7 +144,7 @@ function ItensRow({ numped, token, isMobile }) {
                 </tr>
               ))}
               {itens.length === 0 && (
-                <tr><td colSpan={9} style={{ padding:"12px", textAlign:"center", color:C.textSub }}>Sem itens.</td></tr>
+                <tr><td colSpan={showCorte?11:9} style={{ padding:"12px", textAlign:"center", color:C.textSub }}>Sem itens.</td></tr>
               )}
             </tbody>
             {itens.length > 0 && (
@@ -134,6 +156,20 @@ function ItensRow({ numped, token, isMobile }) {
                     fontFamily:C.mono, color:C.primary, background:"#E5E7EB" }}>
                     {fmtR(itens.reduce((s,r)=>s+(r.subtotal??0),0))}
                   </td>
+                  {showCorte && <td style={{ padding:"4px 8px", textAlign:"right", fontWeight:700,
+                    fontFamily:C.mono, color:C.red, background:"#E5E7EB" }}>
+                    {(() => {
+                      const tc = itens.reduce((s,r)=>s+(r.valor_cortado??0),0);
+                      return tc > 0 ? fmtR(tc) : "—";
+                    })()}
+                  </td>}
+                  {showCorte && <td style={{ padding:"4px 8px", textAlign:"right", fontWeight:700,
+                    fontFamily:C.mono, color:C.amber, background:"#E5E7EB" }}>
+                    {(() => {
+                      const tf = itens.reduce((s,r)=>s+(r.valor_falta??0),0);
+                      return tf > 0 ? fmtR(tf) : "—";
+                    })()}
+                  </td>}
                   <td colSpan={2} style={{ background:"#E5E7EB" }}/>
                 </tr>
               </tfoot>
@@ -146,7 +182,7 @@ function ItensRow({ numped, token, isMobile }) {
 }
 
 // ── Linha de pedido — memoizada para evitar re-render desnecessário ───────────
-const PedidoRow = React.memo(function PedidoRow({ ped, i, expandido, onToggle, token, isMobile, showVendedor }) {
+const PedidoRow = React.memo(function PedidoRow({ ped, i, expandido, onToggle, token, isMobile, showVendedor, showCorte }) {
   const bg = i%2===0 ? C.rowEven : C.rowOdd;
   const td = { padding:"6px 8px", borderBottom:`1px solid #EED0D0`,
     verticalAlign:"middle", background:bg, fontSize:"12px" };
@@ -177,10 +213,15 @@ const PedidoRow = React.memo(function PedidoRow({ ped, i, expandido, onToggle, t
           <span>{fmtDt(ped.dt_pedido)}</span>
           {showVendedor && <span>{ped.nome_vendedor}</span>}
           <span>{ped.num_itens} itens</span>
+          {showCorte && (ped.perda_total ?? 0) > 0 && (
+            <span style={{ color:C.red, fontWeight:600 }}>
+              corte/falta {fmtR(ped.perda_total)}
+            </span>
+          )}
         </div>
       </td>
     </tr>
-    {expandido && <ItensRow numped={ped.numped} token={token} isMobile={true}/>}
+    {expandido && <ItensRow numped={ped.numped} token={token} isMobile={true} showCorte={showCorte}/>}
   </>);
 
   return (<>
@@ -203,10 +244,19 @@ const PedidoRow = React.memo(function PedidoRow({ ped, i, expandido, onToggle, t
         {ped.nome_vendedor}
       </td>}
       <td style={{ ...td, textAlign:"center" }}><PosicaoBadge posicao={ped.posicao}/></td>
+      {showCorte && (
+        <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600,
+          color: (ped.perda_total ?? 0) > 0 ? C.red : C.textSub }}>
+          {(ped.perda_total ?? 0) > 0 ? fmtR(ped.perda_total) : "—"}
+        </td>
+      )}
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>
+        {fmtR(ped.subtotal_itens)}
+      </td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600,
         color:C.primary }}>{fmtR(ped.vl_total)}</td>
     </tr>
-    {expandido && <ItensRow numped={ped.numped} token={token} isMobile={false}/>}
+    {expandido && <ItensRow numped={ped.numped} token={token} isMobile={false} showCorte={showCorte}/>}
   </>);
 });
 
@@ -266,7 +316,12 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
       else if (busca && busInt)   params.set("codcli",  busInt);
       const res = await fetch(`${API_BASE}/api/pedidos?${params}`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setPedidos((await res.json()).dados ?? []);
+      const dados = (await res.json()).dados ?? [];
+      // perda_total = corte + falta (para a coluna e o sort)
+      dados.forEach(p => {
+        p.perda_total = (p.valor_cortado ?? 0) + (p.valor_falta ?? 0);
+      });
+      setPedidos(dados);
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
   }, [dtIni, dtFim, filtroVend, busca, headers]);
@@ -338,7 +393,10 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
   useEffect(() => { setPagina(1); }, [pedidos, filtroStatus, busca]);
 
   const showVendedor = cargo !== "vendedor";
+  const showCorte    = cargo === "admin" || cargo === "gerencial";
   const totVlTotal   = rows.reduce((s,r) => s+(r.vl_total??0), 0);
+  const totPerda     = rows.reduce((s,r) => s+(r.perda_total??0), 0);
+  const totSubtotal  = rows.reduce((s,r) => s+(r.subtotal_itens??0), 0);
 
   // Ranking por vendedor calculado dos dados já carregados
   const ranking = useMemo(() => {
@@ -385,6 +443,7 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
         {rows.length > 0 && (
           <div style={{ marginLeft:"auto", display:"flex", gap:"16px", fontSize:"12px", color:"rgba(255,255,255,.8)" }}>
             <span><b style={{color:"#fff"}}>{rows.length}</b> pedidos</span>
+            {showCorte && totPerda > 0 && <span>Corte/Falta: <b style={{color:"#FCA5A5"}}>{fmtR(totPerda)}</b></span>}
             <span>Total: <b style={{color:C.gold}}>{fmtR(totVlTotal)}</b></span>
           </div>
         )}
@@ -488,6 +547,8 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
         <div style={{ marginLeft:"auto", display:"flex", gap:"12px",
           fontSize:"11px", color:C.textSub }}>
           <span><b style={{color:C.text}}>{rows.length}</b> pedidos</span>
+          {showCorte && totPerda > 0 && <span>Corte/Falta: <b style={{color:C.red}}>{fmtR(totPerda)}</b></span>}
+          <span>Subtotal: <b style={{color:C.text}}>{fmtR(totSubtotal)}</b></span>
           <span>Total: <b style={{color:C.primary}}>{fmtR(totVlTotal)}</b></span>
         </div>
       )}
@@ -514,7 +575,7 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
                   <PedidoRow key={ped.numped} ped={ped} i={(pagina-1)*PAGE_SIZE+i}
                     expandido={expanded.has(ped.numped)}
                     onToggle={() => toggleExpand(ped.numped)}
-                    token={token} isMobile={true} showVendedor={showVendedor}/>
+                    token={token} isMobile={true} showVendedor={showVendedor} showCorte={showCorte}/>
                 ))}
                 {rows.length === 0 && (
                   <tr><td style={{ padding:"48px", textAlign:"center", color:C.textSub }}>
@@ -535,7 +596,9 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
                   <TH label="CLIENTE"  col="razao_social"/>
                   {showVendedor && <TH label="VENDEDOR"  col="nome_vendedor" w="140px"/>}
                   <TH label="SITUAÇÃO" col="posicao"     align="center" w="110px"/>
-                  <TH label="VALOR"    col="vl_total"    align="right"  w="120px"/>
+                  {showCorte && <TH label="CORTE/FALTA" col="perda_total" align="right" w="115px"/>}
+                  <TH label="SUBTOTAL" col="subtotal_itens" align="right" w="115px"/>
+                  <TH label="TOTAL"    col="vl_total"    align="right"  w="120px"/>
                 </tr>
               </thead>
               <tbody>
@@ -543,10 +606,10 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
                   <PedidoRow key={ped.numped} ped={ped} i={(pagina-1)*PAGE_SIZE+i}
                     expandido={expanded.has(ped.numped)}
                     onToggle={() => toggleExpand(ped.numped)}
-                    token={token} isMobile={false} showVendedor={showVendedor}/>
+                    token={token} isMobile={false} showVendedor={showVendedor} showCorte={showCorte}/>
                 ))}
                 {rows.length === 0 && (
-                  <tr><td colSpan={showVendedor?9:8} style={{ padding:"48px",
+                  <tr><td colSpan={(showVendedor?10:9)+(showCorte?1:0)} style={{ padding:"48px",
                     textAlign:"center", color:C.textSub }}>
                     Nenhum pedido encontrado.
                   </td></tr>
@@ -559,6 +622,15 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
                       border:"1px solid #880000" }}>
                       TOTAL — {rows.length} pedidos
                     </td>
+                    {showCorte && (
+                      <td style={{ padding:"5px 8px", border:"1px solid #880000",
+                        textAlign:"right", fontFamily:C.mono,
+                        color: totPerda > 0 ? "#FCA5A5" : "inherit" }}>
+                        {totPerda > 0 ? fmtR(totPerda) : "—"}
+                      </td>
+                    )}
+                    <td style={{ padding:"5px 8px", border:"1px solid #880000",
+                      textAlign:"right", fontFamily:C.mono }}>{fmtR(totSubtotal)}</td>
                     <td style={{ padding:"5px 8px", border:"1px solid #880000",
                       textAlign:"right", fontFamily:C.mono }}>{fmtR(totVlTotal)}</td>
                   </tr>

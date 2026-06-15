@@ -42,6 +42,9 @@ SELECT
     C.FANTASIA                                         AS fantasia,
     PCPEDC.POSICAO                                     AS posicao,
     PCPEDC.VLTOTAL                                     AS vl_total,
+    (SELECT NVL(ROUND(SUM(PI.QT * PI.PVENDA), 2), 0)
+       FROM PCPEDI PI
+      WHERE PI.NUMPED = PCPEDC.NUMPED)                  AS subtotal_itens,
     PCPEDC.CODUSUR                                     AS cod_vendedor,
     U.NOME                                             AS nome_vendedor,
     U.CODSUPERVISOR                                    AS cod_supervisor,
@@ -53,7 +56,19 @@ SELECT
     (SELECT MIN(NF.NUMNOTA)
        FROM PCNFSAID NF
       WHERE NF.NUMTRANSVENDA = PCPEDC.NUMTRANSVENDA
-        AND NF.CODFILIAL      = PCPEDC.CODFILIAL)       AS num_nota
+        AND NF.CODFILIAL      = PCPEDC.CODFILIAL)       AS num_nota,
+    (SELECT NVL(SUM(CI.QTCORTADA), 0)
+       FROM PCCORTEI CI
+      WHERE CI.NUMPED = PCPEDC.NUMPED)                  AS qt_cortada,
+    (SELECT NVL(ROUND(SUM(CI.QTCORTADA * CI.PVENDA), 2), 0)
+       FROM PCCORTEI CI
+      WHERE CI.NUMPED = PCPEDC.NUMPED)                  AS valor_cortado,
+    (SELECT NVL(SUM(FA.QT), 0)
+       FROM PCFALTA FA
+      WHERE FA.NUMPED = PCPEDC.NUMPED)                  AS qt_falta,
+    (SELECT NVL(ROUND(SUM(FA.QT * FA.PVENDA), 2), 0)
+       FROM PCFALTA FA
+      WHERE FA.NUMPED = PCPEDC.NUMPED)                  AS valor_falta
 FROM PCPEDC
     INNER JOIN PCCLIENT  C ON C.CODCLI          = PCPEDC.CODCLI
     INNER JOIN PCUSUARI  U ON U.CODUSUR         = PCPEDC.CODUSUR
@@ -85,7 +100,23 @@ SELECT
            / DECODE(NVL(I.PTABELA,0),0,1,I.PTABELA)
            ) * 100, 2)                                 AS perdesc,
     NVL(I.BONIFIC,'N')                                 AS bonific,
-    I.ST                                               AS st
+    I.ST                                               AS st,
+    (SELECT NVL(SUM(CI.QTCORTADA), 0)
+       FROM PCCORTEI CI
+      WHERE CI.NUMPED  = I.NUMPED
+        AND CI.CODPROD = I.CODPROD)                     AS qt_cortada,
+    (SELECT NVL(ROUND(SUM(CI.QTCORTADA * CI.PVENDA), 2), 0)
+       FROM PCCORTEI CI
+      WHERE CI.NUMPED  = I.NUMPED
+        AND CI.CODPROD = I.CODPROD)                     AS valor_cortado,
+    (SELECT NVL(SUM(FA.QT), 0)
+       FROM PCFALTA FA
+      WHERE FA.NUMPED  = I.NUMPED
+        AND FA.CODPROD = I.CODPROD)                     AS qt_falta,
+    (SELECT NVL(ROUND(SUM(FA.QT * FA.PVENDA), 2), 0)
+       FROM PCFALTA FA
+      WHERE FA.NUMPED  = I.NUMPED
+        AND FA.CODPROD = I.CODPROD)                     AS valor_falta
 FROM PCPEDI I
     INNER JOIN PCPRODUT  P ON P.CODPROD   = I.CODPROD
     LEFT  JOIN PCFORNEC  F ON F.CODFORNEC = P.CODFORNEC
