@@ -12,8 +12,10 @@ METALFRIO_EMAILS = [
     e.strip() for e in os.getenv(
         "METALFRIO_EMAILS",
         "santospcm@metalfrio.com.br,atendecliente@metalfrio.com.br,"
-        "souzamar@metalfrio.com.br,pattucci@metalfrio.com.br,wulf@metalfrio.com.br"
-    ).split(",")
+        "souzamar@metalfrio.com.br,pattucci@metalfrio.com.br,wulf@metalfrio.com.br,"
+        "magalhaesj@metalfrio.com.br,"
+        "tradeassets@br.froneri.com,fabiana.araujo@br.froneri.com"
+    ).split(",") if e.strip()
 ]
 FRICON_BASE64 = os.getenv("FRICON_BASE64", "")
 FRICON_API_URL = "https://fricon.neoassist.com/API/interactions.json"

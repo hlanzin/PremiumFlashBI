@@ -13,7 +13,7 @@ const fmtN = v => v == null ? "—" : Number(v).toLocaleString("pt-BR");
 // Apenas as 5 situações usadas, na ordem certa
 const POSICAO = {
   B:{ label:"Bloqueado", bg:"#FEE2E2", color:"#991B1B" },
-  P:{ label:"Pendente", bg:"#FEE2E2", color:"#991B1B" },
+  P:{ label:"Pendente",  bg:"#FEE2E2", color:"#991B1B"  },
   L:{ label:"Liberado",  bg:"#F0FDF4", color:"#166534" },
   M:{ label:"Montado",   bg:"#FEF9C3", color:"#854D0E" },
   F:{ label:"Faturado",  bg:"#DBEAFE", color:"#1E40AF" },
