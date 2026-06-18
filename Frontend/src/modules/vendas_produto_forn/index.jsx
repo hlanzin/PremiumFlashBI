@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Search, ChevronDown, ShoppingBag } from "lucide-react";
+import { RefreshCw, Search, ChevronDown, ShoppingBag, FileSpreadsheet } from "lucide-react";
 import { C } from "../../theme";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
@@ -34,12 +34,46 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
   const [fornecedores, setFornecedores] = useState([]);
   const [fornSel,      setFornSel]      = useState(null);
   const [mesRef,       setMesRef]       = useState(mesAtual);
+  const [semanaSel,    setSemanaSel]    = useState("");   // "" = mês inteiro
   const [dados,        setDados]        = useState([]);
   const [loading,      setLoading]      = useState(false);
+  const [exporting,    setExporting]    = useState(false);
   const [error,        setError]        = useState(null);
   const [busca,        setBusca]        = useState("");
   const [sortCol,      setSortCol]      = useState("nome_produto");
   const [sortDir,      setSortDir]      = useState("asc");
+
+  // Semanas (domingo a sábado) que tocam o mês selecionado
+  const semanas = useMemo(() => {
+    const [y, m] = mesRef.split("-").map(Number);
+    const primeiroDia = new Date(y, m - 1, 1);
+    const ultimoDia   = new Date(y, m, 0);
+    // Recua até o domingo da semana do dia 1
+    const ini = new Date(primeiroDia);
+    ini.setDate(ini.getDate() - ini.getDay());   // getDay 0=domingo
+    const out = [];
+    let cursor = new Date(ini);
+    let n = 1;
+    while (cursor <= ultimoDia) {
+      const dom = new Date(cursor);
+      const sab = new Date(cursor);
+      sab.setDate(sab.getDate() + 6);
+      const fmt = d => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}`;
+      const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      out.push({
+        idx:   n,
+        label: `Sem ${n} (${fmt(dom)}–${fmt(sab)})`,
+        dt_ini: iso(dom),
+        dt_fim: iso(sab),
+      });
+      cursor.setDate(cursor.getDate() + 7);
+      n++;
+    }
+    return out;
+  }, [mesRef]);
+
+  // Reseta semana ao trocar de mês
+  useEffect(() => { setSemanaSel(""); }, [mesRef]);
 
   useEffect(() => {
     fetch(`${API_BASE}/api/lista-negra/fornecedores`, { headers })
@@ -60,18 +94,83 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
     setSortDir(prev => sortCol === col && prev === "asc" ? "desc" : "asc");
   };
 
+  // Exporta todas as semanas do mês num único CSV com coluna de semana
+  const exportarExcel = useCallback(async () => {
+    if (!fornSel) return;
+    setExporting(true);
+    try {
+      const url = `${API_BASE}/api/vendas-produto/semanal?codfornec=${fornSel}&mes_ref=${mesRef}`;
+      const res = await fetch(url, { headers });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const linhas = json.dados ?? [];
+
+      const fmtDt = v => {
+        if (!v) return "";
+        const s = String(v).split("T")[0];
+        const [y,m,d] = s.split("-");
+        return `${d}/${m}/${y}`;
+      };
+      const num = v => (v ?? 0).toString().replace(".", ",");
+
+      const headersCsv = ["SEMANA","PERÍODO","VENDEDOR","CÓD CLI","CLIENTE",
+        "CÓD PROD","PRODUTO","QTD","VL.UNIT","VL.TOTAL"];
+
+      // Numera as semanas pela data de início (domingo)
+      const semIni = [...new Set(linhas.map(l => String(l.semana_ini).split("T")[0]))].sort();
+      const semIdx = Object.fromEntries(semIni.map((d,i) => [d, i+1]));
+
+      const rowsCsv = linhas.map(l => {
+        const ini = String(l.semana_ini).split("T")[0];
+        return [
+          `Semana ${semIdx[ini]}`,
+          `${fmtDt(l.semana_ini)} a ${fmtDt(l.semana_fim)}`,
+          l.nome_vendedor ?? "",
+          l.cod_cliente ?? "",
+          (l.nome_cliente ?? "").replace(/;/g, ","),
+          l.cod_produto ?? "",
+          (l.nome_produto ?? "").replace(/;/g, ","),
+          num(l.quantidade),
+          num(l.vl_unitario),
+          num(l.vl_total),
+        ];
+      });
+
+      const csv = [headersCsv, ...rowsCsv]
+        .map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(";"))
+        .join("\n");
+
+      const fornNome = (fornecedores.find(f => String(f.id) === String(fornSel))?.nome ?? fornSel)
+        .replace(/[^\w]/g, "_");
+      const blob = new Blob(["\uFEFF" + csv], { type:"text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `vendas_produto_${fornNome}_${mesRef}_semanal.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch(e) {
+      setError(`Erro ao exportar: ${e.message}`);
+    } finally {
+      setExporting(false);
+    }
+  }, [headers, fornSel, mesRef, fornecedores]);
+
   const fetchData = useCallback(async () => {
     if (!fornSel) return;
     setLoading(true); setError(null);
     try {
-      const url = `${API_BASE}/api/vendas-produto?codfornec=${fornSel}&mes_ref=${mesRef}`;
+      let url = `${API_BASE}/api/vendas-produto?codfornec=${fornSel}&mes_ref=${mesRef}`;
+      if (semanaSel) {
+        const sem = semanas.find(s => String(s.idx) === String(semanaSel));
+        if (sem) url += `&dt_ini=${sem.dt_ini}&dt_fim=${sem.dt_fim}`;
+      }
       const res = await fetch(url, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setDados(json.dados ?? []);
     } catch(e) { setError(e.message); }
     finally { setLoading(false); }
-  }, [headers, fornSel, mesRef]);
+  }, [headers, fornSel, mesRef, semanaSel, semanas]);
 
   const rows = useMemo(() => {
     let r = [...dados];
@@ -99,7 +198,10 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
   const totQtd = rows.reduce((s,r) => s+(r.quantidade??0), 0);
   const totVl  = rows.reduce((s,r) => s+(r.vl_total??0), 0);
   const [ano, mes] = mesRef.split("-");
-  const mesLabel   = `${meses[parseInt(mes)-1]}/${ano}`;
+  const semObj     = semanas.find(s => String(s.idx) === String(semanaSel));
+  const mesLabel   = semObj
+    ? `Sem ${semObj.idx} · ${meses[parseInt(mes)-1]}/${ano}`
+    : `${meses[parseInt(mes)-1]}/${ano}`;
 
   return (<>
     {/* Header */}
@@ -165,6 +267,23 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
             fontFamily:C.mono, color:C.text, cursor:"pointer", background:"transparent" }}/>
       </div>
 
+      {/* Seletor de semana */}
+      <div style={{ position:"relative" }}>
+        <select value={semanaSel} onChange={e => setSemanaSel(e.target.value)}
+          style={{ appearance:"none", WebkitAppearance:"none", background:"#fff",
+            border:`1px solid ${C.border}`, borderRadius:"6px",
+            padding:"7px 30px 7px 10px", fontSize:"12px",
+            color: semanaSel ? C.text : C.textSub,
+            cursor:"pointer", outline:"none", minWidth:"160px" }}>
+          <option value="">Mês inteiro</option>
+          {semanas.map(s => (
+            <option key={s.idx} value={s.idx}>{s.label}</option>
+          ))}
+        </select>
+        <ChevronDown size={13} style={{ position:"absolute", right:"8px", top:"50%",
+          transform:"translateY(-50%)", color:C.textSub, pointerEvents:"none" }}/>
+      </div>
+
       {/* Buscar */}
       <button onClick={fetchData} disabled={loading || !fornSel}
         style={{ padding:"7px 14px", background: fornSel ? C.primary : C.border,
@@ -178,6 +297,17 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
           padding:"6px 8px", borderRadius:"6px", cursor:"pointer",
           display:"flex", alignItems:"center" }}>
         <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
+      </button>
+
+      {/* Exportar Excel — todas as semanas do mês */}
+      <button onClick={exportarExcel} disabled={exporting || !fornSel}
+        title="Exporta todas as semanas do mês em um único arquivo"
+        style={{ padding:"7px 12px", background: fornSel ? C.green : C.border,
+          border:"none", color:"#fff", borderRadius:"6px",
+          cursor: fornSel ? "pointer" : "default", fontSize:"12px", fontWeight:700,
+          opacity: !fornSel ? 0.5 : 1, display:"flex", alignItems:"center", gap:"6px" }}>
+        <FileSpreadsheet size={13}/>
+        {exporting ? "Gerando..." : "Excel (semanas)"}
       </button>
 
       {/* Busca */}
