@@ -84,16 +84,18 @@ export default function ModuleEstoque({ isMobile, token }) {
     const nomeArq   = `Estoque_${nomeSecao.replace(/\s+/g,"_")}_${dataRef}.csv`;
 
     const linhas = [
-      ["CODIGO","PRODUTO","QT/CX","ESTOQUE UN","ESTOQUE CX","VALOR"].join(";"),
+      ["CODIGO","PRODUTO","QT/CX","ESTOQUE UN","ESTOQUE CX","PV UN","PV CX","VALOR"].join(";"),
       ...filtered.map(r => [
         r.codprod,
         `"${(r.descricao ?? "").replace(/"/g,'""')}"`,
         r.qtunitcx ?? "",
         r.qtestoque ?? "",
         r.qtestoquecx ?? "",
+        String(r.pvenda ?? "").replace(".",","),
+        String(r.pvenda_cx ?? "").replace(".",","),
         String(r.valor_estoque ?? "").replace(".",","),
       ].join(";")),
-      ["","TOTAL","","","",
+      ["","TOTAL","","","","","",
         String(filtered.reduce((s,r)=>s+(r.valor_estoque??0),0).toFixed(2)).replace(".",",")
       ].join(";"),
     ];
@@ -230,6 +232,8 @@ export default function ModuleEstoque({ isMobile, token }) {
                   <Th label="QT/CX"      col="qtunitcx"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="ESTOQUE UN" col="qtestoque"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="ESTOQUE CX" col="qtestoquecx"   sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="PV UN"      col="pvenda"        sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="PV CX"      col="pvenda_cx"     sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="VALOR"      col="valor_estoque" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                 </tr>
               </thead>
@@ -244,6 +248,8 @@ export default function ModuleEstoque({ isMobile, token }) {
                     <td style={td({ textAlign:"right", fontFamily:C.mono })}>{fmtQty(r.qtunitcx)}</td>
                     <td style={td({ textAlign:"right", fontFamily:C.mono, color:(r.qtestoque??0)<=0?C.red:C.text })}>{fmtQty(r.qtestoque)}</td>
                     <td style={td({ textAlign:"right", fontFamily:C.mono })}>{fmtQty(r.qtestoquecx)}</td>
+                    <td style={td({ textAlign:"right", fontFamily:C.mono, color:C.textSub })}>{fmt(r.pvenda)}</td>
+                    <td style={td({ textAlign:"right", fontFamily:C.mono, color:C.textSub })}>{fmt(r.pvenda_cx)}</td>
                     <td style={td({ textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary })}>{fmt(r.valor_estoque)}</td>
                   </tr>
                 ))}
@@ -251,7 +257,7 @@ export default function ModuleEstoque({ isMobile, token }) {
               {filtered.length > 0 && (
                 <tfoot>
                   <tr style={{ background:C.total, color:C.totalTxt, fontWeight:700 }}>
-                    <td colSpan={5} style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }}>
+                    <td colSpan={7} style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}` }}>
                       {filtered.length} produtos
                     </td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>
