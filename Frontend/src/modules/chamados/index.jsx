@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Plus, ChevronDown, ChevronRight } from "lucide-react";
+import { RefreshCw, Plus, ChevronDown, ChevronRight, FileSpreadsheet } from "lucide-react";
 import { C, getToday } from "../../theme";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
@@ -511,6 +511,38 @@ export default function ModuleChamados({ isMobile, token, userInfo={} }) {
 
   useEffect(()=>{ carregar(); }, [carregar]);
 
+  // Exporta os chamados (já filtrados) para CSV: CODCLI, RG, Status, Data de abertura
+  const exportarExcel = useCallback(() => {
+    if (chamados.length === 0) return;
+
+    const fmtData = (dt) => {
+      if (!dt) return "";
+      const [d, t] = dt.split(" ");
+      const [y, m, dia] = d.split("-");
+      return `${dia}/${m}/${y} ${t?.slice(0,5) ?? ""}`.trim();
+    };
+
+    const cabecalho = ["CODCLI", "RG FREEZER", "STATUS", "DATA ABERTURA"];
+    const linhas = chamados.map(c => [
+      c.cod_cliente ?? "",
+      c.rg_freezer ?? "",
+      c.status ?? "",
+      fmtData(c.criado_em),
+    ]);
+
+    const csv = [cabecalho, ...linhas]
+      .map(r => r.map(cel => `"${String(cel).replace(/"/g, '""')}"`).join(";"))
+      .join("\n");
+
+    const hoje = getToday().replace(/-/g, "");
+    const blob = new Blob(["\uFEFF" + csv], { type:"text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `chamados_freezer_${hoje}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  }, [chamados]);
+
   const sel = (val, set, opts) => (
     <select value={val} onChange={e=>set(e.target.value)}
       style={{ appearance:"none", border:`1.5px solid ${C.border}`, borderRadius:"8px",
@@ -566,6 +598,17 @@ export default function ModuleChamados({ isMobile, token, userInfo={} }) {
                    padding:"7px 10px", borderRadius:"8px", cursor:"pointer",
                    display:"flex", alignItems:"center" }}>
           <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
+        </button>
+
+        <button onClick={exportarExcel} disabled={chamados.length === 0}
+          title="Exportar CODCLI, RG, Status e data de abertura"
+          style={{ display:"flex", alignItems:"center", gap:"6px",
+                   background: chamados.length ? C.green : "#ccc", border:"none", color:"#fff",
+                   padding:"8px 12px", borderRadius:"8px",
+                   cursor: chamados.length ? "pointer" : "default",
+                   fontSize:"12px", fontWeight:700,
+                   opacity: chamados.length ? 1 : 0.6 }}>
+          <FileSpreadsheet size={14}/> Excel
         </button>
 
         <button onClick={()=>setShowForm(v=>!v)}
