@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
-import { Search, RefreshCw, ChevronDown, FileSpreadsheet } from "lucide-react";
+import { Search, RefreshCw, ChevronDown, FileSpreadsheet, Package } from "lucide-react";
 import { C, fmt, fmtQty, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import SkeletonRows from "../../components/SkeletonRows";
+import ModuleHeader from "../../components/ModuleHeader";
+import TableCard from "../../components/TableCard";
 import { exportCSV } from "../../utils/exportCSV";
 import { useSort } from "../../hooks/useSort";
 
@@ -76,44 +78,25 @@ export default function ModuleEstoque({ isMobile, token }) {
 
   return (
     <>
-      <div style={{
-        background: `linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding: isMobile ? "8px 12px" : "10px 20px",
-        display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "space-between",
-        flexWrap: "wrap", gap: "8px", borderBottom: `3px solid ${C.gold}`,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: "20px", color: "#fff", letterSpacing: "0.06em" }}>PREMIUM</div>
-            <div style={{ fontWeight: 700, fontSize: "9px", color: C.gold, letterSpacing: "0.14em" }}>DISTRIBUIDORA</div>
-          </div>
-          <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px" }}>
-            ESTOQUE POR SECAO
-            {summary.historico && (
-              <span style={{ fontWeight: 400, fontSize: "11px", color: "rgba(255,255,255,.7)", marginLeft: "8px" }}>
-                (historico: {summary.data_ref})
-              </span>
-            )}
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {!loading && summary.total_valor > 0 && !isMobile && (
-            <div style={{ textAlign: "right" }}>
-              <div style={{ color: "rgba(255,220,180,.9)", fontSize: "10px" }}>VALOR TOTAL</div>
-              <div style={{ color: "#fff", fontWeight: 700, fontSize: "15px", fontFamily: C.mono }}>
-                {fmt(summary.total_valor)}
-              </div>
+      <ModuleHeader icon={Package} title="ESTOQUE POR SECAO"
+        subtitle={summary.historico ? `historico: ${summary.data_ref}` : null}
+        isMobile={isMobile}>
+        {!loading && summary.total_valor > 0 && !isMobile && (
+          <div style={{ textAlign: "right" }}>
+            <div style={{ color: "rgba(255,220,180,.9)", fontSize: "10px" }}>VALOR TOTAL</div>
+            <div style={{ color: "#fff", fontWeight: 700, fontSize: "15px", fontFamily: C.mono }}>
+              {fmt(summary.total_valor)}
             </div>
-          )}
-          <button onClick={fetchEstoque} disabled={loading}
-            style={{ background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.3)",
-                     color: "#fff", padding: "6px 10px", borderRadius: "6px",
-                     cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
-            <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-            {!isMobile && " Atualizar"}
-          </button>
-        </div>
-      </div>
+          </div>
+        )}
+        <button onClick={fetchEstoque} disabled={loading}
+          style={{ background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.3)",
+                   color: "#fff", padding: "6px 10px", borderRadius: "6px",
+                   cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
+          <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+          {!isMobile && " Atualizar"}
+        </button>
+      </ModuleHeader>
 
       <div style={{
         background: "#fff", borderBottom: `2px solid ${C.border}`,
@@ -172,9 +155,7 @@ export default function ModuleEstoque({ isMobile, token }) {
         </div>
       </div>
 
-      <div style={{ margin: isMobile ? "8px" : "12px 16px", background: "#fff",
-                    border: `1px solid ${C.border}`, borderRadius: "4px",
-                    overflow: "hidden", boxShadow: `0 1px 6px rgba(170,0,0,.1)` }}>
+      <TableCard isMobile={isMobile}>
         {loading && <SkeletonRows count={6} height={30} />}
         {error && <div style={{ padding: "40px", textAlign: "center", color: C.red }}>Erro: {error}</div>}
         {!loading && !error && !secaoSel && (
@@ -232,7 +213,7 @@ export default function ModuleEstoque({ isMobile, token }) {
             )}
           </div>
         )}
-      </div>
+      </TableCard>
     </>
   );
 }

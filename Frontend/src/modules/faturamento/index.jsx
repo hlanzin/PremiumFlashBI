@@ -6,6 +6,8 @@ import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
+import TableCard from "../../components/TableCard";
 import { arrow } from "../../components/ArrowBadge";
 import SkeletonRows from "../../components/SkeletonRows";
 
@@ -655,62 +657,40 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
   return (
     <>
-      {/* Header */}
-      <div style={{
-        background:"linear-gradient(135deg,#AA0000,#CC0000 60%,#AA0000)",
-        padding: isMobile?"8px 12px":"10px 20px",
-        display:isMobile?"none":"flex", alignItems:"center", justifyContent:"space-between",
-        flexWrap:"wrap", gap:"8px", borderBottom:`3px solid ${C.gold}`,
-      }}>
-        <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
-          <div>
-            <div style={{ fontWeight:900, fontSize:isMobile?"16px":"20px", color:"#fff", letterSpacing:"0.06em", lineHeight:1 }}>PREMIUM</div>
-            <div style={{ fontWeight:700, fontSize:"9px", color:C.gold, letterSpacing:"0.14em" }}>DISTRIBUIDORA</div>
-          </div>
-          <div>
-            <div style={{ color:"#fff", fontWeight:700, fontSize:isMobile?"12px":"14px" }}>
-              FATURAMENTO SELL OUT
-              {nomeAtivo() && <span style={{ fontWeight:400, fontSize:"11px", color:"rgba(255,255,255,.8)", marginLeft:"6px" }}>— {nomeAtivo()}</span>}
-            </div>
-            <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
-              Dias consultados: <b style={{color:"#fff"}}>{summary.dias_consulta}</b>
-              &nbsp;·&nbsp; Decorridos: <b style={{color:"#fff"}}>{summary.dias_decorridos}</b>
-              &nbsp;·&nbsp; Mes: <b style={{color:"#fff"}}>{summary.dias_mes}</b>
-              {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
-            </div>
-          </div>
-        </div>
-        <div style={{ display:"flex", gap:isMobile?"8px":"14px", alignItems:"center" }}>
-          {!loading && data.length>0 && !isMobile && (
-            <><Gauge label="% REAL" pct={totPct}/><Gauge label="% TEND." pct={totTend}/></>
-          )}
-          <button onClick={fetchData} disabled={loading}
-            style={{ background:"rgba(0,0,0,.25)", border:"1px solid rgba(255,255,255,.3)",
-                     color:"#fff", padding:isMobile?"6px":"7px 12px", borderRadius:"6px",
-                     cursor:"pointer", display:"flex", alignItems:"center", gap:"4px", fontSize:"12px" }}>
-            <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
-            {!isMobile && " Atualizar"}
+      <ModuleHeader icon={BarChart3} title="FATURAMENTO SELL OUT" subtitle={nomeAtivo()} isMobile={isMobile}
+        titleExtra={<>
+          Dias consultados: <b>{summary.dias_consulta}</b> · Decorridos: <b>{summary.dias_decorridos}</b> · Mês: <b>{summary.dias_mes}</b>
+          {dataRef !== hoje && <> · Data: {dataRef}</>}
+        </>}>
+        {!loading && data.length>0 && !isMobile && (
+          <><Gauge label="% REAL" pct={totPct}/><Gauge label="% TEND." pct={totTend}/></>
+        )}
+        <button onClick={fetchData} disabled={loading}
+          style={{ background:"rgba(0,0,0,.25)", border:"1px solid rgba(255,255,255,.3)",
+                   color:"#fff", padding:isMobile?"6px":"7px 12px", borderRadius:"6px",
+                   cursor:"pointer", display:"flex", alignItems:"center", gap:"4px", fontSize:"12px" }}>
+          <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
+          {!isMobile && " Atualizar"}
+        </button>
+        {isAdmin && (
+          <button onClick={() => setShowDebug(v=>!v)}
+            style={{ padding:"5px 10px", borderRadius:"6px", fontSize:"11px", fontWeight:700,
+              cursor:"pointer", border:`1.5px solid ${showDebug?"#7C3AED":"rgba(255,255,255,.4)"}`,
+              background: showDebug?"#7C3AED":"rgba(255,255,255,.15)",
+              color:"#fff" }}>
+            🔬 Debug SQL
           </button>
-          {isAdmin && (
-            <button onClick={() => setShowDebug(v=>!v)}
-              style={{ padding:"5px 10px", borderRadius:"6px", fontSize:"11px", fontWeight:700,
-                cursor:"pointer", border:`1.5px solid ${showDebug?"#7C3AED":"rgba(255,255,255,.4)"}`,
-                background: showDebug?"#7C3AED":"rgba(255,255,255,.15)",
-                color:"#fff" }}>
-              🔬 Debug SQL
-            </button>
-          )}
-          {rows.length > 0 && (
-            <button onClick={exportToPDF}
-              style={{ display:"flex", alignItems:"center", gap:"5px",
-                background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
-                color:"#fff", padding:isMobile?"6px":"6px 12px", borderRadius:"6px",
-                cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
-              <FileText size={13}/> {!isMobile && "Exportar PDF"}
-            </button>
-          )}
-        </div>
-      </div>
+        )}
+        {rows.length > 0 && (
+          <button onClick={exportToPDF}
+            style={{ display:"flex", alignItems:"center", gap:"5px",
+              background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
+              color:"#fff", padding:isMobile?"6px":"6px 12px", borderRadius:"6px",
+              cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
+            <FileText size={13}/> {!isMobile && "Exportar PDF"}
+          </button>
+        )}
+      </ModuleHeader>
 
       {/* Indicadores mobile */}
       {isMobile && data.length>0 && !loading && (
@@ -843,9 +823,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
       {/* Tabela principal (outros modos) */}
       {mode !== "todas_equipes" && (
-      <div ref={tableRef} style={{ margin:isMobile?"8px":"12px 16px", background:"#fff",
-                    border:`1px solid ${C.border}`, borderRadius:"4px",
-                    overflow:"hidden", boxShadow:"0 1px 6px rgba(170,0,0,.12)" }}>
+      <TableCard>
         {loading && (
           <div style={{ padding:"16px" }}>
             {[...Array(6)].map((_,i) => (
@@ -929,7 +907,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
             {rows.length === 0 && <div style={{ padding:"40px", textAlign:"center", color:C.textSub }}>Nenhum dado encontrado.</div>}
           </div>
         )}
-      </div>
+      </TableCard>
       )}
 
 
@@ -961,7 +939,6 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
             <tbody>
               {rows.map((r,i) => {
                 const fmtV = v => v == null ? "—" : `R$ ${Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2})}`;
-                const fmtN = v => v == null ? "—" : Number(v).toLocaleString("pt-BR");
                 const bg = i%2===0 ? "#FAF5FF" : "#fff";
                 const td = { padding:"4px 7px", border:"1px solid #E9D5FF", background:bg };
                 return (
@@ -981,9 +958,9 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color: (r.tendencia_pct??0)>=100?C.green:(r.tendencia_pct??0)>=90?C.amber:C.red }}>
                       {r.tendencia_pct != null ? `${Number(r.tendencia_pct).toFixed(1)}%` : "—"}
                     </td>
-                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{fmtN(r.dias_uteis_consultados)}</td>
-                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{fmtN(r.dias_uteis_mes_atual)}</td>
-                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{fmtN(r.dias_uteis_decorridos)}</td>
+                        <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{r.dias_uteis_consultados ?? "—"}</td>
+                        <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{r.dias_uteis_mes_atual ?? "—"}</td>
+                        <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{r.dias_uteis_decorridos ?? "—"}</td>
                   </tr>
                 );
               })}

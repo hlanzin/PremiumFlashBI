@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { RefreshCw, Search, ChevronDown, Users } from "lucide-react";
-import { C, fmtR, fmtDt, fmt } from "../../theme";
+import { Search, Users } from "lucide-react";
+import { C, fmtR, fmtDt } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
+import TableCard from "../../components/TableCard";
 import { useSort } from "../../hooks/useSort";
 
 function getMesLabels() {
@@ -90,22 +92,7 @@ export default function ModuleClientesFornecedor({ isMobile, token, userInfo = {
 
   return (
     <>
-      <div style={{
-        background: `linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding: isMobile ? "8px 12px" : "10px 20px",
-        display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "space-between",
-        flexWrap: "wrap", gap: "8px", borderBottom: `3px solid ${C.gold}`,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: "20px", color: "#fff", letterSpacing: "0.06em", lineHeight: 1 }}>PREMIUM</div>
-            <div style={{ fontWeight: 700, fontSize: "9px", color: C.gold, letterSpacing: "0.14em" }}>DISTRIBUIDORA</div>
-          </div>
-          <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-            <Users size={16} color={C.gold} /> CLIENTES POR FORNECEDOR
-          </div>
-        </div>
-      </div>
+      <ModuleHeader icon={Users} title="CLIENTES POR FORNECEDOR" isMobile={isMobile} />
 
       <div style={{
         background: "#fff", borderBottom: `2px solid ${C.border}`,
@@ -125,9 +112,7 @@ export default function ModuleClientesFornecedor({ isMobile, token, userInfo = {
         </div>
       </div>
 
-      <div style={{ margin: isMobile ? "8px" : "12px 16px", background: "#fff",
-                    border: `1px solid ${C.border}`, borderRadius: "4px",
-                    overflow: "hidden", boxShadow: `0 1px 6px rgba(170,0,0,.1)` }}>
+      <TableCard isMobile={isMobile} maxHeight="70vh">
         {loading && <div style={{ padding: "48px", textAlign: "center", color: C.textSub }}>Carregando...</div>}
         {error && <div style={{ padding: "40px", textAlign: "center", color: C.red }}>Erro: {error}</div>}
         {!fornSel && !loading && (
@@ -136,7 +121,7 @@ export default function ModuleClientesFornecedor({ isMobile, token, userInfo = {
           </div>
         )}
         {fornSel && !loading && !error && (
-          <div style={{ overflowX: "auto", maxHeight: "70vh", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+          <>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: isMobile ? "10px" : "11px" }}>
               <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
                 <tr style={{ background: C.subHeader }}>
@@ -180,9 +165,9 @@ export default function ModuleClientesFornecedor({ isMobile, token, userInfo = {
             {rows.length === 0 && (
               <div style={{ padding: "32px", textAlign: "center", color: C.textSub }}>Nenhum cliente encontrado.</div>
             )}
-          </div>
+          </>
         )}
-      </div>
+      </TableCard>
     </>
   );
 }

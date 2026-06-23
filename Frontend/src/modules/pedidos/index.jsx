@@ -6,6 +6,8 @@ import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
+import TableCard from "../../components/TableCard";
 
 // Apenas as 5 situações usadas, na ordem certa
 const POSICAO = {
@@ -286,20 +288,38 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
   const [filtroVend, setFiltroVend] = useState(
     cargo === "vendedor" ? codUser : null
   );
+  const [supervisores, setSupervisores] = useState([]);
+  const [filtroSup, setFiltroSup] = useState(null);
+  // mapa supervisor → vendedores
+  const [supVendMap, setSupVendMap] = useState(null);
 
-  // Busca vendedores para o filtro (gerencial/supervisor)
+  // Busca vendedores + supervisores para o filtro
   useEffect(() => {
     if (cargo === "vendedor") return;
     fetch(`${API_BASE}/api/dn`, { headers })
       .then(r => r.json())
       .then(j => {
-        const map = new Map();
+        const vendMap = new Map();
+        const supMap = new Map();
+        const vendPorSup = new Map();
         (j.dados ?? []).forEach(r => {
-          if (!map.has(r.cod_vendedor)) map.set(r.cod_vendedor, r.nome_vendedor);
+          if (!vendMap.has(r.cod_vendedor))
+            vendMap.set(r.cod_vendedor, r.nome_vendedor);
+          if (r.cod_supervisor && !supMap.has(r.cod_supervisor))
+            supMap.set(r.cod_supervisor, r.nome_supervisor);
+          if (r.cod_supervisor) {
+            if (!vendPorSup.has(r.cod_supervisor))
+              vendPorSup.set(r.cod_supervisor, new Set());
+            vendPorSup.get(r.cod_supervisor).add(r.cod_vendedor);
+          }
         });
-        setVendedores(Array.from(map.entries())
+        setVendedores(Array.from(vendMap.entries())
           .map(([cod,nome]) => ({cod,nome}))
           .sort((a,b) => a.nome.localeCompare(b.nome)));
+        setSupervisores(Array.from(supMap.entries())
+          .map(([cod,nome]) => ({cod,nome}))
+          .sort((a,b) => a.nome.localeCompare(b.nome)));
+        setSupVendMap(vendPorSup);
       }).catch(() => {});
   }, [headers, cargo]);
 
@@ -355,9 +375,13 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
     setPagina(1);
   };
 
-  // Filtro local por texto + posicao + ordenação
+  // Filtro local por supervisor + texto + posicao + ordenação
   const rows = useMemo(() => {
     let r = [...pedidos];
+    if (filtroSup && supVendMap) {
+      const vends = supVendMap.get(filtroSup);
+      if (vends) r = r.filter(p => vends.has(p.cod_vendedor));
+    }
     if (busca) {
       const s = busca.toLowerCase();
       r = r.filter(p =>
@@ -378,7 +402,7 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
         : String(bv).localeCompare(String(av), "pt-BR");
     });
     return r;
-  }, [pedidos, busca, filtroStatus, sortCol, sortDir]);
+  }, [pedidos, busca, filtroStatus, sortCol, sortDir, filtroSup, supVendMap]);
 
   // Só a página atual — limita o DOM a PAGE_SIZE linhas
   const totalPaginas = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -427,25 +451,15 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
 
   return (<>
     <style>{ROW_CSS}</style>
-    {/* Header */}
-    {!isMobile && (
-      <div style={{ background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding:"10px 20px", display:"flex", alignItems:"center",
-        gap:"12px", borderBottom:`3px solid ${C.gold}` }}>
-        <div>
-          <div style={{ fontWeight:900, fontSize:"20px", color:"#fff", letterSpacing:"0.06em", lineHeight:1 }}>PREMIUM</div>
-          <div style={{ fontWeight:700, fontSize:"9px", color:C.gold, letterSpacing:"0.14em" }}>DISTRIBUIDORA</div>
+    <ModuleHeader icon={Package} title="PEDIDOS DE VENDA" isMobile={isMobile}>
+      {rows.length > 0 && (
+        <div style={{ display:"flex", gap:"16px", fontSize:"12px", color:"rgba(255,255,255,.8)" }}>
+          <span><b style={{color:"#fff"}}>{rows.length}</b> pedidos</span>
+          {showCorte && totPerda > 0 && <span>Corte/Falta: <b style={{color:"#FCA5A5"}}>{fmtR(totPerda)}</b></span>}
+          <span>Total: <b style={{color:C.gold}}>{fmtR(totVlTotal)}</b></span>
         </div>
-        <div style={{ color:"#fff", fontWeight:700, fontSize:"14px" }}>PEDIDOS DE VENDA</div>
-        {rows.length > 0 && (
-          <div style={{ marginLeft:"auto", display:"flex", gap:"16px", fontSize:"12px", color:"rgba(255,255,255,.8)" }}>
-            <span><b style={{color:"#fff"}}>{rows.length}</b> pedidos</span>
-            {showCorte && totPerda > 0 && <span>Corte/Falta: <b style={{color:"#FCA5A5"}}>{fmtR(totPerda)}</b></span>}
-            <span>Total: <b style={{color:C.gold}}>{fmtR(totVlTotal)}</b></span>
-          </div>
-        )}
-      </div>
-    )}
+      )}
+    </ModuleHeader>
 
     {/* Toolbar de filtros */}
     <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,
@@ -474,6 +488,17 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
           Buscar
         </button>
       </div>
+
+      {/* Filtro supervisor */}
+      {cargo !== "vendedor" && supervisores.length > 0 && (
+        <select value={filtroSup??""} onChange={e=>{setFiltroSup(e.target.value?Number(e.target.value):null);setFiltroVend(null)}}
+          style={{ appearance:"none", border:`1px solid ${C.border}`, borderRadius:"6px",
+            padding:"6px 28px 6px 10px", fontSize:"12px", outline:"none",
+            cursor:"pointer", background:"#fff", color:filtroSup?C.text:C.textSub, minWidth:"150px" }}>
+          <option value="">Todos supervisores</option>
+          {supervisores.map(s => <option key={s.cod} value={s.cod}>{s.nome}</option>)}
+        </select>
+      )}
 
       {/* Filtro vendedor */}
       {cargo !== "vendedor" && (
@@ -551,10 +576,7 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
       )}
     </div>
 
-    {/* Tabela com scroll interno */}
-    <div style={{ margin:isMobile?"8px":"12px 16px", background:"#fff",
-      border:`1px solid ${C.border}`, borderRadius:"4px",
-      overflow:"hidden", boxShadow:"0 1px 6px rgba(170,0,0,.12)" }}>
+    <TableCard>
 
       {loading && <div style={{ padding:"48px", textAlign:"center", color:C.textSub }}>
         Carregando pedidos...
@@ -662,15 +684,13 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
         )}
         </>
       )}
-    </div>
+    </TableCard>
 
     <div style={{ height:"8px" }}/>
 
     {/* Ranking de vendas do período */}
     {!loading && !error && ranking.length > 0 && (
-      <div style={{ margin:isMobile?"8px":"0 16px 16px", background:"#fff",
-        border:`1px solid ${C.border}`, borderRadius:"4px",
-        overflow:"hidden", boxShadow:"0 1px 6px rgba(170,0,0,.12)" }}>
+      <TableCard>
 
         <div style={{ padding:"8px 14px", background:`linear-gradient(90deg,${C.header},${C.primary})`,
           display:"flex", alignItems:"center", gap:"10px" }}>
@@ -744,7 +764,7 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </TableCard>
     )}
   </>);
 }

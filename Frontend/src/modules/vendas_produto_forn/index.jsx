@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { RefreshCw, Search, ChevronDown, ShoppingBag, FileSpreadsheet } from "lucide-react";
+import { Search, ChevronDown, ShoppingBag, FileSpreadsheet } from "lucide-react";
 import { C, fmtR, fmtN } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
+import TableCard from "../../components/TableCard";
 import { exportCSV } from "../../utils/exportCSV";
 import { useSort } from "../../hooks/useSort";
 
@@ -147,22 +149,7 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
 
   return (
     <>
-      <div style={{
-        background: `linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding: isMobile ? "8px 12px" : "10px 20px",
-        display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "space-between",
-        borderBottom: `3px solid ${C.gold}`,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: "20px", color: "#fff", letterSpacing: "0.06em", lineHeight: 1 }}>PREMIUM</div>
-            <div style={{ fontWeight: 700, fontSize: "9px", color: C.gold, letterSpacing: "0.14em" }}>DISTRIBUIDORA</div>
-          </div>
-          <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-            <ShoppingBag size={16} color={C.gold} /> VENDAS POR PRODUTO
-          </div>
-        </div>
-      </div>
+      <ModuleHeader icon={ShoppingBag} title="VENDAS POR PRODUTO" isMobile={isMobile} />
 
       <div style={{
         background: "#fff", borderBottom: `2px solid ${C.border}`,
@@ -220,9 +207,7 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
         )}
       </div>
 
-      <div style={{ margin: isMobile ? "8px" : "12px 16px", background: "#fff",
-                    border: `1px solid ${C.border}`, borderRadius: "4px", overflow: "hidden",
-                    boxShadow: `0 1px 6px rgba(170,0,0,.1)` }}>
+      <TableCard isMobile={isMobile}>
         {!fornSel && !loading && (
           <div style={{ padding: "48px", textAlign: "center", color: C.textSub }}>
             Selecione um fornecedor para visualizar as vendas.
@@ -270,7 +255,7 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
             </table>
           </div>
         )}
-      </div>
+      </TableCard>
     </>
   );
 }

@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Plus, ChevronDown, ChevronRight, FileSpreadsheet } from "lucide-react";
-import { C, getToday, fmtDt } from "../../theme";
+import { RefreshCw, Plus, ChevronDown, ChevronRight, FileSpreadsheet, FileText } from "lucide-react";
+import { C, getToday, fmtDt as fmtDtTheme } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
 
 const STATUS_CORES = {
   "Aberto":           { bg:"#EFF6FF", color:"#2563EB", border:"#BFDBFE" },
@@ -25,11 +26,10 @@ const badge = (status) => {
   );
 };
 
-const fmt_dt = (dt) => {
+const fmt_dt_hora = (dt) => {
   if (!dt) return "—";
   const [d, t] = dt.split(" ");
-  const [y, m, dia] = d.split("-");
-  return `${dia}/${m}/${y} ${t?.slice(0,5) ?? ""}`;
+  return `${fmtDtTheme(d)} ${t?.slice(0,5) ?? ""}`;
 };
 
 // ── Estilo padrão de campo ────────────────────────────────────────────────────
@@ -348,7 +348,7 @@ function ChamadoCard({ c, token, cargo, onUpdate, isMobile }) {
             <span>RG: <b>{c.rg_freezer}</b></span>
             {c.numero_os     && <span style={{ color:C.green,  fontWeight:700 }}>OS: {c.numero_os}</span>}
             {c.numero_chamado && <span style={{ color:C.primary }}>Nº: {c.numero_chamado}</span>}
-            <span style={{ marginLeft:"auto" }}>{fmt_dt(c.criado_em)}</span>
+            <span style={{ marginLeft:"auto" }}>{fmt_dt_hora(c.criado_em)}</span>
           </div>
         </div>
       </div>
@@ -562,21 +562,7 @@ export default function ModuleChamados({ isMobile, token, userInfo={} }) {
 
   return (
     <>
-      {!isMobile && (
-        <div style={{ background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-                      padding:"10px 20px", display:"flex", alignItems:"center",
-                      gap:"12px", borderBottom:`3px solid ${C.gold}` }}>
-          <div>
-            <div style={{ fontWeight:900, fontSize:"20px", color:"#fff",
-                          letterSpacing:"0.06em", lineHeight:1 }}>PREMIUM</div>
-            <div style={{ fontWeight:700, fontSize:"9px", color:C.gold,
-                          letterSpacing:"0.14em" }}>DISTRIBUIDORA</div>
-          </div>
-          <div style={{ color:"#fff", fontWeight:700, fontSize:"14px" }}>
-            CHAMADOS DE FREEZER
-          </div>
-        </div>
-      )}
+      <ModuleHeader icon={FileText} title="CHAMADOS DE FREEZER" isMobile={isMobile} />
 
       {/* Toolbar */}
       <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { RefreshCw, ChevronDown, ChevronRight, Settings, Eye,
-         Plus, TrendingUp, TrendingDown, Minus, Search } from "lucide-react";
+         Plus, TrendingUp as BLIcon, TrendingDown, Minus, Search } from "lucide-react";
 import { C, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
 import { arrow } from "../../components/ArrowBadge";
 import SkeletonRows from "../../components/SkeletonRows";
 
@@ -385,24 +386,6 @@ function Configuracao({campanha, token, isMobile}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HEADER padrão do módulo
-// ─────────────────────────────────────────────────────────────────────────────
-function ModuleHeader({isMobile, titulo}) {
-  if (isMobile) return null;
-  return (
-    <div style={{background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-      padding:isMobile?"8px 12px":"10px 20px",display:"flex",alignItems:"center",
-      gap:"12px",borderBottom:`3px solid ${C.gold}`}}>
-      <div>
-        <div style={{fontWeight:900,fontSize:isMobile?"16px":"20px",color:"#fff",letterSpacing:"0.06em",lineHeight:1}}>PREMIUM</div>
-        <div style={{fontWeight:700,fontSize:"9px",color:C.gold,letterSpacing:"0.14em"}}>DISTRIBUIDORA</div>
-      </div>
-      <div style={{color:"#fff",fontWeight:700,fontSize:isMobile?"12px":"14px"}}>{titulo}</div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // VIEW VENDEDOR — todas as campanhas da semana vigente, layout simples
 // ─────────────────────────────────────────────────────────────────────────────
 function CampanhaVendedor({campanha, token}) {
@@ -459,7 +442,7 @@ function VendedorView({token, userInfo, isMobile}) {
   },[headers]);
 
   return (<>
-    <ModuleHeader isMobile={isMobile} titulo="BATEU LEVOU"/>
+    <ModuleHeader icon={BLIcon} title="BATEU LEVOU" isMobile={isMobile}/>
     <div style={{ padding:"12px 16px" }}>
       {loading && (
         <div style={{ textAlign:"center", padding:"48px", color:C.textSub }}>
@@ -566,7 +549,7 @@ function FornecedorView({token, userInfo, isMobile}) {
   const encerrada = campanhaSel && campanhaSel.semana_fim < hoje;
 
   return (<>
-    <ModuleHeader isMobile={isMobile} titulo="BATEU LEVOU"/>
+    <ModuleHeader icon={BLIcon} title="BATEU LEVOU" isMobile={isMobile}/>
 
     {/* ── MOBILE: lista em tela cheia → detalhe em tela cheia ── */}
     {isMobile ? (
@@ -900,8 +883,8 @@ function ViewPadrao({cargo, token, userInfo, isMobile}) {
   };
 
   return (<>
-    <ModuleHeader isMobile={isMobile}
-      titulo={`BATEU LEVOU${campanhaSel?" — "+campanhaSel.nome:""}`}/>
+    <ModuleHeader icon={BLIcon}
+      title={"BATEU LEVOU" + (campanhaSel ? " — " + campanhaSel.nome : "")} isMobile={isMobile}/>
 
     <div style={{background:"#fff",borderBottom:`2px solid ${C.border}`,
       padding:"8px 16px",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Minus, FileText } from "lucide-react";
+import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Minus, FileText, Star } from "lucide-react";
 import { C, fmt, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
 import { arrow, medal } from "../../components/ArrowBadge";
 import SkeletonRows from "../../components/SkeletonRows";
 import { useSort } from "../../hooks/useSort";
@@ -150,42 +151,23 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
 
   return (
     <>
-      <div style={{
-        background: `linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding: isMobile ? "8px 12px" : "10px 20px",
-        display: isMobile ? "none" : "flex", alignItems: "center", justifyContent: "space-between",
-        borderBottom: `3px solid ${C.gold}`,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div>
-            <div style={{ fontWeight: 900, fontSize: "20px", color: "#fff", letterSpacing: "0.06em", lineHeight: 1 }}>PREMIUM</div>
-            <div style={{ fontWeight: 700, fontSize: "9px", color: C.gold, letterSpacing: "0.14em" }}>DISTRIBUIDORA</div>
-          </div>
-          <div>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px" }}>RANKING DE VENDEDORES</div>
-            <div style={{ color: "rgba(255,220,180,.9)", fontSize: "11px", marginTop: "2px" }}>
-              Total: <b style={{ color: "#fff" }}>{fmt(tot.fat)}</b>
-              &nbsp;·&nbsp; Meta: <b style={{ color: "#fff" }}>{fmt(tot.meta)}</b>
-              &nbsp;·&nbsp; Média: <b style={{ color: "#fff" }}>{fmt(tot.media)}</b>
-            </div>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <button onClick={fetchData} disabled={loading}
-            style={{ background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.3)", color: "#fff",
-                     padding: "6px 10px", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
-            <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+      <ModuleHeader icon={Star} title="RANKING DE VENDEDORES"
+        titleExtra={<>Total: <b>{fmt(tot.fat)}</b> · Meta: <b>{fmt(tot.meta)}</b> · Média: <b>{fmt(tot.media)}</b></>}
+        isMobile={isMobile}>
+        <button onClick={fetchData} disabled={loading}
+          style={{ background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.3)", color: "#fff",
+                   padding: "6px 10px", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
+          <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
+        </button>
+        {rows.length > 0 && (
+          <button onClick={exportToPDF}
+            style={{ display: "flex", alignItems: "center", gap: "5px", background: "rgba(255,255,255,.15)",
+              border: "1px solid rgba(255,255,255,.3)", color: "#fff", padding: "6px 12px",
+              borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>
+            <FileText size={13} /> PDF
           </button>
-          {rows.length > 0 && (
-            <button onClick={exportToPDF}
-              style={{ display: "flex", alignItems: "center", gap: "5px", background: "rgba(255,255,255,.15)",
-                border: "1px solid rgba(255,255,255,.3)", color: "#fff", padding: "6px 12px",
-                borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>
-              <FileText size={13} /> PDF
-            </button>
-          )}
-        </div>
-      </div>
+        )}
+      </ModuleHeader>
 
       <div style={{
         background: "#fff", borderBottom: `2px solid ${C.border}`,

@@ -55,16 +55,6 @@ export const pctStyle = (p) => {
   return               { color:"#fff", background:C.red,   borderRadius:"3px", padding:"1px 5px", fontWeight:600 };
 };
 
-// Ícone circular de status (verde ≥100, âmbar ≥90, vermelho <90)
-// Importar nos módulos: import { C, pctStyle, arrow } from "../../theme"
-// Requer TrendingUp, TrendingDown, Minus do lucide-react no componente que usar
-export const arrowStyle = (p) => {
-  if (p == null) return null;
-  if (p >= 100) return { bg: C.green,  shadow: "rgba(22,163,74,.5)"  };
-  if (p >= 90)  return { bg: C.amber,  shadow: "rgba(217,119,6,.5)"  };
-  return              { bg: C.red,    shadow: "rgba(220,38,38,.5)"  };
-};
-
 // Retorna a data local no formato YYYY-MM-DD (evita offset UTC)
 export const getToday = () => {
   const d = new Date();

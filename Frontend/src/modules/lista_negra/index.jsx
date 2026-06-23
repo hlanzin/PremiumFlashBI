@@ -6,6 +6,7 @@ import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
 
 const EQUIPE_CODES = [2, 8, 9];
 
@@ -430,43 +431,30 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
   };
 
   return (<>
-    {/* Header */}
-    {!isMobile && (
-      <div style={{ background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding:"10px 20px", display:"flex", alignItems:"center",
-        gap:"12px", borderBottom:`3px solid ${C.gold}` }}>
-        <div>
-          <div style={{ fontWeight:900, fontSize:"20px", color:"#fff",
-            letterSpacing:"0.06em", lineHeight:1 }}>PREMIUM</div>
-          <div style={{ fontWeight:700, fontSize:"9px", color:C.gold,
-            letterSpacing:"0.14em" }}>DISTRIBUIDORA</div>
-        </div>
-        <div style={{ color:"#fff", fontWeight:700, fontSize:"14px" }}>LISTA NEGRA</div>
-
-        {/* Botão exportar */}
-        {rows.length > 0 && (
-          <div style={{ marginLeft:"auto", position:"relative" }}>
-            <button onClick={() => setShowExportMenu(v => !v)}
-              style={{ display:"flex", alignItems:"center", gap:"5px",
-                background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
-                color:"#fff", padding:"6px 12px", borderRadius:"6px",
-                cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
-              <FileText size={13}/> Exportar <ChevronDown size={11}/>
-            </button>
-            {showExportMenu && (
-              <div style={{ position:"absolute", right:0, top:"calc(100% + 4px)",
-                background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px",
-                boxShadow:"0 4px 12px rgba(0,0,0,.15)", zIndex:100, minWidth:"160px",
-                overflow:"hidden" }}>
-                <button onClick={exportToPDF}
-                  style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%",
-                    padding:"9px 14px", border:"none", borderBottom:`1px solid ${C.border}`,
-                    background:"#fff", cursor:"pointer", fontSize:"12px", textAlign:"left" }}>
-                  <FileText size={13} color={C.primary}/> Exportar PDF
-                </button>
-                <button onClick={exportToExcel}
-                  style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%",
-                    padding:"9px 14px", border:"none",
+    <ModuleHeader icon={FileText} title="LISTA NEGRA" isMobile={isMobile}>
+      {rows.length > 0 && (
+        <div style={{ position:"relative" }}>
+          <button onClick={() => setShowExportMenu(v => !v)}
+            style={{ display:"flex", alignItems:"center", gap:"5px",
+              background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
+              color:"#fff", padding:"6px 12px", borderRadius:"6px",
+              cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
+            <FileText size={13}/> Exportar <ChevronDown size={11}/>
+          </button>
+          {showExportMenu && (
+            <div style={{ position:"absolute", right:0, top:"calc(100% + 4px)",
+              background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px",
+              boxShadow:"0 4px 12px rgba(0,0,0,.15)", zIndex:100, minWidth:"160px",
+              overflow:"hidden" }}>
+              <button onClick={exportToPDF}
+                style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%",
+                  padding:"9px 14px", border:"none", borderBottom:`1px solid ${C.border}`,
+                  background:"#fff", cursor:"pointer", fontSize:"12px", textAlign:"left" }}>
+                <FileText size={13} color={C.primary}/> Exportar PDF
+              </button>
+              <button onClick={exportToExcel}
+                style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%",
+                  padding:"9px 14px", border:"none",
                     background:"#fff", cursor:"pointer", fontSize:"12px", textAlign:"left" }}>
                   <FileSpreadsheet size={13} color="#1D6F42"/> Exportar Excel
                 </button>
@@ -474,8 +462,7 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
             )}
           </div>
         )}
-      </div>
-    )}
+      </ModuleHeader>
 
     {/* Toolbar */}
     <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,

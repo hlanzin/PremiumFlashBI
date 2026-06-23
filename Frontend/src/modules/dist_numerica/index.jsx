@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
-         ChevronDown, TrendingUp, TrendingDown, Minus, Menu, X } from "lucide-react";
+import { RefreshCw, Search, BarChart3, TrendingUp, Users, User, Building2, Shield,
+         ChevronDown, TrendingDown, Minus, Menu, X } from "lucide-react";
 import { C, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
+import TableCard from "../../components/TableCard";
 import { arrow } from "../../components/ArrowBadge";
 import SkeletonRows from "../../components/SkeletonRows";
 
@@ -400,32 +402,12 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
   return (
     <>
       {/* Header */}
-      <div style={{
-        background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding:isMobile?"8px 12px":"10px 20px",
-        display:isMobile?"none":"flex", alignItems:"center", justifyContent:"space-between",
-        flexWrap:"wrap", gap:"8px", borderBottom:`3px solid ${C.gold}`,
-      }}>
-        <div style={{ display:"flex", alignItems:"center", gap:"12px" }}>
-          <div>
-            <div style={{ fontWeight:900, fontSize:isMobile?"16px":"20px", color:"#fff", letterSpacing:"0.06em", lineHeight:1 }}>PREMIUM</div>
-            <div style={{ fontWeight:700, fontSize:"9px", color:C.gold, letterSpacing:"0.14em" }}>DISTRIBUIDORA</div>
-          </div>
-          <div>
-            <div style={{ color:"#fff", fontWeight:700, fontSize:isMobile?"12px":"14px" }}>
-              DISTRIBUICAO NUMERICA
-              {nomeAtivo() && <span style={{ fontWeight:400, fontSize:"11px", color:"rgba(255,255,255,.8)", marginLeft:"6px" }}>— {nomeAtivo()}</span>}
-            </div>
-            <div style={{ color:"rgba(255,220,180,.9)", fontSize:"11px", marginTop:"2px" }}>
-              Meta: <b style={{color:"#fff"}}>{fmtN(tot.meta)}</b>
-              &nbsp;·&nbsp; Fat. Mês: <b style={{color:"#fff"}}>{fmtN(tot.mes)}</b>
-              &nbsp;·&nbsp; Cart: <b style={{color:"#fff"}}>{fmtN(tot.semana)}</b>
-              &nbsp;·&nbsp; Total: <b style={{color:"#fff"}}>{fmtN(totReal)}</b>
-              &nbsp;·&nbsp; <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
-              {dataRef !== hoje && <span style={{color:C.goldLight}}>&nbsp;·&nbsp; Data: {dataRef}</span>}
-            </div>
-          </div>
-        </div>
+<ModuleHeader icon={TrendingUp} title="DISTRIBUIÇÃO NUMÉRICA" subtitle={nomeAtivo()} isMobile={isMobile}
+  titleExtra={<>
+    Meta: <b>{fmtN(tot.meta)}</b> · Fat. Mês: <b>{fmtN(tot.mes)}</b> · Cart: <b>{fmtN(tot.semana)}</b>
+    · Total: <b>{fmtN(totReal)}</b> · <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
+    {dataRef !== hoje && <> · Data: {dataRef}</>}
+  </>}>
         <button onClick={fetchData} disabled={loading}
           style={{ background:"rgba(0,0,0,.25)", border:"1px solid rgba(255,255,255,.3)",
                    color:"#fff", padding:isMobile?"6px":"7px 12px", borderRadius:"6px",
@@ -433,7 +415,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
           <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
           {!isMobile && " Atualizar"}
         </button>
-      </div>
+      </ModuleHeader>
 
       {/* Indicadores mobile */}
       {isMobile && data.length>0 && !loading && (
@@ -728,9 +710,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
       {/* Tabela principal */}
       {mode !== "todas_equipes" && (
-      <div style={{ margin:isMobile?"8px":"12px 16px", background:"#fff",
-                    border:`1px solid ${C.border}`, borderRadius:"4px",
-                    overflow:"hidden", boxShadow:`0 1px 6px rgba(170,0,0,.12)` }}>
+      <TableCard>
         {loading && (
           <div style={{ padding:"16px" }}>
             {[...Array(6)].map((_,i) => (
@@ -831,7 +811,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
             {rows.length === 0 && <div style={{ padding:"40px", textAlign:"center", color:C.textSub }}>Nenhum dado encontrado.</div>}
           </div>
         )}
-      </div>
+      </TableCard>
       )}
     </>
   );

@@ -5,6 +5,7 @@ import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
 
 const pctTroca = (v) => {
   if (v == null) return { label: "—", style: { color: C.textSub } };
@@ -224,26 +225,15 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
   };
 
   return (<>
-    {!isMobile && (
-      <div style={{ background: `linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding: "10px 20px", display: "flex", alignItems: "center", gap: "12px", borderBottom: `3px solid ${C.gold}` }}>
-        <div>
-          <div style={{ fontWeight: 900, fontSize: "20px", color: "#fff", letterSpacing: "0.06em", lineHeight: 1 }}>PREMIUM</div>
-          <div style={{ fontWeight: 700, fontSize: "9px", color: C.gold, letterSpacing: "0.14em" }}>DISTRIBUIDORA</div>
-        </div>
-        <div style={{ color: "#fff", fontWeight: 700, fontSize: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
-          <Banknote size={16} color={C.gold} /> TROCA
-        </div>
+      <ModuleHeader icon={Banknote} title="TROCA" isMobile={isMobile}>
         {rows.length > 0 && mode !== "todas_equipes" && (
           <button onClick={exportToPDF}
-            style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: "5px",
-              background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.3)",
+            style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.3)",
               color: "#fff", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>
-            <FileText size={13} /> Exportar PDF
+            <FileText size={13} /> PDF
           </button>
         )}
-      </div>
-    )}
+      </ModuleHeader>
 
     <div style={{ background: "#fff", borderBottom: `2px solid ${C.border}`,
       padding: isMobile ? "6px 10px" : "8px 16px",

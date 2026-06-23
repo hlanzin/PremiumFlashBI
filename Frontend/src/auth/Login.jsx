@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { C } from "../theme";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://192.168.38.30:8000";
+import { API_BASE } from "../config";
 
 export default function Login({ onLogin }) {
   const [username, setUsername] = useState("");

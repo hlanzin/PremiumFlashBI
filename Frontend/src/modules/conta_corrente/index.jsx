@@ -6,6 +6,8 @@ import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import Dropdown from "../../components/Dropdown";
+import ModuleHeader from "../../components/ModuleHeader";
+import TableCard from "../../components/TableCard";
 import { arrow } from "../../components/ArrowBadge";
 
 const fmtDtHora = v => {
@@ -422,44 +424,28 @@ export default function ModuleContaCorrente({ isMobile, token, userInfo = {} }) 
     : ["saldos","historico"];
 
   return (<>
-    {/* Header */}
-    {!isMobile && (
-      <div style={{ background:`linear-gradient(135deg,${C.header},${C.primary} 60%,${C.header})`,
-        padding:"10px 20px", display:"flex", alignItems:"center",
-        gap:"12px", borderBottom:`3px solid ${C.gold}` }}>
-        <div>
-          <div style={{ fontWeight:900, fontSize:"20px", color:"#fff",
-            letterSpacing:"0.06em", lineHeight:1 }}>PREMIUM</div>
-          <div style={{ fontWeight:700, fontSize:"9px", color:C.gold,
-            letterSpacing:"0.14em" }}>DISTRIBUIDORA</div>
+    <ModuleHeader icon={Wallet} title="CONTA CORRENTE RCA" isMobile={isMobile}>
+      {aba==="saldos" && saldos.length > 0 && (
+        <div style={{ display:"flex", gap:"16px", fontSize:"11px" }}>
+          {[["Limite Total",fmtR(totLimite),C.gold],
+            ["Utilizado",fmtR(totUtilizado),C.red],
+            ["Disponível",fmtR(totDisp),C.green]].map(([l,v,c])=>(
+            <div key={l} style={{ textAlign:"center" }}>
+              <div style={{ color:"rgba(255,255,255,.65)", fontSize:"10px" }}>{l}</div>
+              <div style={{ color:c, fontWeight:700, fontFamily:C.mono }}>{v}</div>
+            </div>
+          ))}
         </div>
-        <div style={{ color:"#fff", fontWeight:700, fontSize:"14px",
-          display:"flex", alignItems:"center", gap:"6px" }}>
-          <Wallet size={16} color={C.gold}/> CONTA CORRENTE RCA
-        </div>
-        {aba==="saldos" && saldos.length > 0 && (
-          <div style={{ marginLeft:"auto", display:"flex", gap:"16px", fontSize:"11px" }}>
-            {[["Limite Total",fmtR(totLimite),C.gold],
-              ["Utilizado",fmtR(totUtilizado),C.red],
-              ["Disponível",fmtR(totDisp),C.green]].map(([l,v,c])=>(
-              <div key={l} style={{ textAlign:"center" }}>
-                <div style={{ color:"rgba(255,255,255,.65)", fontSize:"10px" }}>{l}</div>
-                <div style={{ color:c, fontWeight:700, fontFamily:C.mono }}>{v}</div>
-              </div>
-            ))}
-          </div>
-        )}
-        {pendentes.length > 0 && aba !== "pendentes" && (
-          <button onClick={()=>setAba("pendentes")}
-            style={{ marginLeft: aba==="saldos"?"0":"auto",
-              background:C.amber, border:"none", color:"#fff",
-              padding:"5px 10px", borderRadius:"6px", cursor:"pointer",
-              fontSize:"11px", fontWeight:700, display:"flex", alignItems:"center", gap:"4px" }}>
-            <Clock size={11}/> {pendentes.length} pendente{pendentes.length>1?"s":""}
-          </button>
-        )}
-      </div>
-    )}
+      )}
+      {pendentes.length > 0 && aba !== "pendentes" && (
+        <button onClick={()=>setAba("pendentes")}
+          style={{ background:C.amber, border:"none", color:"#fff",
+            padding:"5px 10px", borderRadius:"6px", cursor:"pointer",
+            fontSize:"11px", fontWeight:700, display:"flex", alignItems:"center", gap:"4px" }}>
+          <Clock size={11}/> {pendentes.length} pendente{pendentes.length>1?"s":""}
+        </button>
+      )}
+    </ModuleHeader>
 
     {/* Abas */}
     <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,
@@ -535,8 +521,7 @@ export default function ModuleContaCorrente({ isMobile, token, userInfo = {} }) 
 
       {/* ── Pendentes (admin) ── */}
       {aba==="pendentes" && !loading && !error && (
-        <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px",
-          overflow:"hidden", boxShadow:"0 1px 6px rgba(170,0,0,.1)" }}>
+        <TableCard>
           {pendentes.length === 0
             ? <div style={{ padding:"48px", textAlign:"center", color:C.textSub }}>Nenhuma solicitação pendente.</div>
             : <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12px" }}>
@@ -587,13 +572,12 @@ export default function ModuleContaCorrente({ isMobile, token, userInfo = {} }) 
                 </tbody>
               </table>
           }
-        </div>
+        </TableCard>
       )}
 
       {/* ── Histórico ── */}
       {aba==="historico" && !loading && !error && (
-        <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px",
-          overflow:"hidden", boxShadow:"0 1px 6px rgba(170,0,0,.1)" }}>
+        <TableCard>
           {historico.length === 0
             ? <div style={{ padding:"48px", textAlign:"center", color:C.textSub }}>Sem histórico.</div>
             : <div style={{ overflowX:"auto" }}>
@@ -636,13 +620,12 @@ export default function ModuleContaCorrente({ isMobile, token, userInfo = {} }) 
                 </table>
               </div>
           }
-        </div>
+        </TableCard>
       )}
 
       {/* ── Extrato Oracle ── */}
       {aba==="extrato" && !loading && !error && (
-        <div style={{ background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px",
-          overflow:"hidden", boxShadow:"0 1px 6px rgba(170,0,0,.1)" }}>
+        <TableCard>
           <div style={{ padding:"8px 14px", background:`linear-gradient(90deg,${C.header},${C.primary})`,
             color:"#fff", fontWeight:700, fontSize:"12px" }}>
             Extrato Winthor — RCA #{extratoRca}
@@ -685,7 +668,7 @@ export default function ModuleContaCorrente({ isMobile, token, userInfo = {} }) 
                 </table>
               </div>
           }
-        </div>
+        </TableCard>
       )}
     </div>
 
