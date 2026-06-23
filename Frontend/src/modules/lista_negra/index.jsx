@@ -1,9 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
-         ChevronDown, TrendingUp, TrendingDown, Menu, X, FileText, FileSpreadsheet, Filter } from "lucide-react";
-import { C, getToday } from "../../theme";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
+         TrendingUp, TrendingDown, Menu, X, FileText, FileSpreadsheet, Filter, ChevronDown } from "lucide-react";
+import { C, getToday, fmtN } from "../../theme";
+import { API_BASE } from "../../config";
+import { useAuthHeaders } from "../../api";
+import Th from "../../components/Th";
+import Dropdown from "../../components/Dropdown";
 
 const EQUIPE_CODES = [2, 8, 9];
 
@@ -23,25 +25,7 @@ const IconNao = () => (
   </div>
 );
 
-// ── Dropdown ──────────────────────────────────────────────────────────────────
-function Dropdown({ value, onChange, options, placeholder }) {
-  return (
-    <div style={{ position:"relative", display:"inline-block", maxWidth:"280px", width:"100%" }}>
-      <select value={value??""} onChange={e => onChange(e.target.value ? Number(e.target.value) : null)}
-        style={{ appearance:"none", background:"#fff", border:`1px solid ${C.border}`,
-                 borderRadius:"6px", padding:"7px 32px 7px 10px", fontSize:"12px",
-                 color:value?C.text:C.textSub, cursor:"pointer", outline:"none", width:"100%" }}>
-        <option value="">{placeholder}</option>
-        {options.map(o => {
-          const key = o.id ?? o.cod;
-          return <option key={key} value={key}>{o.nome}</option>;
-        })}
-      </select>
-      <ChevronDown size={13} style={{ position:"absolute", right:"8px", top:"50%",
-        transform:"translateY(-50%)", color:C.textSub, pointerEvents:"none" }}/>
-    </div>
-  );
-}
+
 
 // ── Linha de vendedor (agrupador) ─────────────────────────────────────────────
 function VendedorRow({ nome, rows }) {
@@ -206,7 +190,7 @@ function THead({ mode, sortCol, sortDir, onSort }) {
     const active = sortCol === col;
     return (
       <th onClick={() => col && onSort(col)}
-        style={{ padding:"6px 8px", background:C.subHeader, color:"#fff", fontSize:"10px",
+        style={{ padding:"6px 8px", color:"#fff", fontSize:"10px",
                  fontWeight:700, textAlign:align, whiteSpace:"nowrap",
                  border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em",
                  cursor:col?"pointer":"default", userSelect:"none",
@@ -244,7 +228,7 @@ const MODES = [
 export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
   const cargo   = userInfo.cargo ?? "gerencial";
   const codUser = userInfo.cod_winthor ?? null;
-  const headers = useMemo(() => ({ Authorization:`Bearer ${token}` }), [token]);
+  const headers = useAuthHeaders(token);
 
   const MODES_VISIVEIS = MODES.filter(m => {
     if (cargo === "gerencial" || cargo === "admin") return true;
@@ -512,8 +496,8 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
 
       {/* Dropdown dimensão */}
       {agrupamento === "fornecedor"
-        ? <Dropdown value={dimId} onChange={setDimId} options={fornecedores} placeholder="Selecione fornecedor..."/>
-        : <Dropdown value={dimId} onChange={setDimId} options={secoes}       placeholder="Selecione seção..."/>}
+        ? <Dropdown value={dimId} onChange={setDimId} options={fornecedores} placeholder="Selecione fornecedor..." valueKey="id"/>
+        : <Dropdown value={dimId} onChange={setDimId} options={secoes}       placeholder="Selecione seção..."       valueKey="id"/>}
 
       {/* Data */}
       <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}

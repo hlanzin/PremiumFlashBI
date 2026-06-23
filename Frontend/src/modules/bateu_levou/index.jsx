@@ -1,22 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { RefreshCw, ChevronDown, ChevronRight, Settings, Eye,
          Plus, TrendingUp, TrendingDown, Minus, Search } from "lucide-react";
-import { C, fmtPct, pctStyle, getToday } from "../../theme";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
+import { C, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
+import { API_BASE } from "../../config";
+import { useAuthHeaders } from "../../api";
+import Th from "../../components/Th";
+import Dropdown from "../../components/Dropdown";
+import { arrow } from "../../components/ArrowBadge";
+import SkeletonRows from "../../components/SkeletonRows";
 
 const fmtQtd = (v, u) =>
   v == null ? "—" : `${Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2})} ${u==="CX"?"cx":"un"}`;
-
-const arrow = (p) => {
-  if (p==null) return <span style={{color:"#ccc"}}>—</span>;
-  const [bg,sh,Icon] = p>=100?[C.green,"rgba(22,163,74,.5)",TrendingUp]
-    :p>=90?[C.amber,"rgba(217,119,6,.5)",Minus]
-    :[C.red,"rgba(220,38,38,.5)",TrendingDown];
-  return <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",
-    width:"24px",height:"24px",borderRadius:"50%",background:bg,boxShadow:`0 2px 4px ${sh}`}}>
-    <Icon size={12} color="#fff" strokeWidth={2.5}/></div>;
-};
 
 const semanaAtualIni = () => {
   const d=new Date(), day=d.getDay();

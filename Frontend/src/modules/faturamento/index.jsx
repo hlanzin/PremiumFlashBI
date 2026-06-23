@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
          ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus, Menu, X, FileText } from "lucide-react";
-import { C, fmt, fmtPct, pctStyle, getToday } from "../../theme";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
+import { C, fmt, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
+import { API_BASE } from "../../config";
+import { useAuthHeaders } from "../../api";
+import Th from "../../components/Th";
+import Dropdown from "../../components/Dropdown";
+import { arrow } from "../../components/ArrowBadge";
+import SkeletonRows from "../../components/SkeletonRows";
 
 const EQUIPE_CODES = [2, 8, 9];
 const GRUPOS = { "PLF": [10040, 10042, 120239] };
@@ -12,21 +16,6 @@ const getGrupo = (cod) => {
   for (const [nome, codigos] of Object.entries(GRUPOS))
     if (codigos.includes(Number(cod))) return nome;
   return null;
-};
-
-const arrow = (p) => {
-  if (p == null) return <span style={{ color:"#ccc" }}>—</span>;
-  const [bg, shadow, Icon] =
-    p >= 100 ? [C.green, "rgba(22,163,74,.5)",  TrendingUp  ] :
-    p >= 90  ? [C.amber, "rgba(217,119,6,.5)",  Minus       ] :
-               [C.red,   "rgba(220,38,38,.5)",  TrendingDown];
-  return (
-    <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center",
-                  width:"26px", height:"26px", borderRadius:"50%",
-                  background:bg, boxShadow:`0 2px 5px ${shadow}` }}>
-      <Icon size={13} color="#fff" strokeWidth={2.5}/>
-    </div>
-  );
 };
 
 const agg = (rows) => {
@@ -42,23 +31,6 @@ const agg = (rows) => {
   const pctDia = nec  > 0 ? (dia/nec)*100 : null;
   return { meta, real, raf, nec, dia, pct, tend, pctDia };
 };
-
-function Th({ label, col, sortCol, sortDir, onSort, align, sticky }) {
-  const active = sortCol === col;
-  return (
-    <th onClick={() => onSort(col)} style={{
-      padding:"6px 8px", background:C.subHeader, color:"#fff", fontSize:"10px",
-      fontWeight:700, textAlign:align??"left", cursor:"pointer", userSelect:"none",
-      whiteSpace:"nowrap", border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em",
-      ...(sticky ? { position:"sticky", left:0, zIndex:3 } : {}),
-    }}>
-      {label}
-      {active && (sortDir === "asc"
-        ? <ChevronUp size={9} style={{ verticalAlign:"middle" }}/>
-        : <ChevronDown size={9} style={{ verticalAlign:"middle" }}/>)}
-    </th>
-  );
-}
 
 function GrupoRow({ nome, rows, showVendedor }) {
   const { meta,real,raf,nec,dia,pct,tend,pctDia } = agg(rows);
@@ -231,23 +203,6 @@ function Gauge({ label, pct }) {
           {pct.toFixed(0)}%
         </div>
       </div>
-    </div>
-  );
-}
-
-function Dropdown({ value, onChange, options, placeholder }) {
-  return (
-    <div style={{ position:"relative", display:"inline-block", width:"100%", maxWidth:"280px" }}>
-      <select value={value??""} onChange={e => onChange(e.target.value ? Number(e.target.value) : null)}
-        style={{ appearance:"none", WebkitAppearance:"none", background:"#fff",
-                 border:`1px solid ${C.border}`, borderRadius:"6px",
-                 padding:"7px 32px 7px 10px", fontSize:"12px", fontFamily:C.sans,
-                 color: value ? C.text : C.textSub, cursor:"pointer", outline:"none", width:"100%" }}>
-        <option value="">{placeholder}</option>
-        {options.map(o => <option key={o.cod} value={o.cod}>{o.nome}</option>)}
-      </select>
-      <ChevronDown size={13} style={{ position:"absolute", right:"8px", top:"50%",
-                                      transform:"translateY(-50%)", color:C.textSub, pointerEvents:"none" }}/>
     </div>
   );
 }

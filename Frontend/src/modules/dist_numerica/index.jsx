@@ -1,43 +1,15 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
-         ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus, Menu, X } from "lucide-react";
-import { C, fmtPct, pctStyle, getToday } from "../../theme";
+         ChevronDown, TrendingUp, TrendingDown, Minus, Menu, X } from "lucide-react";
+import { C, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
+import { API_BASE } from "../../config";
+import { useAuthHeaders } from "../../api";
+import Th from "../../components/Th";
+import Dropdown from "../../components/Dropdown";
+import { arrow } from "../../components/ArrowBadge";
+import SkeletonRows from "../../components/SkeletonRows";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
 const EQUIPE_CODES = [2, 8, 9];
-
-const fmtN = (v) => (v == null ? "—" : Number(v).toLocaleString("pt-BR"));
-
-const arrow = (p) => {
-  if (p == null) return <span style={{ color:"#ccc" }}>—</span>;
-  const [bg, shadow, Icon] =
-    p >= 100 ? [C.green, "rgba(22,163,74,.5)",  TrendingUp  ] :
-    p >= 90  ? [C.amber, "rgba(217,119,6,.5)",  Minus       ] :
-               [C.red,   "rgba(220,38,38,.5)",  TrendingDown];
-  return (
-    <div style={{ display:"inline-flex", alignItems:"center", justifyContent:"center",
-                  width:"26px", height:"26px", borderRadius:"50%",
-                  background:bg, boxShadow:`0 2px 5px ${shadow}` }}>
-      <Icon size={13} color="#fff" strokeWidth={2.5}/>
-    </div>
-  );
-};
-
-function Th({ label, col, sortCol, sortDir, onSort, align }) {
-  const active = sortCol === col;
-  return (
-    <th onClick={() => onSort(col)} style={{
-      padding:"6px 8px", background:C.subHeader, color:"#fff", fontSize:"10px",
-      fontWeight:700, textAlign:align??"left", cursor:"pointer", userSelect:"none",
-      whiteSpace:"nowrap", border:`1px solid ${C.primaryDk}`, letterSpacing:"0.04em",
-    }}>
-      {label}
-      {active && (sortDir === "asc"
-        ? <ChevronUp size={9} style={{ verticalAlign:"middle" }}/>
-        : <ChevronDown size={9} style={{ verticalAlign:"middle" }}/>)}
-    </th>
-  );
-}
 
 function buildDNBySupervisor(rows, colDimNome) {
   const grupos = [];
@@ -115,23 +87,6 @@ function DataRow({ row, i, showVendedor, colDimNome }) {
   );
 }
 
-function Dropdown({ value, onChange, options, placeholder }) {
-  return (
-    <div style={{ position:"relative", display:"inline-block", width:"100%", maxWidth:"280px" }}>
-      <select value={value ?? ""} onChange={e => onChange(e.target.value ? Number(e.target.value) : null)}
-        style={{ appearance:"none", WebkitAppearance:"none", background:"#fff",
-                 border:`1px solid ${C.border}`, borderRadius:"6px",
-                 padding:"7px 32px 7px 10px", fontSize:"12px", fontFamily:C.sans,
-                 color:value?C.text:C.textSub, cursor:"pointer", outline:"none", width:"100%" }}>
-        <option value="">{placeholder}</option>
-        {options.map(o => <option key={o.cod} value={o.cod}>{o.nome}</option>)}
-      </select>
-      <ChevronDown size={13} style={{ position:"absolute", right:"8px", top:"50%",
-                                      transform:"translateY(-50%)", color:C.textSub, pointerEvents:"none" }}/>
-    </div>
-  );
-}
-
 // ── Card de equipe para DN ────────────────────────────────────────────────────
 function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isMobile, consolidado,
                         filtroRcas = new Set(), filtroDims = new Set() }) {
@@ -141,7 +96,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
   const [aberto, setAberto] = useState(true);
   const [sortCol,setSortCol]= useState(colDimNome);
   const [sortDir,setSortDir]= useState("asc");
-  const headers = useMemo(() => ({ Authorization:`Bearer ${token}` }), [token]);
+  const headers = useAuthHeaders(token);
 
   useEffect(() => {
     setLoading(true);

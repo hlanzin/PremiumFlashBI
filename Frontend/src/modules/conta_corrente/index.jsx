@@ -1,19 +1,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { RefreshCw, Users, User, Building2, Shield,
          ChevronDown, Wallet, CheckCircle, XCircle, Clock, Plus, Minus } from "lucide-react";
-import { C, getToday } from "../../theme";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
-
-const fmtR = v => v == null ? "—" :
-  `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits:2 })}`;
-
-const fmtDt = v => {
-  if (!v) return "—";
-  const s = String(v).split("T")[0];
-  const [y,m,d] = s.split("-");
-  return `${d}/${m}/${y}`;
-};
+import { C, fmtR, fmtDt, getToday } from "../../theme";
+import { API_BASE } from "../../config";
+import { useAuthHeaders } from "../../api";
+import Th from "../../components/Th";
+import Dropdown from "../../components/Dropdown";
+import { arrow } from "../../components/ArrowBadge";
 
 const fmtDtHora = v => {
   if (!v) return "—";

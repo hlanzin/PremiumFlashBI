@@ -33,6 +33,21 @@ export const fmtPct = (v) => (v == null ? "—" : v.toFixed(1) + "%");
 export const fmtQty = (v) =>
   v == null ? "—" : new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(v);
 
+export const fmtR = (v) =>
+  v == null || v === 0
+    ? "—"
+    : `R$ ${Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+
+export const fmtN = (v) =>
+  v == null ? "—" : Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 3 });
+
+export const fmtDt = (v) => {
+  if (!v) return "—";
+  const s = String(v).split("T")[0];
+  const [y, m, d] = s.split("-");
+  return `${d}/${m}/${y}`;
+};
+
 export const pctStyle = (p) => {
   if (p == null) return { color: C.textSub };
   if (p >= 100)  return { color:"#fff", background:C.green, borderRadius:"3px", padding:"1px 5px", fontWeight:600 };

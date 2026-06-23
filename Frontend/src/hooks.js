@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 export function useIsMobile(bp = 768) {
   const [mobile, setMobile] = useState(() => window.innerWidth < bp);
@@ -10,17 +10,17 @@ export function useIsMobile(bp = 768) {
   return mobile;
 }
 
-// Hook de fetch genérico com loading / error / refetch
-export function useFetch(url, options = {}) {
-  const [data,    setData]    = useState(null);
+export function useFetchData(url, headers) {
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
+  const [error, setError] = useState(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     if (!url) return;
-    setLoading(true); setError(null);
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch(url, options);
+      const res = await fetch(url, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setData(await res.json());
     } catch (e) {
@@ -28,8 +28,9 @@ export function useFetch(url, options = {}) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [url, headers]);
 
-  useEffect(() => { fetchData(); }, [url]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
   return { data, loading, error, refetch: fetchData };
 }

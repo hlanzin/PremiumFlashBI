@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { RefreshCw, Plus, Edit2, Trash2, Check, X, ChevronDown, Shield } from "lucide-react";
-import { C, getToday } from "../../theme";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
+import { C, getToday, fmtDt } from "../../theme";
+import { API_BASE } from "../../config";
+import { useAuthHeaders } from "../../api";
 
 const CARGOS = ["admin","gerencial","supervisor","vendedor","fornecedor"];
 

@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { RefreshCw, Plus, ChevronDown, ChevronRight, FileSpreadsheet } from "lucide-react";
-import { C, getToday } from "../../theme";
-
-const API_BASE = import.meta.env.VITE_API_BASE ?? "https://api-flash.premiumvc.com.br";
+import { C, getToday, fmtDt } from "../../theme";
+import { API_BASE } from "../../config";
+import { useAuthHeaders } from "../../api";
+import Dropdown from "../../components/Dropdown";
 
 const STATUS_CORES = {
   "Aberto":           { bg:"#EFF6FF", color:"#2563EB", border:"#BFDBFE" },
