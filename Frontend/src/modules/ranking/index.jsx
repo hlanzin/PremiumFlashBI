@@ -122,8 +122,8 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
             ${sorted.map((r, i) => `<tr${i % 2 === 0 ? ' style="background:#FFF8F8"' : ""}>
               <td>${i + 1}°</td>
               <td>${r.nome_vendedor ?? `#${r.cod_vendedor}`}</td>
-              <td align="right">R$ ${(r.faturamento ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</td>
               <td align="right">R$ ${(r.meta ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</td>
+              <td align="right">R$ ${(r.faturamento ?? 0).toLocaleString("pt-BR",{minimumFractionDigits:2})}</td>
               <td align="center">${r.pct_atingido != null ? r.pct_atingido.toFixed(1)+"%" : "—"}</td>
               <td align="center">${r.tendencia != null ? r.tendencia.toFixed(1)+"%" : "—"}</td>
             </tr>`).join("")}
