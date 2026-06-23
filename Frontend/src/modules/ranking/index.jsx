@@ -210,8 +210,8 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                   <th style={{ padding: "6px 8px", background: C.subHeader, color: "#fff", fontSize: "10px", fontWeight: 700,
                     textAlign: "center", border: `1px solid ${C.primaryDk}`, width: "40px" }}>#</th>
                   <Th label="VENDEDOR" col="nome_vendedor" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="FATURAMENTO" col="faturamento" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
                   <Th label="META" col="meta" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <Th label="FATURAMENTO" col="faturamento" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
                   <Th label="RESTA A FAZER" col="resta_a_fazer" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
                   <Th label="% ATING" col="pct_atingido" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center" />
                   <Th label="TENDÊNCIA" col="tendencia" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center" />
@@ -237,8 +237,8 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                           fontSize: "11px", fontWeight: 800 }}>{m.label}</span> : i + 1}
                       </td>
                       <td style={{ padding: "5px 8px", fontWeight: 600 }}>{r.nome_vendedor ?? `#${r.cod_vendedor}`}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono, fontWeight: 600 }}>{fmt(r.faturamento)}</td>
                       <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono }}>{fmt(r.meta)}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono, fontWeight: 600 }}>{fmt(r.faturamento)}</td>
                       <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono, color: C.red, fontWeight: 600 }}>{fmt(r.resta_a_fazer)}</td>
                       <td style={{ padding: "5px 8px", textAlign: "center" }}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
                       <td style={{ padding: "5px 8px", textAlign: "center" }}><span style={pctStyle(r.tendencia)}>{fmtPct(r.tendencia)}</span></td>
@@ -256,8 +256,8 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
                   <tr style={{ background: C.total, color: C.totalTxt, fontWeight: 700 }}>
                     <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}` }}></td>
                     <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}` }}>{sorted.length} vendedores</td>
-                    <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}`, textAlign: "right", fontFamily: C.mono }}>{fmt(tot.fat)}</td>
                     <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}`, textAlign: "right", fontFamily: C.mono }}>{fmt(tot.meta)}</td>
+                    <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}`, textAlign: "right", fontFamily: C.mono }}>{fmt(tot.fat)}</td>
                     <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}`, textAlign: "right", fontFamily: C.mono }}>{fmt(tot.raf)}</td>
                     <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}`, textAlign: "center" }}>
                       <span style={pctStyle(tot.pctGeral)}>{fmtPct(tot.pctGeral)}</span>
