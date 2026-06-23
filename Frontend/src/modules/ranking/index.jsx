@@ -55,7 +55,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
         realizado_dia: r.realizado_dia,
         dias_uteis_decorridos: r.dias_uteis_decorridos,
         dias_uteis_mes_atual: r.dias_uteis_mes_atual,
-        pct_dia: (r.necessidade_dia ?? 0) > 0 ? ((r.nao_faturado_hoje ?? 0) / r.necessidade_dia) * 100 : null,
+        pct_dia: (r.necessidade_dia ?? 0) > 0 ? ((r.realizado_dia ?? 0) / r.necessidade_dia) * 100 : null,
       }));
       setRows(mapped);
     } catch (e) { setError(e.message); }
