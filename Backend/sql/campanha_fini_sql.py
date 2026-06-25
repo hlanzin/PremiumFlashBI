@@ -21,6 +21,9 @@ COD_FORNEC_FINI = 1488
 # Condições de venda normais (exclui troca 5/11, bonificação, etc.)
 CONDVENDA_NORMAIS = "1,2,3,7,9,14,15,17,18,19,98"
 
+# Contas RCA que só enviam bonificação (tipo de venda 5) — não são venda real.
+RCA_BONIFICACAO = "2, 160, 180"
+
 
 def build_campanha_fini_sql(modo: str = "todos",
                             filtro_id: Optional[int] = None,
@@ -86,6 +89,7 @@ META AS (
       AND PCPEDC.CODFILIAL    IN ('{FILIAL}')
       AND PCPEDC.CONDVENDA    IN ({CONDVENDA_NORMAIS})
       AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.CODUSUR     NOT IN ({RCA_BONIFICACAO})
       AND PCPEDC.DTCANCEL     IS NULL
       {filtro_met}
     GROUP BY PCPEDC.CODCLI
@@ -114,6 +118,7 @@ FAT_MES AS (
       AND NVL(PCNFSAID.TIPOVENDA,'X') NOT IN ('SR','DF')
       AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
       AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
+      AND PCNFSAID.CODUSUR    NOT IN ({RCA_BONIFICACAO})
       AND PCNFSAID.DTCANCEL    IS NULL
       {filtro_fat}
     GROUP BY PCNFSAID.CODCLI
@@ -133,6 +138,7 @@ CART_SEM AS (
       AND PCPEDC.CONDVENDA    IN ({CONDVENDA_NORMAIS})
       AND PCPEDC.POSICAO     <> 'F'
       AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.CODUSUR     NOT IN ({RCA_BONIFICACAO})
       AND PCPEDC.DTCANCEL     IS NULL
       {filtro_car}
     GROUP BY PCPEDC.CODCLI
@@ -152,6 +158,7 @@ CART_HOJE AS (
       AND PCPEDC.CONDVENDA    IN ({CONDVENDA_NORMAIS})
       AND PCPEDC.POSICAO     <> 'F'
       AND NVL(PCPEDI.BONIFIC,'N') = 'N'
+      AND PCPEDC.CODUSUR     NOT IN ({RCA_BONIFICACAO})
       AND PCPEDC.DTCANCEL     IS NULL
       {filtro_car}
     GROUP BY PCPEDC.CODCLI
