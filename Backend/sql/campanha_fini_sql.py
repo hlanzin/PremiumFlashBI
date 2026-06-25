@@ -22,7 +22,7 @@ COD_FORNEC_FINI = 1488
 CONDVENDA_NORMAIS = "1,2,3,7,9,14,15,17,18,19,98"
 
 # Contas RCA que só enviam bonificação (tipo de venda 5) — não são venda real.
-RCA_BONIFICACAO = "2, 160, 180"
+RCA_BONIFICACAO = "2, 160, 180, 10"
 
 
 def build_campanha_fini_sql(modo: str = "todos",
