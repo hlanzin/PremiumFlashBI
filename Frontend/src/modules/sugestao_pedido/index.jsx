@@ -35,6 +35,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
   const [error,   setError]   = useState(null);
   const [busca,   setBusca]   = useState("");
   const [buscou,  setBuscou]  = useState(false);
+  const [edicoes, setEdicoes] = useState({});   // cod_produto -> sug_cx editada
 
   useEffect(() => {
     apiGet(`${API_BASE}/api/lista-negra/fornecedores`, headers)
@@ -50,7 +51,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
       dcorte_ini: diniC, dcorte_fim: dfimC, dias_estoque: diasEst,
     });
     apiGet(`${API_BASE}/api/sugestao-pedido?${qs}`, headers)
-      .then(j => setDados(j.dados ?? []))
+      .then(j => { setDados(j.dados ?? []); setEdicoes({}); })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   };
@@ -64,19 +65,38 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
       String(r.cod_fabrica ?? "").includes(s));
   }, [dados, busca]);
 
-  const totais = useMemo(() => ({
-    vendida:  filtrados.reduce((s, r) => s + (r.qt_vendida ?? 0), 0),
-    cortada:  filtrados.reduce((s, r) => s + (r.qt_cortada ?? 0), 0),
-    sugestao: filtrados.reduce((s, r) => s + (r.sugestao_qt ?? 0), 0),
-    sugestaoCx: filtrados.reduce((s, r) => s + (r.qt_unit_cx > 0 ? Math.ceil((r.sugestao_qt ?? 0) / r.qt_unit_cx) : 0), 0),
-    peso:     filtrados.reduce((s, r) => s + (r.peso_sugestao ?? ((r.sugestao_qt ?? 0) * (r.peso_bruto ?? 0))), 0),
-  }), [filtrados]);
+  const totais = useMemo(() => {
+    const cxSug = (r) => (r.qt_unit_cx > 0 ? Math.ceil((r.sugestao_qt ?? 0) / r.qt_unit_cx) : 0);
+    const cxEf  = (r) => {
+      const e = edicoes[r.cod_produto];
+      return (e !== undefined && e !== "") ? Number(e) : cxSug(r);
+    };
+    return {
+      vendida:  filtrados.reduce((s, r) => s + (r.qt_vendida ?? 0), 0),
+      cortada:  filtrados.reduce((s, r) => s + (r.qt_cortada ?? 0), 0),
+      sugestaoCx: filtrados.reduce((s, r) => s + (cxEf(r) || 0), 0),
+      peso:     filtrados.reduce((s, r) => s + (cxEf(r) || 0) * (r.qt_unit_cx ?? 0) * (r.peso_bruto ?? 0), 0),
+      valor:    filtrados.reduce((s, r) => s + (cxEf(r) || 0) * (r.qt_unit_cx ?? 0) * (r.ult_vlr_entrada ?? 0), 0),
+    };
+  }, [filtrados, edicoes]);
 
   const fornNome = fornecedores.find(f => String(f.id) === String(fornSel))?.nome ?? fornSel;
 
-  const pesoDe = (r) => r.peso_sugestao ?? ((r.sugestao_qt ?? 0) * (r.peso_bruto ?? 0));
-  const cxDe   = (r) => (r.qt_unit_cx > 0 ? Math.ceil((r.sugestao_qt ?? 0) / r.qt_unit_cx) : null);
+  // sugestão sugerida pelo sistema (caixas, arredondado pra cima)
+  const cxSugerida = (r) => (r.qt_unit_cx > 0 ? Math.ceil((r.sugestao_qt ?? 0) / r.qt_unit_cx) : null);
+  // sugestão efetiva = edição manual se houver, senão a sugerida
+  const cxDe = (r) => {
+    const e = edicoes[r.cod_produto];
+    if (e !== undefined && e !== "") return Number(e);
+    return cxSugerida(r);
+  };
   const estCxDe = (r) => (r.qt_unit_cx > 0 ? (r.estoque_disponivel ?? 0) / r.qt_unit_cx : null);
+  // peso recalculado a partir das caixas efetivas (× qt/cx × peso unitário)
+  const pesoDe = (r) => {
+    const cx = cxDe(r);
+    if (cx == null) return r.peso_sugestao ?? ((r.sugestao_qt ?? 0) * (r.peso_bruto ?? 0));
+    return cx * (r.qt_unit_cx ?? 0) * (r.peso_bruto ?? 0);
+  };
 
   const exportarExcel = () => {
     if (!filtrados.length) return;
@@ -185,7 +205,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
         doc.text(`Sugestão de Pedido — ${fornNome}`, 8, 13.5);
         doc.setFontSize(7); doc.setTextColor(255, 220, 180);
         doc.text(
-          `Venda: ${diniV} a ${dfimV}  |  Corte: ${diniC} a ${dfimC}  |  Dias de estoque: ${diasEst}`,
+          `Venda: ${diniV} a ${dfimV}  |  Corte: ${diniC} a ${dfimC}  |  Dias de estoque: ${diasEst}  |  Valor estimado: ${fmtR(totais.valor)}`,
           pageW - 8, 7.5, { align: "right" });
         const page = doc.internal.getNumberOfPages();
         doc.setFontSize(7); doc.setTextColor(150, 150, 150);
@@ -270,6 +290,14 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
                 width: isMobile ? "auto" : "160px", outline: "none", color: C.text }} />
           </div>
           <span style={{ fontSize: "11px", color: C.textSub }}>{filtrados.length} itens</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px",
+            padding: "4px 12px", borderRadius: "6px", background: "#FFF4CC",
+            border: "1px solid #E5C97A" }}>
+            <span style={{ fontSize: "9px", fontWeight: 700, color: "#8C6400", letterSpacing: "0.05em" }}>
+              VALOR ESTIMADO</span>
+            <span style={{ fontSize: "13px", fontWeight: 700, color: "#8C6400", fontFamily: C.mono }}>
+              {fmtR(totais.valor)}</span>
+          </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: "6px" }}>
             <button onClick={exportarExcel}
               style={{ display: "flex", alignItems: "center", gap: "5px", background: "#1D6F42",
@@ -321,7 +349,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
               </thead>
               <tbody>
                 {filtrados.map((r, i) => {
-                  const sugCx = cxDe(r);
+                  const sugCx = cxSugerida(r);
                   return (
                     <tr key={r.cod_produto ?? i}
                       style={{ background: i % 2 === 0 ? C.rowEven : C.rowOdd }}>
@@ -342,8 +370,17 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
                         color: (r.qt_cortada ?? 0) > 0 ? C.amber : C.textSub })}>{fmtN(r.qt_cortada)}</td>
                       <td style={td({ textAlign: "right", fontFamily: C.mono, color: C.textSub })}>{fmtR(r.ult_vlr_entrada)}</td>
                       <td style={td({ textAlign: "right", fontFamily: C.mono, fontWeight: 700,
-                        background: "#FFF4CC", color: "#8C6400" })}>
-                        {sugCx != null ? sugCx : "—"}</td>
+                        background: "#FFF4CC", color: "#8C6400", padding: "2px 4px" })}>
+                        {sugCx != null ? (
+                          <input
+                            type="number" min="0"
+                            value={edicoes[r.cod_produto] ?? sugCx}
+                            onChange={e => setEdicoes(prev => ({ ...prev, [r.cod_produto]: e.target.value }))}
+                            style={{ width: "52px", textAlign: "right", border: `1px solid #E5C97A`,
+                              borderRadius: "4px", padding: "3px 5px", fontSize: "11px",
+                              fontFamily: C.mono, fontWeight: 700, color: "#8C6400",
+                              background: "#FFFDF5", outline: "none" }} />
+                        ) : "—"}</td>
                       <td style={td({ textAlign: "right", fontFamily: C.mono, color: C.textSub })}>{fmtN(pesoDe(r))}</td>
                     </tr>
                   );

@@ -77,6 +77,7 @@ FROM (
         B.PESOBRUTO                                            AS peso_bruto,
         B.CUSTOREP                                             AS custo_rep,
         NVL(C.CUSTOULTENT, 0)                                 AS ult_vlr_entrada,
+        C.DTULTENT                                            AS dt_ult_entrada,
         NVL(V.QT_VENDIDA,0)                                    AS qt_vendida,
         DU.QT                                                  AS dias_uteis,
         NVL(C.QTEST,0)                                         AS qt_estoque,
@@ -100,6 +101,8 @@ FROM (
       AND NVL(B.DTEXCLUSAO, SYSDATE+1) > SYSDATE
       AND (NVL(V.QT_VENDIDA,0) > 0 OR NVL(CO.QT_CORTADA,0) > 0)
 ) T
+WHERE T.sugestao_qt > 0
+  AND T.dt_ult_entrada >= TRUNC(SYSDATE) - 90
 ORDER BY T.descricao
 """
     return sql, params
