@@ -75,12 +75,13 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
 
   const pesoDe = (r) => r.peso_sugestao ?? ((r.sugestao_qt ?? 0) * (r.peso_bruto ?? 0));
   const cxDe   = (r) => (r.qt_unit_cx > 0 ? Math.ceil((r.sugestao_qt ?? 0) / r.qt_unit_cx) : null);
+  const estCxDe = (r) => (r.qt_unit_cx > 0 ? (r.estoque_disponivel ?? 0) / r.qt_unit_cx : null);
 
   const exportarExcel = () => {
     if (!filtrados.length) return;
     exportCSV(`Sugestao_Pedido_${fornNome}_${getToday()}`,
       ["COD_FAB", "COD_PROD", "PRODUTO", "QT_CX", "VENDA_PERIODO", "DIAS_UTEIS",
-       "MEDIA_DIA", "ESTOQUE_DISP", "CORTE", "ULT_VLR_ENTRADA",
+       "MEDIA_DIA", "ESTOQUE_DISP", "ESTOQUE_DISP_CX", "CORTE", "ULT_VLR_ENTRADA",
        "SUGESTAO_UN", "SUGESTAO_CX", "PESO_SUGESTAO_KG"],
       filtrados.map(r => [
         r.cod_fabrica ?? "",
@@ -91,6 +92,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
         r.dias_uteis ?? "",
         String(r.media_dia ?? 0).replace(".", ","),
         String(r.estoque_disponivel ?? 0).replace(".", ","),
+        (estCxDe(r) != null ? String(estCxDe(r).toFixed(2)).replace(".", ",") : ""),
         String(r.qt_cortada ?? 0).replace(".", ","),
         String((r.ult_vlr_entrada ?? 0).toFixed(4)).replace(".", ","),
         r.sugestao_qt ?? 0,
@@ -130,6 +132,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
       fmtN(r.qt_vendida),
       fmtN(r.media_dia),
       fmtN(r.estoque_disponivel),
+      (estCxDe(r) != null ? fmtN(estCxDe(r)) : "—"),
       fmtN(r.qt_cortada),
       fmtR(r.ult_vlr_entrada),
       fmtN(r.sugestao_qt),
@@ -138,14 +141,14 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
     ]);
 
     body.push([
-      "", "TOTAL", "", fmtN(totais.vendida), "", "", fmtN(totais.cortada), "",
+      "", "TOTAL", "", fmtN(totais.vendida), "", "", "", fmtN(totais.cortada), "",
       fmtN(totais.sugestao), "", fmtN(totais.peso),
     ]);
 
     doc.autoTable({
       head: [[
         "Cód Fab", "Produto", "Qt/Cx", "Venda", "Méd/Dia", "Est. Disp",
-        "Corte", "Últ. Entrada", "Sug. Un", "Sug. Cx", "Peso (kg)",
+        "Est. Cx", "Corte", "Últ. Entrada", "Sug. Un", "Sug. Cx", "Peso (kg)",
       ]],
       body,
       startY: 24,
@@ -154,17 +157,18 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
       headStyles: { fillColor: [170, 0, 0], textColor: 255, fontStyle: "bold", fontSize: 7.5, halign: "center" },
       alternateRowStyles: { fillColor: [255, 248, 248] },
       columnStyles: {
-        0: { cellWidth: 34, halign: "left" },
+        0: { cellWidth: 32, halign: "left" },
         1: { cellWidth: "auto", halign: "left" },
-        2: { cellWidth: 12, halign: "center" },
-        3: { cellWidth: 20, halign: "right" },
-        4: { cellWidth: 18, halign: "right" },
-        5: { cellWidth: 20, halign: "right" },
-        6: { cellWidth: 16, halign: "right" },
-        7: { cellWidth: 22, halign: "right" },
-        8: { cellWidth: 18, halign: "right", fontStyle: "bold" },
+        2: { cellWidth: 11, halign: "center" },
+        3: { cellWidth: 18, halign: "right" },
+        4: { cellWidth: 16, halign: "right" },
+        5: { cellWidth: 18, halign: "right" },
+        6: { cellWidth: 16, halign: "right", fillColor: [255, 244, 204], textColor: [140, 100, 0], fontStyle: "bold" },
+        7: { cellWidth: 15, halign: "right" },
+        8: { cellWidth: 20, halign: "right" },
         9: { cellWidth: 16, halign: "right", fontStyle: "bold" },
-        10:{ cellWidth: 22, halign: "right" },
+        10:{ cellWidth: 15, halign: "right", fontStyle: "bold" },
+        11:{ cellWidth: 20, halign: "right" },
       },
       didParseCell: (d) => {
         if (d.row.index === body.length - 1) {
@@ -310,6 +314,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
                   <Th>VENDA</Th>
                   <Th>MÉD/DIA</Th>
                   <Th>EST. DISP</Th>
+                  <Th>EST. CX</Th>
                   <Th>CORTE</Th>
                   <Th>ÚLT. ENTRADA</Th>
                   <Th>SUG. UN</Th>
@@ -334,6 +339,9 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
                       <td style={td({ textAlign: "right", fontFamily: C.mono, color: C.textSub })}>{fmtN(r.media_dia)}</td>
                       <td style={td({ textAlign: "right", fontFamily: C.mono,
                         color: (r.estoque_disponivel ?? 0) <= 0 ? C.red : C.text })}>{fmtN(r.estoque_disponivel)}</td>
+                      <td style={td({ textAlign: "right", fontFamily: C.mono, fontWeight: 600,
+                        background: "#FFF4CC", color: "#8C6400" })}>
+                        {estCxDe(r) != null ? fmtN(estCxDe(r)) : "—"}</td>
                       <td style={td({ textAlign: "right", fontFamily: C.mono,
                         color: (r.qt_cortada ?? 0) > 0 ? C.amber : C.textSub })}>{fmtN(r.qt_cortada)}</td>
                       <td style={td({ textAlign: "right", fontFamily: C.mono, color: C.textSub })}>{fmtR(r.ult_vlr_entrada)}</td>
@@ -351,6 +359,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
                   <td style={td({ border: `1px solid ${C.primaryDk}` })}>TOTAL — {filtrados.length} itens</td>
                   <td style={td({ border: `1px solid ${C.primaryDk}` })}></td>
                   <td style={td({ textAlign: "right", fontFamily: C.mono, border: `1px solid ${C.primaryDk}` })}>{fmtN(totais.vendida)}</td>
+                  <td style={td({ border: `1px solid ${C.primaryDk}` })}></td>
                   <td style={td({ border: `1px solid ${C.primaryDk}` })}></td>
                   <td style={td({ border: `1px solid ${C.primaryDk}` })}></td>
                   <td style={td({ textAlign: "right", fontFamily: C.mono, border: `1px solid ${C.primaryDk}` })}>{fmtN(totais.cortada)}</td>
