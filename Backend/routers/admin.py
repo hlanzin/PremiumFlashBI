@@ -143,3 +143,37 @@ def get_all_campanhas(u: CurrentUser = Depends(get_current_user)):
     _only_admin(u)
     from models.bateu_levou import listar_campanhas
     return {"dados": listar_campanhas()}
+
+
+# ── Exclusões de fornecedores / seções ───────────────────────────────────────
+class ExclusaoBody(BaseModel):
+    tipo:      str            # 'fornecedor' | 'secao'
+    valor:     int
+    descricao: Optional[str] = None
+
+
+@router.get("/exclusoes")
+def get_exclusoes(u: CurrentUser = Depends(get_current_user)):
+    _only_admin(u)
+    from models.exclusoes import listar
+    return {"dados": listar()}
+
+
+@router.post("/exclusoes")
+def post_exclusao(body: ExclusaoBody, u: CurrentUser = Depends(get_current_user)):
+    _only_admin(u)
+    from models.exclusoes import adicionar
+    if body.tipo not in ("fornecedor", "secao"):
+        raise HTTPException(400, "tipo deve ser 'fornecedor' ou 'secao'")
+    nid = adicionar(body.tipo, body.valor, body.descricao)
+    return {"id": nid, "tipo": body.tipo, "valor": body.valor}
+
+
+@router.delete("/exclusoes/{exc_id}")
+def delete_exclusao(exc_id: int, u: CurrentUser = Depends(get_current_user)):
+    _only_admin(u)
+    from models.exclusoes import remover
+    ok = remover(exc_id)
+    if not ok:
+        raise HTTPException(404, "Exclusão não encontrada")
+    return {"removido": True}

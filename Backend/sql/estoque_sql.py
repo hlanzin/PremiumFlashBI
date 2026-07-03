@@ -1,5 +1,6 @@
 """SQL do módulo de Estoque — usa PCEST (atual) ou PCHISTEST (histórico)."""
 from config import FILIAL
+from models.exclusoes import sql_not_in_secao
 
 
 def build_estoque_query(codigo_secao: int, date_ref: str) -> tuple:
@@ -86,7 +87,10 @@ ORDER BY VALOR_ESTOQUE DESC
     return sql, {"codigo_secao": codigo_secao}
 
 
-SQL_SECOES = f"""
+def build_secoes_sql() -> str:
+    """Dropdown de seções do estoque. Função (não constante) para o filtro de
+    exclusão ser recalculado a cada chamada, refletindo mudanças do admin."""
+    return f"""
 SELECT CODSEC, DESCRICAO
 FROM PCSECAO
 WHERE CODSEC IN (
@@ -98,5 +102,6 @@ WHERE CODSEC IN (
       AND PCPRODUT.DTEXCLUSAO IS NULL
 )
   AND CODSEC NOT IN (120427, 11026, 120423, 10043, 120426, 120421, 120422, 120098, 9001, 120425, 7011)
+  {sql_not_in_secao('CODSEC')}
 ORDER BY DESCRICAO
 """

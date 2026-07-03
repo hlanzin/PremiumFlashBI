@@ -14,6 +14,7 @@ build_dn_query(modo, filtro_id, date_ref, agrupamento)
 """
 from typing import Optional
 from config import FILIAL
+from models.exclusoes import sql_not_in_fornec, sql_not_in_secao
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bloco PARAMS (igual nos dois templates)
@@ -240,6 +241,8 @@ def _base_dn_sql_ger(agrupamento="fornecedor"):
     col_id, col_nome_expr, join_dim, group_dim = _dim(agrupamento)
     col_id_pr = col_id.replace("PCPRODUT", "PR")
     dim_nome_col = "NOME_SECAO" if agrupamento == "secao" else "NOME_FORNECEDOR"
+    _xf = sql_not_in_fornec("PCPRODUT.CODFORNEC") + sql_not_in_secao("PCPRODUT.CODSEC")
+    _xf_pr = sql_not_in_fornec("PR.CODFORNEC") + sql_not_in_secao("PR.CODSEC")
     return (_PARAMS + f"""
 QT_CLI_META AS (
     SELECT {col_id} AS DIM_ID, {col_nome_expr},
@@ -262,6 +265,7 @@ QT_CLI_META AS (
       AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
       AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
       AND PCNFSAID.DTCANCEL   IS NULL
+      {_xf}
     GROUP BY {group_dim}
 ),
 QT_CLI_MES AS (
@@ -283,6 +287,7 @@ QT_CLI_MES AS (
       AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
       AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
       AND PCNFSAID.DTCANCEL   IS NULL
+      {_xf}
     GROUP BY {col_id}
 ),
 NAO_FAT_SEMANA AS (
@@ -298,6 +303,7 @@ NAO_FAT_SEMANA AS (
       AND PCPEDC.POSICAO     <> 'F'
       AND NVL(PCPEDI.BONIFIC,'N') = 'N'
       AND PCPEDC.DTCANCEL    IS NULL
+      {_xf}
       AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
       AND NOT EXISTS (
           SELECT 1 FROM PCNFSAID NS
@@ -314,6 +320,7 @@ NAO_FAT_SEMANA AS (
             AND NS.CODFISCAL  NOT IN (522,622,722,532,632,732)
             AND NS.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
             AND NS.DTCANCEL    IS NULL
+              {_xf_pr}
             AND MV.CODCLI      = PCPEDC.CODCLI
             AND {col_id_pr}    = {col_id}
       )
@@ -356,6 +363,7 @@ FAT_HOJE AS (
       AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
       AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
       AND PCNFSAID.DTCANCEL   IS NULL
+      {_xf}
     GROUP BY {col_id}
 )
 SELECT
@@ -452,6 +460,8 @@ def build_dn_query(modo: str, filtro_id: Optional[int] = None,
         return sql, []
 
     excl = "AND PCUSUARI.CODUSUR NOT IN (2,10,160,180)"
+    excl += sql_not_in_fornec("PCPRODUT.CODFORNEC")
+    excl += sql_not_in_secao("PCPRODUT.CODSEC")
 
     if modo == "vendedor" and filtro_id is not None:
         fm   = "AND PCNFSAID.CODUSUR = :p1"
@@ -591,10 +601,13 @@ def build_dn_total_query(modo: str, filtro_id: Optional[int] = None,
     dr = date_ref or parse_data(None)
 
     if modo == "gerencial":
-        excl = fm = fms = fnfs = fnfh = ""
+        excl = sql_not_in_fornec("PCPRODUT.CODFORNEC") + sql_not_in_secao("PCPRODUT.CODSEC")
+        fm = fms = fnfs = fnfh = ""
         params = []
     else:
         excl = "AND PCUSUARI.CODUSUR NOT IN (2,10,160,180)"
+        excl += sql_not_in_fornec("PCPRODUT.CODFORNEC")
+        excl += sql_not_in_secao("PCPRODUT.CODSEC")
         if modo == "vendedor" and filtro_id is not None:
             fm   = "AND PCNFSAID.CODUSUR = :p1"
             fms  = "AND PCNFSAID.CODUSUR = :p2"

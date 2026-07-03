@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, faturamento, estoque, dist_numerica, bateu_levou, admin, chamados, lista_negra, troca, pedidos, conta_corrente, clientes_fornecedor, vendas_produto_forn, campanha_fini
+from routers import auth, faturamento, estoque, dist_numerica, bateu_levou, admin, chamados, lista_negra, troca, pedidos, conta_corrente, clientes_fornecedor, vendas_produto_forn, campanha_fini, sugestao_pedido
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from models.exclusoes import create_tables as _ct_excl
+    _ct_excl()
     print("Flash BI API v1.3.0 iniciada")
     yield
 
@@ -26,6 +28,7 @@ app.include_router(conta_corrente.router)
 app.include_router(clientes_fornecedor.router)
 app.include_router(vendas_produto_forn.router)
 app.include_router(campanha_fini.router)
+app.include_router(sugestao_pedido.router)
 
 @app.get("/", tags=["Status"])
 def root():

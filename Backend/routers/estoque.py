@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from database import execute_query, parse_data, get_connection
-from sql.estoque_sql import build_estoque_query, SQL_SECOES
+from sql.estoque_sql import build_estoque_query, build_secoes_sql
 from routers.auth import get_current_user
 
 router = APIRouter(prefix="/api/estoque", tags=["Estoque"])
@@ -13,7 +13,7 @@ def get_secoes(_: str = Depends(get_current_user)):
     try:
         conn = get_connection()
         try:
-            cur = conn.cursor(); cur.execute(SQL_SECOES)
+            cur = conn.cursor(); cur.execute(build_secoes_sql())
             cols = [c[0].lower() for c in cur.description]
             return {"dados": [dict(zip(cols, r)) for r in cur.fetchall()]}
         finally:

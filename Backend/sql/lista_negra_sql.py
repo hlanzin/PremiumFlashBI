@@ -7,6 +7,7 @@ que aquele vendedor atendeu no período, independente de mudança de base.
 """
 from typing import Optional
 from config import FILIAL
+from models.exclusoes import sql_not_in_fornec, sql_not_in_secao
 
 
 def build_lista_negra_sql(
@@ -104,7 +105,7 @@ CART_SEM AS (
         INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
         LEFT  JOIN PCPRODUT ON PCPRODUT.CODPROD = PCPEDI.CODPROD
         CROSS JOIN PARAMS P
-    WHERE PCPEDC.DATA       BETWEEN P.DT_SEMANA_INI AND P.DT_ONTEM
+    WHERE PCPEDC.DATA       BETWEEN P.DT_MES_INI AND P.DT_ONTEM
       AND PCPEDC.CODFILIAL   IN ('{FILIAL}')
       AND PCPEDC.CONDVENDA   IN (1,2,3,7,9,14,15,17,18,19,98)
       AND PCPEDC.POSICAO    <> 'F'
@@ -190,6 +191,7 @@ def build_fornecedores_sql() -> tuple:
           AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
           AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
           AND PCNFSAID.DTCANCEL   IS NULL
+          {sql_not_in_fornec('PCPRODUT.CODFORNEC')}
         ORDER BY PCFORNEC.FORNECEDOR
     """
     return sql, []
@@ -213,6 +215,7 @@ def build_secoes_sql() -> tuple:
           AND PCNFSAID.CODFISCAL  NOT IN (522,622,722,532,632,732)
           AND PCNFSAID.CONDVENDA  NOT IN (4,8,10,13,20,98,99)
           AND PCNFSAID.DTCANCEL   IS NULL
+          {sql_not_in_secao('PCPRODUT.CODSEC')}
         ORDER BY PCSECAO.DESCRICAO
     """
     return sql, []
@@ -302,7 +305,7 @@ CART_SEM AS (
         INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR = PCPEDC.CODUSUR
         LEFT  JOIN PCPRODUT ON PCPRODUT.CODPROD = PCPEDI.CODPROD
         CROSS JOIN PARAMS P
-    WHERE PCPEDC.DATA       BETWEEN P.DT_SEMANA_INI AND P.DT_ONTEM
+    WHERE PCPEDC.DATA       BETWEEN P.DT_MES_INI AND P.DT_ONTEM
       AND PCPEDC.CODFILIAL   IN ('{FILIAL}')
       AND PCPEDC.CONDVENDA   IN (1,2,3,7,9,14,15,17,18,19,98)
       AND PCPEDC.POSICAO    <> 'F'

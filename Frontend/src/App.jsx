@@ -13,12 +13,14 @@ import ModuleContaCorrente from "./modules/conta_corrente";
 import ModuleClientesForn   from "./modules/clientes_fornecedor";
 import ModuleVendasProduto  from "./modules/vendas_produto_forn";
 import ModuleCampanhaFini from "./modules/campanha_fini"
+import ModuleExclusoes from "./modules/exclusoes";
+import ModuleSugestaoPedido from "./modules/sugestao_pedido";
 const ModulePedidos = lazy(() => import("./modules/pedidos"));
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
   BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, ShoppingBag, Banknote, Wallet, Users,
-  LogOut, Menu, X, ChevronRight, Candy
+  LogOut, Menu, X, ChevronRight, Candy, Ban, ClipboardList
 } from "lucide-react";
 
 // ── Registro de módulos ───────────────────────────────────────────────────────
@@ -36,7 +38,9 @@ const BI_MODULES = [
   { id:"estoque",       label:"Estoque",           icon:Package,     component:ModuleEstoque,      cargos:null },
   { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"admin",         label:"Admin",             icon:Settings,    component:ModuleAdmin,        cargos:["admin"] },
+  { id:"exclusoes", label:"Exclusões", icon:Ban, component:ModuleExclusoes, cargos:["admin"] },
   { id:"campanha_fini", label:"Campanha Fini", icon:Candy, component:ModuleCampanhaFini, cargos:["admin","gerencial","supervisor","vendedor"] },
+  { id:"sugestao_pedido", label:"Sugestão de Pedido", icon:ClipboardList, component:ModuleSugestaoPedido, cargos:["admin","gerencial"] },
 ];
 
 const SIDEBAR_W     = 220;   // largura expandida
