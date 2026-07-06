@@ -27,8 +27,9 @@ def get_db():
 
 
 def create_tables():
-    with get_db() as conn:
-        conn.executescript("""
+    conn = get_db()
+    try:
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS exclusoes (
                 id        INTEGER PRIMARY KEY AUTOINCREMENT,
                 tipo      TEXT    NOT NULL CHECK (tipo IN ('fornecedor','secao')),
@@ -47,6 +48,9 @@ def create_tables():
             conn.execute(
                 "INSERT OR IGNORE INTO exclusoes (tipo, valor, descricao) VALUES (?,?,?)",
                 (tipo, valor, desc))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _load(tipo: str) -> List[int]:
@@ -99,6 +103,23 @@ def sql_not_in_secao(coluna: str) -> str:
     if not vals:
         return ""
     return f" AND {coluna} NOT IN ({', '.join(str(v) for v in vals)})"
+
+
+def sql_prod_excluido(coluna_codprod: str) -> str:
+    """Filtro de exclusão por CODPROD via subquery — funciona em queries que
+    têm o CODPROD mas NÃO fazem JOIN com PCPRODUT (ex.: subqueries de total da DN).
+    Exclui produtos de fornecedores E seções excluídos."""
+    forn = fornecedores_excluidos()
+    sec  = secoes_excluidas()
+    conds = []
+    if forn:
+        conds.append(f"CODFORNEC IN ({', '.join(str(v) for v in forn)})")
+    if sec:
+        conds.append(f"CODSEC IN ({', '.join(str(v) for v in sec)})")
+    if not conds:
+        return ""
+    where = " OR ".join(conds)
+    return f" AND {coluna_codprod} NOT IN (SELECT CODPROD FROM PCPRODUT WHERE {where})"
 
 
 # ── CRUD (admin) ─────────────────────────────────────────────────────────────
