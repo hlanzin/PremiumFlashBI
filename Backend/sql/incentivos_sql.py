@@ -51,6 +51,7 @@ WITH FAT AS (
       AND PCMOV.CODOPER       = 'S'
       AND PCNFSAID.CONDVENDA  IN ({CONDVENDA_NORMAIS})
       AND PCNFSAID.CODUSUR    NOT IN ({RCA_BONIFICACAO})
+      AND PCNFSAID.CODUSUR    <> 10
       AND PCNFSAID.DTCANCEL   IS NULL
     GROUP BY PCNFSAID.CODUSUR, PCMOV.CODPROD
 ),
@@ -67,6 +68,7 @@ CART AS (
       AND PCPEDC.POSICAO     NOT IN ('F','C')
       AND PCPEDC.CONDVENDA   IN ({CONDVENDA_NORMAIS})
       AND PCPEDC.CODUSUR     NOT IN ({RCA_BONIFICACAO})
+      AND PCPEDC.CODUSUR     <> 10
       AND PCPEDC.DTCANCEL    IS NULL
     GROUP BY PCPEDC.CODUSUR, PCPEDI.CODPROD
 ),
@@ -93,5 +95,89 @@ FROM UNIDS U
     LEFT  JOIN PCSUPERV  SUP ON SUP.CODSUPERVISOR = UV.CODSUPERVISOR
 WHERE U.UNID > 0
 ORDER BY NOME_SUPERVISOR, NOME_VENDEDOR, P.DESCRICAO
+"""
+    return sql, params
+
+
+def build_combo_sql(cod_produtos: list, date_ref: str = None) -> tuple:
+    """
+    Incentivo de COMBO por cliente: conta quantos CLIENTES levaram TODOS os
+    produtos da lista (combo completo), por vendedor. Quantidade não importa —
+    basta o cliente ter comprado cada um dos produtos ao menos uma vez.
+
+    Considera faturado (PCNFSAID/PCMOV) + carteira (PCPEDI/PCPEDC), mês atual.
+    Exclui vendedor 10 e contas de bonificação.
+
+    Retorna (sql, params). Uma linha por vendedor:
+      cod_vendedor, nome_vendedor, cod_supervisor, nome_supervisor, combos
+    onde 'combos' = nº de clientes que fecharam o combo completo.
+    """
+    from database import parse_data
+    dr = date_ref or parse_data(None)
+    prods = ",".join(str(int(p)) for p in cod_produtos)
+    n_prod = len(cod_produtos)
+    params = {"dini": dr[:8] + "01", "dfim": dr}
+
+    sql = f"""
+WITH VENDAS AS (
+    -- Faturado: cada par (vendedor, cliente, produto) que teve venda
+    SELECT DISTINCT
+           PCNFSAID.CODUSUR AS CODUSUR,
+           PCNFSAID.CODCLI  AS CODCLI,
+           PCMOV.CODPROD    AS CODPROD
+    FROM PCNFSAID
+        INNER JOIN PCMOV ON PCMOV.NUMTRANSVENDA = PCNFSAID.NUMTRANSVENDA
+                        AND PCMOV.CODFILIAL     = PCNFSAID.CODFILIAL
+    WHERE PCNFSAID.CODFILIAL IN ('{FILIAL}')
+      AND PCMOV.CODPROD      IN ({prods})
+      AND PCNFSAID.DTSAIDA   BETWEEN TO_DATE(:dini,'YYYY-MM-DD') AND TO_DATE(:dfim,'YYYY-MM-DD')
+      AND PCMOV.CODOPER      = 'S'
+      AND PCMOV.QT           > 0
+      AND PCNFSAID.CONDVENDA IN ({CONDVENDA_NORMAIS})
+      AND PCNFSAID.CODUSUR   NOT IN ({RCA_BONIFICACAO})
+      AND PCNFSAID.CODUSUR   <> 10
+      AND PCNFSAID.DTCANCEL  IS NULL
+    UNION
+    -- Carteira: mesmos pares em pedidos não faturados
+    SELECT DISTINCT
+           PCPEDC.CODUSUR AS CODUSUR,
+           PCPEDC.CODCLI  AS CODCLI,
+           PCPEDI.CODPROD AS CODPROD
+    FROM PCPEDC
+        INNER JOIN PCPEDI ON PCPEDI.NUMPED = PCPEDC.NUMPED
+    WHERE PCPEDC.CODFILIAL IN ('{FILIAL}')
+      AND PCPEDI.CODPROD    IN ({prods})
+      AND PCPEDC.DATA       BETWEEN TO_DATE(:dini,'YYYY-MM-DD') AND TO_DATE(:dfim,'YYYY-MM-DD')
+      AND PCPEDC.POSICAO    NOT IN ('F','C')
+      AND PCPEDI.QT         > 0
+      AND PCPEDC.CONDVENDA  IN ({CONDVENDA_NORMAIS})
+      AND PCPEDC.CODUSUR    NOT IN ({RCA_BONIFICACAO})
+      AND PCPEDC.CODUSUR    <> 10
+      AND PCPEDC.DTCANCEL   IS NULL
+),
+COMBO_CLI AS (
+    -- Cliente que comprou os N produtos distintos = combo completo
+    SELECT CODUSUR, CODCLI
+    FROM VENDAS
+    GROUP BY CODUSUR, CODCLI
+    HAVING COUNT(DISTINCT CODPROD) = {n_prod}
+),
+COMBOS AS (
+    -- Nº de combos (clientes completos) por vendedor
+    SELECT CODUSUR, COUNT(*) AS COMBOS
+    FROM COMBO_CLI
+    GROUP BY CODUSUR
+)
+SELECT
+    CB.CODUSUR        AS COD_VENDEDOR,
+    UV.NOME           AS NOME_VENDEDOR,
+    UV.CODSUPERVISOR  AS COD_SUPERVISOR,
+    SUP.NOME          AS NOME_SUPERVISOR,
+    CB.COMBOS         AS COMBOS
+FROM COMBOS CB
+    INNER JOIN PCUSUARI UV  ON UV.CODUSUR        = CB.CODUSUR
+    LEFT  JOIN PCSUPERV SUP ON SUP.CODSUPERVISOR = UV.CODSUPERVISOR
+WHERE CB.COMBOS > 0
+ORDER BY CB.COMBOS DESC, NOME_VENDEDOR
 """
     return sql, params

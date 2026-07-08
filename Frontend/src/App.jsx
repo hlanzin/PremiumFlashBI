@@ -48,9 +48,10 @@ const BI_MODULES = [
 // Todos os cargos veem. Para adicionar novos: inclua aqui E no backend
 // (routers/incentivos.py -> dicionário INCENTIVOS).
 const INCENTIVOS = [
+  { id:"ranking-geral", label:"🏆 Ranking Geral" },
   { id:"yopro", label:"YoPro" },
-  // { id:"incentivo2", label:"..." },
-  // { id:"incentivo3", label:"..." },
+  { id:"caixas", label:"Batata Hyts" },
+  { id:"gulozitos", label:"Gulozitos" },
 ];
 
 const SIDEBAR_W     = 220;   // largura expandida
