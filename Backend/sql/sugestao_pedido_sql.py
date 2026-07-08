@@ -10,7 +10,8 @@ onde:
     venda_periodo        = SUM(PCPEDI.QT) no período :dini..:dfim
     dias_uteis_periodo   = COUNT dias úteis (PCDATAS.DIAUTIL='S') no período
     estoque_disponivel   = PCEST.QTEST - PCEST.QTRESERV
-    corte_periodo        = SUM(PCCORTEI.QTCORTADA) no período :dcorte_ini..:dcorte_fim
+    corte_periodo        = SUM(PCCORTEI.QTCORTADA) + SUM(PCFALTA.QT) no período :dcorte_ini..:dcorte_fim
+                           (para a Premium, "corte" = cortes + faltas)
 """
 from typing import Optional
 from config import FILIAL
@@ -56,12 +57,23 @@ VENDA AS (
     GROUP BY A.CODPROD
 ),
 CORTE AS (
-    SELECT
-        CI.CODPROD,
-        SUM(NVL(CI.QTCORTADA,0)) AS QT_CORTADA
-    FROM PCCORTEI CI
-    WHERE CI.DATA BETWEEN TO_DATE(:dcorte_ini,'YYYY-MM-DD') AND TO_DATE(:dcorte_fim,'YYYY-MM-DD')
-    GROUP BY CI.CODPROD
+    -- "Corte" para a Premium = PCCORTEI (cortes) + PCFALTA (faltas), mesmo período
+    SELECT CODPROD, SUM(QT_CORTADA) AS QT_CORTADA FROM (
+        SELECT
+            CI.CODPROD,
+            SUM(NVL(CI.QTCORTADA,0)) AS QT_CORTADA
+        FROM PCCORTEI CI
+        WHERE CI.DATA BETWEEN TO_DATE(:dcorte_ini,'YYYY-MM-DD') AND TO_DATE(:dcorte_fim,'YYYY-MM-DD')
+        GROUP BY CI.CODPROD
+        UNION ALL
+        SELECT
+            FA.CODPROD,
+            SUM(NVL(FA.QT,0)) AS QT_CORTADA
+        FROM PCFALTA FA
+        WHERE FA.DATA BETWEEN TO_DATE(:dcorte_ini,'YYYY-MM-DD') AND TO_DATE(:dcorte_fim,'YYYY-MM-DD')
+        GROUP BY FA.CODPROD
+    )
+    GROUP BY CODPROD
 )
 SELECT
     T.*,

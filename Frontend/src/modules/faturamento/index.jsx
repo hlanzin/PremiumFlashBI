@@ -25,7 +25,7 @@ const agg = (rows) => {
   const real   = rows.reduce((s,r) => s+(r.valor_faturado_mes_atual??0), 0);
   const raf    = rows.reduce((s,r) => s+(r.resta_a_fazer     ??0), 0);
   const nec    = rows.reduce((s,r) => s+(r.necessidade_dia   ??0), 0);
-  const dia    = rows.reduce((s,r) => s+(r.nao_faturado_hoje ??0), 0);
+  const dia    = rows.reduce((s,r) => s+(r.realizado_dia ??0), 0);
   const dd     = rows[0]?.dias_uteis_decorridos ?? 0;
   const dm     = rows[0]?.dias_uteis_mes_atual  ?? 0;
   const pct    = meta > 0 ? (real/meta)*100 : null;
@@ -58,7 +58,7 @@ function DataRow({ row, i, showVendedor, showSecao=true, showNomeVendedor=false,
   const [hov, setHov] = useState(false);
   const pct    = row.valor_meta_secao > 0 ? ((row.valor_faturado_mes_atual??0)/row.valor_meta_secao)*100 : null;
   const tend   = row.tendencia_pct;
-  const pctDia = row.necessidade_dia  > 0 ? (row.nao_faturado_hoje/row.necessidade_dia)*100  : null;
+  const pctDia = row.necessidade_dia  > 0 ? (row.realizado_dia/row.necessidade_dia)*100  : null;
   const bg     = hov ? C.rowHover : i%2===0 ? C.rowEven : C.rowOdd;
   const td     = { padding:"5px 8px", borderBottom:`1px solid #EED0D0`, verticalAlign:"middle", background:bg };
   const stickyTd = isMobile ? { ...td, position:"sticky", left:0, zIndex:2, boxShadow:"2px 0 4px rgba(0,0,0,.08)" } : td;
@@ -79,7 +79,7 @@ function DataRow({ row, i, showVendedor, showSecao=true, showNomeVendedor=false,
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(tend)}>{fmtPct(tend)}</span></td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:(row.resta_a_fazer??0)<=0?C.green:C.red }}>{fmt(row.resta_a_fazer)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmt(row.necessidade_dia)}</td>
-      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary }}>{fmt(row.nao_faturado_hoje)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary }}>{fmt(row.realizado_dia)}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pctDia)}>{fmtPct(pctDia)}</span></td>
       <td style={{ ...td, textAlign:"center" }}>{arrow(tend)}</td>
     </tr>
@@ -92,7 +92,7 @@ function SupervisorTotalRow({ row, i }) {
     ? ((row.valor_faturado_mes_atual??0)/row.valor_meta_secao)*100 : null;
   const tend   = row.tendencia_pct;
   const pctDia = (row.necessidade_dia??0) > 0
-    ? (row.nao_faturado_hoje/row.necessidade_dia)*100 : null;
+    ? (row.realizado_dia/row.necessidade_dia)*100 : null;
   const bg = i%2===0 ? C.rowEven : C.rowOdd;
   const td = { padding:"6px 10px", borderBottom:`1px solid #EED0D0`,
                verticalAlign:"middle", background:bg };
@@ -107,7 +107,7 @@ function SupervisorTotalRow({ row, i }) {
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(tend)}>{fmtPct(tend)}</span></td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:(row.resta_a_fazer??0)<=0?C.green:C.red }}>{fmt(row.resta_a_fazer)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmt(row.necessidade_dia)}</td>
-      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary }}>{fmt(row.nao_faturado_hoje)}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600, color:C.primary }}>{fmt(row.realizado_dia)}</td>
       <td style={{ ...td, textAlign:"center" }}><span style={pctStyle(pctDia)}>{fmtPct(pctDia)}</span></td>
       <td style={{ ...td, textAlign:"center" }}>{arrow(tend)}</td>
     </tr>
@@ -135,7 +135,7 @@ function buildTableRowsBySupervisor(rows) {
     const real = g.rows.reduce((s,r)=>s+(r.valor_faturado_mes_atual??0),0);
     const raf  = g.rows.reduce((s,r)=>s+(r.resta_a_fazer??0),0);
     const nec  = g.rows.reduce((s,r)=>s+(r.necessidade_dia??0),0);
-    const dia  = g.rows.reduce((s,r)=>s+(r.nao_faturado_hoje??0),0);
+    const dia  = g.rows.reduce((s,r)=>s+(r.realizado_dia??0),0);
     const pct  = meta>0?(real/meta)*100:null;
     const pctD = nec>0?(dia/nec)*100:null;
     return (
@@ -244,7 +244,7 @@ function EquipeCard({ supervisor, dataRef, token, sortCol, sortDir, onSort, isMo
           cod_vendedor: r.cod_vendedor,
           nome_vendedor: r.nome_vendedor,
           valor_meta_secao: 0, valor_faturado_mes_atual: 0,
-          resta_a_fazer: 0, necessidade_dia: 0, nao_faturado_hoje: 0,
+          resta_a_fazer: 0, necessidade_dia: 0, realizado_dia: 0,
           dias_uteis_decorridos: r.dias_uteis_decorridos,
           dias_uteis_mes_atual: r.dias_uteis_mes_atual,
           _tend_num: 0, _tend_count: 0,
@@ -255,7 +255,7 @@ function EquipeCard({ supervisor, dataRef, token, sortCol, sortDir, onSort, isMo
       v.valor_faturado_mes_atual += r.valor_faturado_mes_atual??0;
       v.resta_a_fazer            += r.resta_a_fazer            ?? 0;
       v.necessidade_dia          += r.necessidade_dia          ?? 0;
-      v.nao_faturado_hoje        += r.nao_faturado_hoje        ?? 0;
+      v.realizado_dia        += r.realizado_dia        ?? 0;
       if (r.tendencia_pct != null) { v._tend_num += r.tendencia_pct; v._tend_count++; }
     });
     return Array.from(map.values()).map(v => ({
@@ -271,7 +271,7 @@ function EquipeCard({ supervisor, dataRef, token, sortCol, sortDir, onSort, isMo
     real: displayRows.reduce((s,r) => s+(r.valor_faturado_mes_atual??0), 0),
     raf:  displayRows.reduce((s,r) => s+(r.resta_a_fazer??0), 0),
     nec:  displayRows.reduce((s,r) => s+(r.necessidade_dia??0), 0),
-    dia:  displayRows.reduce((s,r) => s+(r.nao_faturado_hoje??0), 0),
+    dia:  displayRows.reduce((s,r) => s+(r.realizado_dia??0), 0),
   };
   const dias_dec  = displayRows[0]?.dias_uteis_decorridos ?? 0;
   const dias_mes  = displayRows[0]?.dias_uteis_mes_atual  ?? 0;
@@ -336,8 +336,8 @@ function EquipeCard({ supervisor, dataRef, token, sortCol, sortDir, onSort, isMo
                   <Th label="% TEND."    col="tendencia_pct"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
                   <Th label="R.A.F"      col="resta_a_fazer"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
                   <Th label="NECESS/DIA" col="necessidade_dia"          sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
-                  <Th label="REALIZ/DIA" col="nao_faturado_hoje"        sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
-                  <Th label="% DIA"      col="nao_faturado_hoje"        sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
+                  <Th label="REALIZ/DIA" col="realizado_dia"        sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                  <Th label="% DIA"      col="realizado_dia"        sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
                   <Th label="STATUS"     col="tendencia_pct"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
                 </tr>
               </thead>
@@ -492,7 +492,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
     real: rows.reduce((s,r) => s+(r.valor_faturado_mes_atual??0), 0),
     raf:  rows.reduce((s,r) => s+(r.resta_a_fazer     ??0), 0),
     nec:  rows.reduce((s,r) => s+(r.necessidade_dia   ??0), 0),
-    dia:  rows.reduce((s,r) => s+(r.nao_faturado_hoje ??0), 0),
+    dia:  rows.reduce((s,r) => s+(r.realizado_dia ??0), 0),
   };
   const totPct    = tot.meta>0 ? (tot.real/tot.meta)*100 : 0;
   const totTend   = tot.meta>0 && summary.dias_decorridos>0 ? ((tot.real/summary.dias_decorridos)*summary.dias_mes/tot.meta)*100 : 0;
@@ -573,7 +573,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
     rows.forEach((row, i) => {
       const pct    = row.valor_meta_secao > 0 ? ((row.valor_faturado_mes_atual??0) / row.valor_meta_secao) * 100 : null;
       const tend   = row.tendencia_pct;
-      const pctDia = row.necessidade_dia  > 0 ? (row.nao_faturado_hoje / row.necessidade_dia)  * 100 : null;
+      const pctDia = row.necessidade_dia  > 0 ? (row.realizado_dia / row.necessidade_dia)  * 100 : null;
       const rafCol = (row.resta_a_fazer ?? 0) <= 0 ? "#16a34a" : "#dc2626";
 
       html += "<tr>";
@@ -588,7 +588,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
       html += `<td style="${TD(i,"text-align:center")}">${badge(tend)}</td>`;
       html += `<td style="${TD(i,`text-align:right;font-family:monospace;color:${rafCol}`)}">${fmt(row.resta_a_fazer)}</td>`;
       html += `<td style="${TD(i,"text-align:right;font-family:monospace")}">${fmt(row.necessidade_dia)}</td>`;
-      html += `<td style="${TD(i,"text-align:right;font-family:monospace;font-weight:600;color:#CC0000")}">${fmt(row.nao_faturado_hoje)}</td>`;
+      html += `<td style="${TD(i,"text-align:right;font-family:monospace;font-weight:600;color:#CC0000")}">${fmt(row.realizado_dia)}</td>`;
       html += `<td style="${TD(i,"text-align:center")}">${badge(pctDia)}</td>`;
       html += `<td style="${TD(i,"text-align:center")}">${icon(tend)}</td>`;
       html += "</tr>";
@@ -878,8 +878,8 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
                   <Th label="% TEND."    col="tendencia_pct"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="R.A.F"      col="resta_a_fazer"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="NECESS/DIA" col="necessidade_dia"    sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="REALIZ/DIA" col="nao_faturado_hoje"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
-                  <Th label="% DIA"      col="nao_faturado_hoje"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
+                  <Th label="REALIZ/DIA" col="realizado_dia"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
+                  <Th label="% DIA"      col="realizado_dia"  sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="STATUS"     col="tendencia_pct"      sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                 </tr>
               </thead>
@@ -953,7 +953,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color: (r.resta_a_fazer??0)<0 ? C.green : C.red }}>{fmtV(r.resta_a_fazer)}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.necessidade_dia)}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.green }}>{fmtV(r.faturado_hoje)}</td>
-                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.nao_faturado_hoje)}</td>
+                    <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtV(r.realizado_dia)}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:700 }}>{fmtV(r.realizado_dia)}</td>
                     <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color: (r.tendencia_pct??0)>=100?C.green:(r.tendencia_pct??0)>=90?C.amber:C.red }}>
                       {r.tendencia_pct != null ? `${Number(r.tendencia_pct).toFixed(1)}%` : "—"}

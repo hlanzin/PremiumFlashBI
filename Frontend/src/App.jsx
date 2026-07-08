@@ -15,12 +15,13 @@ import ModuleVendasProduto  from "./modules/vendas_produto_forn";
 import ModuleCampanhaFini from "./modules/campanha_fini"
 import ModuleExclusoes from "./modules/exclusoes";
 import ModuleSugestaoPedido from "./modules/sugestao_pedido";
+import ModuleIncentivo from "./modules/incentivos";
 const ModulePedidos = lazy(() => import("./modules/pedidos"));
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
   BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, ShoppingBag, Banknote, Wallet, Users,
-  LogOut, Menu, X, ChevronRight, Candy, Ban, ClipboardList
+  LogOut, Menu, X, ChevronRight, ChevronDown, Candy, Ban, ClipboardList, Gift,
 } from "lucide-react";
 
 // ── Registro de módulos ───────────────────────────────────────────────────────
@@ -43,6 +44,15 @@ const BI_MODULES = [
   { id:"sugestao_pedido", label:"Sugestão de Pedido", icon:ClipboardList, component:ModuleSugestaoPedido, cargos:["admin","gerencial"] },
 ];
 
+// ── Incentivos (dropdown na sidebar) ──────────────────────────────────────────
+// Todos os cargos veem. Para adicionar novos: inclua aqui E no backend
+// (routers/incentivos.py -> dicionário INCENTIVOS).
+const INCENTIVOS = [
+  { id:"yopro", label:"YoPro" },
+  // { id:"incentivo2", label:"..." },
+  // { id:"incentivo3", label:"..." },
+];
+
 const SIDEBAR_W     = 220;   // largura expandida
 const SIDEBAR_W_COL = 56;    // largura colapsada (só ícones)
 
@@ -59,6 +69,8 @@ export default function App() {
   });
 
   const [activeModule,   setActiveModule]   = useState("faturamento");
+  const [activeIncentivo, setActiveIncentivo] = useState(null);   // id do incentivo ativo
+  const [incentivosOpen, setIncentivosOpen] = useState(false);     // dropdown aberto
   const [sidebarOpen,    setSidebarOpen]    = useState(false);   // mobile: gaveta aberta
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // desktop: colapsado
 
@@ -96,12 +108,21 @@ export default function App() {
   // ── App autenticado ───────────────────────────────────────────────────────
   const cargo = auth.userInfo?.cargo ?? "vendedor";
   const modulosVisiveis = BI_MODULES.filter(m => !m.cargos || m.cargos.includes(cargo));
-  const ActiveModule = BI_MODULES.find(m => m.id === activeModule)?.component ?? ModuleFaturamento;
+  const isIncentivoAtivo = activeModule === "incentivos" && activeIncentivo;
+  const ActiveModule = isIncentivoAtivo
+    ? ModuleIncentivo
+    : (BI_MODULES.find(m => m.id === activeModule)?.component ?? ModuleFaturamento);
   const collapsed    = !isMobile && sidebarCollapsed;
   const sw           = collapsed ? SIDEBAR_W_COL : SIDEBAR_W;
 
   const handleNav = (id) => {
     setActiveModule(id);
+    if (isMobile) setSidebarOpen(false);
+  };
+
+  const handleNavIncentivo = (incId) => {
+    setActiveModule("incentivos");
+    setActiveIncentivo(incId);
     if (isMobile) setSidebarOpen(false);
   };
 
@@ -170,6 +191,54 @@ export default function App() {
               }}>
               <Icon size={17} style={{ flexShrink:0 }}/>
               {!collapsed && <span>{label}</span>}
+            </button>
+          );
+        })}
+
+        {/* ── Incentivos (dropdown) ─────────────────────────────────────── */}
+        <button
+          onClick={() => {
+            if (collapsed) { setSidebarCollapsed(false); setIncentivosOpen(true); }
+            else setIncentivosOpen(o => !o);
+          }}
+          title={collapsed ? "Incentivos" : undefined}
+          style={{
+            display:"flex", alignItems:"center",
+            gap: collapsed ? 0 : "10px",
+            justifyContent: collapsed ? "center" : "flex-start",
+            width:"100%", padding: collapsed ? "11px 0" : "10px 18px",
+            border:"none", cursor:"pointer", fontFamily:C.sans,
+            fontSize:"13px", fontWeight: activeModule === "incentivos" ? 700 : 400,
+            background: activeModule === "incentivos" ? "rgba(255,255,255,.15)" : "transparent",
+            color: activeModule === "incentivos" ? "#fff" : "rgba(255,255,255,.65)",
+            borderLeft: activeModule === "incentivos" && !collapsed ? `3px solid ${C.gold}` : "3px solid transparent",
+            transition:"all .15s",
+          }}>
+          <Gift size={17} style={{ flexShrink:0 }}/>
+          {!collapsed && <span style={{ flex:1, textAlign:"left" }}>Incentivos</span>}
+          {!collapsed && (incentivosOpen
+            ? <ChevronDown size={15} style={{ flexShrink:0 }}/>
+            : <ChevronRight size={15} style={{ flexShrink:0 }}/>)}
+        </button>
+
+        {/* Sub-itens dos incentivos */}
+        {!collapsed && incentivosOpen && INCENTIVOS.map(inc => {
+          const active = activeModule === "incentivos" && activeIncentivo === inc.id;
+          return (
+            <button key={inc.id} onClick={() => handleNavIncentivo(inc.id)}
+              style={{
+                display:"flex", alignItems:"center", gap:"8px",
+                width:"100%", padding:"8px 18px 8px 44px",
+                border:"none", cursor:"pointer", fontFamily:C.sans,
+                fontSize:"12px", fontWeight: active ? 700 : 400,
+                background: active ? "rgba(255,255,255,.12)" : "transparent",
+                color: active ? "#fff" : "rgba(255,255,255,.55)",
+                borderLeft: active ? `3px solid ${C.gold}` : "3px solid transparent",
+                transition:"all .15s",
+              }}>
+              <span style={{ width:5, height:5, borderRadius:"50%",
+                background: active ? C.gold : "rgba(255,255,255,.4)", flexShrink:0 }}/>
+              {inc.label}
             </button>
           );
         })}
@@ -269,7 +338,9 @@ export default function App() {
               <div style={{ fontWeight:700, fontSize:"8px", color:C.gold, letterSpacing:"0.14em" }}>DISTRIBUIDORA · BI</div>
             </div>
             <div style={{ marginLeft:"auto", fontSize:"11px", color:"rgba(255,255,255,.7)" }}>
-              {BI_MODULES.find(m => m.id === activeModule)?.label}
+              {isIncentivoAtivo
+                ? `Incentivo ${INCENTIVOS.find(i => i.id === activeIncentivo)?.label}`
+                : BI_MODULES.find(m => m.id === activeModule)?.label}
             </div>
           </div>
         )}
@@ -282,10 +353,14 @@ export default function App() {
             </div>
           }>
             <ActiveModule
-              key={activeModule}
+              key={isIncentivoAtivo ? `incentivo_${activeIncentivo}` : activeModule}
               isMobile={isMobile}
               token={auth.token}
               userInfo={auth.userInfo}
+              incentivoId={isIncentivoAtivo ? activeIncentivo : undefined}
+              incentivoNome={isIncentivoAtivo
+                ? INCENTIVOS.find(i => i.id === activeIncentivo)?.label
+                : undefined}
             />
           </Suspense>
         </div>

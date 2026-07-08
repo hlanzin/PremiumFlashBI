@@ -363,8 +363,10 @@ def build_ranking_query(filtro_supervisor: Optional[int] = None,
                         date_ref: Optional[str] = None) -> tuple:
     """Retorna SQL + params para o ranking de vendedores (todas as seções somadas)."""
     from database import parse_data
-    excl_usur  = "AND PCUSUARI.CODUSUR NOT IN (2,10,160,180)"
-    excl_devol = "AND PCNFENT.CODUSURDEVOL NOT IN (2,10,160,180)"
+    from models.exclusoes import sql_not_in_secao
+    _xs = sql_not_in_secao("PCPRODUT.CODSEC")
+    excl_usur  = "AND PCUSUARI.CODUSUR NOT IN (2,10,160,180)" + _xs
+    excl_devol = "AND PCNFENT.CODUSURDEVOL NOT IN (2,10,160,180)" + _xs
 
     if filtro_supervisor is not None:
         fv  = "AND NVL(PCNFSAID.CODSUPERVISOR,PCUSUARI.CODSUPERVISOR) = :p1"
