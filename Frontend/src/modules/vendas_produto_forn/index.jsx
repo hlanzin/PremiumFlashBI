@@ -4,9 +4,10 @@ import { C, fmtR, fmtN } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
 import TableCard from "../../components/TableCard";
+
 import { exportCSV } from "../../utils/exportCSV";
 import { useSort } from "../../hooks/useSort";
 
@@ -149,15 +150,16 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
 
   return (
     <>
-      <ModuleHeader icon={ShoppingBag} title="VENDAS POR PRODUTO" isMobile={isMobile} />
+      <ModuleHeader icon={ShoppingBag} title="VENDAS POR PRODUTO" isMobile={isMobile}
+        onExportExcel={rows.length > 0 ? exportarExcel : undefined} />
 
       <div style={{
         background: "#fff", borderBottom: `2px solid ${C.border}`,
         padding: isMobile ? "6px 12px" : "8px 20px",
         display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
       }}>
-        <Dropdown value={fornSel} onChange={setFornSel} options={fornecedores}
-          placeholder="Selecione fornecedor..." labelKey="nome" valueKey="cod" />
+        <SelectModal value={fornSel} onChange={setFornSel} options={fornecedores}
+          placeholder="Selecione fornecedor..." labelKey="nome" valueKey="cod" isMobile={isMobile} />
 
         <div style={{ position: "relative" }}>
           <select value={mesRef} onChange={e => { setMesRef(e.target.value); setSemanaSel(null); }}
@@ -198,13 +200,6 @@ export default function ModuleVendasProduto({ isMobile, token, userInfo = {} }) 
                      width: isMobile ? "auto" : "120px", outline: "none", color: C.text, fontFamily: C.sans }} />
         </div>
 
-        {rows.length > 0 && (
-          <button onClick={exportarExcel}
-            style={{ display: "flex", alignItems: "center", gap: "5px", background: "#1D6F42", border: "none",
-                     color: "#fff", padding: "5px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
-            <FileSpreadsheet size={13} /> Exportar
-          </button>
-        )}
       </div>
 
       <TableCard isMobile={isMobile}>

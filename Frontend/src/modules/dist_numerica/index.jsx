@@ -1,15 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Search, BarChart3, TrendingUp, Users, User, Building2, Shield,
-         ChevronDown, TrendingDown, Minus, Menu, X } from "lucide-react";
+import { BarChart3, TrendingUp, Users, User, Building2, Shield,
+         ChevronDown, TrendingDown, Minus } from "lucide-react";
 import { C, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
+import ModeSelector from "../../components/ModeSelector";
 import ModuleHeader from "../../components/ModuleHeader";
 import TableCard from "../../components/TableCard";
 import { arrow } from "../../components/ArrowBadge";
 import SkeletonRows from "../../components/SkeletonRows";
+import DatePicker from "../../components/DatePicker";
+import { exportCSV } from "../../utils/exportCSV";
 
 const EQUIPE_CODES = [2, 8, 9];
 
@@ -281,9 +284,9 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
   const [error,      setError]      = useState(null);
   const [sortCol,    setSortCol]    = useState("nome_fornecedor");
   const [sortDir,    setSortDir]    = useState("asc");
-  const [search,     setSearch]     = useState("");
+
   const [todosData,  setTodosData]  = useState([]);
-  const [tabsOpen,   setTabsOpen]   = useState(false);
+
   const hoje = getToday();
   const [dataRef,    setDataRef]    = useState(hoje);
 
@@ -341,14 +344,6 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
   const rows = useMemo(() => {
     let r = [...data];
-    if (search) {
-      const s = search.toLowerCase();
-      r = r.filter(row =>
-        (row[colDimNome]??"").toLowerCase().includes(s) ||
-        (row.nome_secao??"").toLowerCase().includes(s)  ||
-        (row.nome_fornecedor??"").toLowerCase().includes(s) ||
-        (row.descricao??"").toLowerCase().includes(s));
-    }
     // filtroRcas só faz sentido em modos com vendedor
     if (filtroRcas.size > 0 && mode !== "gerencial")
       r = r.filter(row => filtroRcas.has(row.cod_vendedor));
@@ -360,7 +355,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       return sortDir==="asc"?(av<bv?-1:av>bv?1:0):(av>bv?-1:av<bv?1:0);
     });
     return r;
-  }, [data, search, sortCol, sortDir, colDimNome, filtroRcas, filtroDims, mode]);
+  }, [data, sortCol, sortDir, colDimNome, filtroRcas, filtroDims, mode]);
 
   const tot = {
     meta:   rows.reduce((s,r)=>s+(r.qt_cli_meta??0),0),
@@ -372,7 +367,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
   const totPct  = tot.meta > 0 ? (totReal / tot.meta) * 100 : 0;
 
   const handleSort = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
-  const changeMode = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
+  const changeMode = id  => { setMode(id); setActiveCode(null); };
 
   const dimsDisponiveis = useMemo(() => {
     const map = new Map();
@@ -403,19 +398,17 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
     <>
       {/* Header */}
 <ModuleHeader icon={TrendingUp} title="DISTRIBUIÇÃO NUMÉRICA" subtitle={nomeAtivo()} isMobile={isMobile}
+  onRefresh={fetchData} loading={loading}
+  onExportExcel={rows.length > 0 ? () => {
+    const header = ["#","SUPERVISOR","VENDEDOR","CARTEIRA","ATINGIRAM","%","RESTANTES"];
+    const dataRows = rows.map((r,i) => [i+1, r.nome_supervisor, r.nome_vendedor ?? r.nome_supervisor, r.total_carteira, r.atingiram, fmtPct(r.pct), r.total_carteira - r.atingiram]);
+    exportCSV(`DistNumerica_${dataRef}`, header, dataRows);
+  } : undefined}
   titleExtra={<>
     Meta: <b>{fmtN(tot.meta)}</b> · Fat. Mês: <b>{fmtN(tot.mes)}</b> · Cart: <b>{fmtN(tot.semana)}</b>
     · Total: <b>{fmtN(totReal)}</b> · <span style={pctStyle(totPct)}>{fmtPct(totPct)}</span>
     {dataRef !== hoje && <> · Data: {dataRef}</>}
-  </>}>
-        <button onClick={fetchData} disabled={loading}
-          style={{ background:"rgba(0,0,0,.25)", border:"1px solid rgba(255,255,255,.3)",
-                   color:"#fff", padding:isMobile?"6px":"7px 12px", borderRadius:"6px",
-                   cursor:"pointer", display:"flex", alignItems:"center", gap:"4px", fontSize:"12px" }}>
-          <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
-          {!isMobile && " Atualizar"}
-        </button>
-      </ModuleHeader>
+  </>} />
 
       {/* Indicadores mobile */}
       {isMobile && data.length>0 && !loading && (
@@ -447,152 +440,86 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
           ))}
         </div>
 
-        {isMobile ? (
-          <div style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%" }}>
-            <button onClick={() => setTabsOpen(o=>!o)}
-              style={{ display:"flex", alignItems:"center", gap:"6px", padding:"7px 12px",
-                       background:C.primary, border:"none", color:"#fff", borderRadius:"6px",
-                       cursor:"pointer", fontSize:"12px", fontWeight:700, flex:1 }}>
-              {tabsOpen?<X size={14}/>:<Menu size={14}/>}
-              {MODES_VISIVEIS.find(m=>m.id===mode)?.label}
-              <ChevronDown size={12} style={{ marginLeft:"auto" }}/>
-            </button>
-          </div>
-        ) : (
-          <div style={{ display:"flex", border:`1px solid ${C.border}`, borderRadius:"6px", overflow:"hidden" }}>
-            {MODES_VISIVEIS.map(({ id, label, Icon }) => (
-              <button key={id} onClick={() => changeMode(id)}
-                style={{ display:"flex", alignItems:"center", gap:"5px", padding:"6px 13px",
-                         fontSize:"12px", cursor:"pointer", border:"none", fontFamily:C.sans,
-                         background:mode===id?C.primary:"#fff", color:mode===id?"#fff":C.text,
-                         fontWeight:mode===id?700:400, borderRight:`1px solid ${C.border}`, transition:"all .15s" }}>
-                <Icon size={13}/>{label}
+        <ModeSelector modes={MODES_VISIVEIS} active={mode} onChange={changeMode} isMobile={isMobile} />
+
+        {mode==="equipe"     && <SelectModal value={activeCode} onChange={setActiveCode} options={equipes}     placeholder="Selecione uma equipe..." isMobile={isMobile}/>}
+        {mode==="vendedor"   && <SelectModal value={activeCode} onChange={setActiveCode} options={vendedores}  placeholder="Selecione um vendedor..." isMobile={isMobile}/>}
+        {mode==="supervisor" && <SelectModal value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..." isMobile={isMobile}/>}
+
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:"8px" }}>
+          <DatePicker value={dataRef} onChange={setDataRef} max={hoje} isMobile={isMobile} />
+
+          {cargo !== "vendedor" && mode !== "todas_equipes" && (
+            <div style={{ position:"relative" }}>
+              <button onClick={() => setShowFiltros(v=>!v)}
+                style={{ padding:"5px 8px", borderRadius:"6px",
+                  border:`1.5px solid ${totalFiltros>0?C.primary:C.border}`,
+                  fontSize:"12px", fontWeight:700, cursor:"pointer",
+                  display:"flex", alignItems:"center", gap:"4px",
+                  background: totalFiltros>0 ? C.primary : "#fff",
+                  color: totalFiltros>0 ? "#fff" : C.text }}>
+                ⚙ Filtros {totalFiltros>0 && `(${totalFiltros})`}
               </button>
-            ))}
-          </div>
-        )}
-
-        {isMobile && tabsOpen && (
-          <div style={{ width:"100%", background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px", overflow:"hidden" }}>
-            {MODES_VISIVEIS.map(({ id, label, Icon }) => (
-              <button key={id} onClick={() => changeMode(id)}
-                style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 14px",
-                         width:"100%", border:"none", borderBottom:`1px solid ${C.border}`,
-                         background:mode===id?C.rowHover:"#fff", color:mode===id?C.primary:C.text,
-                         fontWeight:mode===id?700:400, cursor:"pointer", fontFamily:C.sans, fontSize:"13px" }}>
-                <Icon size={15}/>{label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {mode==="equipe"     && <Dropdown value={activeCode} onChange={setActiveCode} options={equipes}     placeholder="Selecione uma equipe..."/>}
-        {mode==="vendedor"   && <Dropdown value={activeCode} onChange={setActiveCode} options={vendedores}  placeholder="Selecione um vendedor..."/>}
-        {mode==="supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..."/>}
-
-        <div style={{ display:"flex", alignItems:"center", gap:"6px",
-                      border:`1px solid ${C.border}`, borderRadius:"6px",
-                      padding:"5px 10px", background:C.bg }}>
-          <Search size={12} style={{ color:C.textSub }}/>
-          <input placeholder="Filtrar..." value={search} onChange={e=>setSearch(e.target.value)}
-            style={{ border:"none", background:"transparent", fontSize:"12px",
-                     width:"120px", outline:"none", color:C.text, fontFamily:C.sans }}/>
-        </div>
-
-        <div style={{ display:"flex", alignItems:"center", gap:"6px",
-                      border:`1px solid ${C.border}`, borderRadius:"6px",
-                      padding:"5px 10px", background:"#fff", marginLeft:isMobile?"0":"auto" }}>
-          <span style={{ fontSize:"11px", color:C.textSub, fontWeight:600, whiteSpace:"nowrap" }}>Data</span>
-          <input type="date" value={dataRef} max={hoje}
-            onChange={e => setDataRef(e.target.value)}
-            style={{ border:"none", outline:"none", fontSize:"12px",
-                     fontFamily:C.mono, color:C.text, background:"transparent", cursor:"pointer" }}/>
-          {dataRef !== hoje && (
-            <button onClick={() => setDataRef(hoje)}
-              style={{ background:"none", border:"none", color:C.primary,
-                       cursor:"pointer", fontSize:"11px", fontWeight:700, padding:"0 2px" }}>
-              hoje
-            </button>
+              {showFiltros && (
+                <div style={{ position:"absolute", top:"calc(100% + 4px)", right:0,
+                  background:"#fff", border:`1px solid ${C.border}`, borderRadius:"8px",
+                  boxShadow:"0 6px 20px rgba(0,0,0,.15)", zIndex:200,
+                  width: isMobile?"calc(100vw - 32px)":"560px",
+                  maxHeight:"420px", overflow:"hidden", display:"flex", flexDirection:"column" }}>
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                    padding:"10px 14px", borderBottom:`1px solid ${C.border}`, background:"#FAFAFA" }}>
+                    <span style={{ fontWeight:700, fontSize:"12px" }}>Filtros Avançados</span>
+                    <div style={{ display:"flex", gap:"8px" }}>
+                      {totalFiltros>0 && <button onClick={limparFiltros}
+                        style={{ fontSize:"11px", color:C.red, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
+                        Limpar tudo</button>}
+                      <button onClick={() => setShowFiltros(false)}
+                        style={{ background:"none", border:"none", cursor:"pointer", fontSize:"16px", color:C.textSub }}>×</button>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", overflow:"hidden", flex:1 }}>
+                    <div style={{ flex:1, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column" }}>
+                      <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, fontSize:"11px", fontWeight:700, color:C.textSub, background:"#FAFAFA" }}>
+                        VENDEDOR {filtroRcas.size>0 && <span style={{ color:C.primary }}>({filtroRcas.size})</span>}
+                      </div>
+                      <div style={{ padding:"6px 8px", borderBottom:`1px solid ${C.border}` }}>
+                        <input value={buscaRca} onChange={e=>setBuscaRca(e.target.value)} placeholder="Buscar RCA..."
+                          style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`, borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
+                      </div>
+                      <div style={{ overflowY:"auto", maxHeight:"250px" }}>
+                        {vendedores.filter(v=>(v.nome??"").toLowerCase().includes(buscaRca.toLowerCase())).map(v=>(
+                          <label key={v.cod} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"5px 12px",
+                            cursor:"pointer", background:filtroRcas.has(v.cod)?"#FFF0F0":"transparent", borderBottom:`1px solid #F5F5F5` }}>
+                            <input type="checkbox" checked={filtroRcas.has(v.cod)} onChange={()=>toggleRca(v.cod)} style={{ accentColor:C.primary }}/>
+                            <span style={{ fontSize:"11px" }}>{v.nome}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
+                      <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, fontSize:"11px", fontWeight:700, color:C.textSub, background:"#FAFAFA" }}>
+                        {agrupamento==="secao"?"SEÇÃO":"FORNECEDOR"} {filtroDims.size>0 && <span style={{ color:C.primary }}>({filtroDims.size})</span>}
+                      </div>
+                      <div style={{ padding:"6px 8px", borderBottom:`1px solid ${C.border}` }}>
+                        <input value={buscaDim} onChange={e=>setBuscaDim(e.target.value)} placeholder="Buscar..."
+                          style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`, borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
+                      </div>
+                      <div style={{ overflowY:"auto", maxHeight:"250px" }}>
+                        {dimsDisponiveis.filter(d=>(d.nome??"").toLowerCase().includes(buscaDim.toLowerCase())).map(d=>(
+                          <label key={d.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"5px 12px",
+                            cursor:"pointer", background:filtroDims.has(d.id)?"#FFF0F0":"transparent", borderBottom:`1px solid #F5F5F5` }}>
+                            <input type="checkbox" checked={filtroDims.has(d.id)} onChange={()=>toggleDim(d.id)} style={{ accentColor:C.primary }}/>
+                            <span style={{ fontSize:"11px" }}>{d.nome}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
-
-        {isMobile && !tabsOpen && (
-          <input placeholder="Filtrar..." value={search} onChange={e=>setSearch(e.target.value)}
-            style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:"6px",
-                     padding:"7px 10px", fontSize:"12px", outline:"none",
-                     color:C.text, fontFamily:C.sans, background:C.bg }}/>
-        )}
-
-        {cargo !== "vendedor" && mode !== "todas_equipes" && (
-          <div style={{ position:"relative", marginLeft:"auto" }}>
-            <button onClick={() => setShowFiltros(v=>!v)}
-              style={{ padding:"5px 12px", borderRadius:"6px",
-                border:`1.5px solid ${totalFiltros>0?C.primary:C.border}`,
-                fontSize:"12px", fontWeight:700, cursor:"pointer",
-                display:"flex", alignItems:"center", gap:"6px",
-                background: totalFiltros>0 ? C.primary : "#fff",
-                color: totalFiltros>0 ? "#fff" : C.text }}>
-              ⚙ Filtros {totalFiltros>0 && `(${totalFiltros})`}
-            </button>
-            {showFiltros && (
-              <div style={{ position:"absolute", top:"calc(100% + 4px)", right:0,
-                background:"#fff", border:`1px solid ${C.border}`, borderRadius:"8px",
-                boxShadow:"0 6px 20px rgba(0,0,0,.15)", zIndex:200,
-                width: isMobile?"calc(100vw - 32px)":"560px",
-                maxHeight:"420px", overflow:"hidden", display:"flex", flexDirection:"column" }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
-                  padding:"10px 14px", borderBottom:`1px solid ${C.border}`, background:"#FAFAFA" }}>
-                  <span style={{ fontWeight:700, fontSize:"12px" }}>Filtros Avançados</span>
-                  <div style={{ display:"flex", gap:"8px" }}>
-                    {totalFiltros>0 && <button onClick={limparFiltros}
-                      style={{ fontSize:"11px", color:C.red, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
-                      Limpar tudo</button>}
-                    <button onClick={() => setShowFiltros(false)}
-                      style={{ background:"none", border:"none", cursor:"pointer", fontSize:"16px", color:C.textSub }}>×</button>
-                  </div>
-                </div>
-                <div style={{ display:"flex", overflow:"hidden", flex:1 }}>
-                  <div style={{ flex:1, borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column" }}>
-                    <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, fontSize:"11px", fontWeight:700, color:C.textSub, background:"#FAFAFA" }}>
-                      VENDEDOR {filtroRcas.size>0 && <span style={{ color:C.primary }}>({filtroRcas.size})</span>}
-                    </div>
-                    <div style={{ padding:"6px 8px", borderBottom:`1px solid ${C.border}` }}>
-                      <input value={buscaRca} onChange={e=>setBuscaRca(e.target.value)} placeholder="Buscar RCA..."
-                        style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`, borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
-                    </div>
-                    <div style={{ overflowY:"auto", maxHeight:"250px" }}>
-                      {vendedores.filter(v=>(v.nome??"").toLowerCase().includes(buscaRca.toLowerCase())).map(v=>(
-                        <label key={v.cod} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"5px 12px",
-                          cursor:"pointer", background:filtroRcas.has(v.cod)?"#FFF0F0":"transparent", borderBottom:`1px solid #F5F5F5` }}>
-                          <input type="checkbox" checked={filtroRcas.has(v.cod)} onChange={()=>toggleRca(v.cod)} style={{ accentColor:C.primary }}/>
-                          <span style={{ fontSize:"11px" }}>{v.nome}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ flex:1, display:"flex", flexDirection:"column" }}>
-                    <div style={{ padding:"8px 12px", borderBottom:`1px solid ${C.border}`, fontSize:"11px", fontWeight:700, color:C.textSub, background:"#FAFAFA" }}>
-                      {agrupamento==="secao"?"SEÇÃO":"FORNECEDOR"} {filtroDims.size>0 && <span style={{ color:C.primary }}>({filtroDims.size})</span>}
-                    </div>
-                    <div style={{ padding:"6px 8px", borderBottom:`1px solid ${C.border}` }}>
-                      <input value={buscaDim} onChange={e=>setBuscaDim(e.target.value)} placeholder="Buscar..."
-                        style={{ width:"100%", padding:"4px 8px", border:`1px solid ${C.border}`, borderRadius:"4px", fontSize:"11px", outline:"none" }}/>
-                    </div>
-                    <div style={{ overflowY:"auto", maxHeight:"250px" }}>
-                      {dimsDisponiveis.filter(d=>(d.nome??"").toLowerCase().includes(buscaDim.toLowerCase())).map(d=>(
-                        <label key={d.id} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"5px 12px",
-                          cursor:"pointer", background:filtroDims.has(d.id)?"#FFF0F0":"transparent", borderBottom:`1px solid #F5F5F5` }}>
-                          <input type="checkbox" checked={filtroDims.has(d.id)} onChange={()=>toggleDim(d.id)} style={{ accentColor:C.primary }}/>
-                          <span style={{ fontSize:"11px" }}>{d.nome}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Modo Todas Equipes */}

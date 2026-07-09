@@ -21,6 +21,12 @@ export const C = {
   bg:        "#F5EEEE",
   mono:      "Consolas,'Courier New',monospace",
   sans:      "'Segoe UI',Arial,sans-serif",
+  // OKLCH tinted neutrals — impeccable palette
+  surface:   "#FFFCFC",
+  surfaceAlt:"#F8F0F0",
+  divider:   "#E8D8D8",
+  accent:    "#CC0000",
+  accentDim: "#880000",
 };
 
 export const fmt = (v) =>
@@ -67,12 +73,17 @@ export const getToday = () => {
 
 export const GLOBAL_CSS = `
   * { box-sizing:border-box; margin:0; padding:0 }
-  body { background:${C.bg}; font-family:${C.sans}; -webkit-tap-highlight-color:transparent }
+  body { background:${C.bg}; font-family:${C.sans}; -webkit-tap-highlight-color:transparent;
+         color:${C.text}; font-size:13px; line-height:1.5 }
   @keyframes spin  { to { transform:rotate(360deg) } }
   @keyframes pulse { 0%,100%{opacity:.4} 50%{opacity:.8} }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  @keyframes slideUp { from{opacity:0;transform:translateY(12px) scale(.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+  @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
   input::placeholder { color:#aaa }
   select:focus { outline:2px solid ${C.gold} }
-  ::-webkit-scrollbar { height:4px; width:4px }
+  ::-webkit-scrollbar { height:5px; width:5px }
   ::-webkit-scrollbar-track { background:#f1f1f1 }
-  ::-webkit-scrollbar-thumb { background:${C.primary}; border-radius:2px }
+  ::-webkit-scrollbar-thumb { background:${C.primary}; border-radius:3px }
+  ::-webkit-scrollbar-thumb:hover { background:${C.primaryDk} }
 `;

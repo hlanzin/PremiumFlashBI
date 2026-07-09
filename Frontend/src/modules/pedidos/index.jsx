@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Search, ChevronDown, ChevronRight,
+import { Search, ChevronDown, ChevronRight,
          Package, X, Users, User, Shield } from "lucide-react";
 import { C, fmtR, fmtN, fmtDt, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
 import TableCard from "../../components/TableCard";
+import DatePicker from "../../components/DatePicker";
+import { exportCSV } from "../../utils/exportCSV";
 
 // Apenas as 5 situações usadas, na ordem certa
 const POSICAO = {
@@ -451,7 +453,13 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
 
   return (<>
     <style>{ROW_CSS}</style>
-    <ModuleHeader icon={Package} title="PEDIDOS DE VENDA" isMobile={isMobile}>
+    <ModuleHeader icon={Package} title="PEDIDOS DE VENDA" isMobile={isMobile}
+      onRefresh={fetchData} loading={loading}
+      onExportExcel={rows.length > 0 ? () => {
+        const header = ["PEDIDO","DATA","VENDEDOR","CLIENTE","SUPERVISOR","SUBTOTAL","TOTAL","SITUAÇÃO"];
+        const dataRows = rowsPagina.map(p => [p.numped, p.dt_pedido, p.nome_vendedor, p.fantasia || p.razao_social, p.nome_supervisor, fmtR(p.subtotal_itens), fmtR(p.vl_total), p.posicao]);
+        exportCSV(`Pedidos_${dtIniInput}_${dtFimInput}`, header, dataRows);
+      } : undefined}>
       {rows.length > 0 && (
         <div style={{ display:"flex", gap:"16px", fontSize:"12px", color:"rgba(255,255,255,.8)" }}>
           <span><b style={{color:"#fff"}}>{rows.length}</b> pedidos</span>
@@ -466,28 +474,16 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
       padding:isMobile?"8px 10px":"10px 16px",
       display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
 
-      {/* Datas — só aplica ao clicar Buscar ou pressionar Enter */}
-      <div style={{ display:"flex", alignItems:"center", gap:"6px",
-        border:`1px solid ${C.border}`, borderRadius:"6px", padding:"5px 10px" }}>
-        <span style={{ fontSize:"11px", color:C.textSub, fontWeight:600 }}>De</span>
-        <input type="date" value={dtIniInput}
-          onChange={e => setDtIniInput(e.target.value)}
-          onKeyDown={e => e.key==="Enter" && aplicarDatas()}
-          style={{ border:"none", outline:"none", fontSize:"12px",
-            fontFamily:C.mono, color:C.text, cursor:"pointer" }}/>
-        <span style={{ fontSize:"11px", color:C.textSub, fontWeight:600 }}>até</span>
-        <input type="date" value={dtFimInput}
-          onChange={e => setDtFimInput(e.target.value)}
-          onKeyDown={e => e.key==="Enter" && aplicarDatas()}
-          style={{ border:"none", outline:"none", fontSize:"12px",
-            fontFamily:C.mono, color:C.text, cursor:"pointer" }}/>
-        <button onClick={aplicarDatas}
+      {/* Datas — só aplica ao clicar Buscar */}
+        <DatePicker value={dtIniInput} onChange={setDtIniInput} isMobile={isMobile} />
+      <span style={{ fontSize:"11px", color:C.textSub, fontWeight:600 }}>até</span>
+      <DatePicker value={dtFimInput} onChange={setDtFimInput} isMobile={isMobile} />
+      <button onClick={aplicarDatas}
           style={{ padding:"3px 10px", borderRadius:"4px", fontSize:"11px",
             fontWeight:700, cursor:"pointer", background:C.primary,
             border:"none", color:"#fff", whiteSpace:"nowrap" }}>
           Buscar
         </button>
-      </div>
 
       {/* Filtro supervisor */}
       {cargo !== "vendedor" && supervisores.length > 0 && (
@@ -555,14 +551,6 @@ export default function ModulePedidos({ isMobile, token, userInfo = {} }) {
           </button>
         )}
       </div>
-
-      {/* Refresh */}
-      <button onClick={fetchData} disabled={loading}
-        style={{ background:"rgba(0,0,0,.07)", border:`1px solid ${C.border}`,
-          padding:"6px 8px", borderRadius:"6px", cursor:"pointer",
-          display:"flex", alignItems:"center" }}>
-        <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
-      </button>
 
       {/* Totais inline */}
       {!isMobile && rows.length > 0 && (

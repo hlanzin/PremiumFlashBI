@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
-         TrendingUp, TrendingDown, Menu, X, FileText, FileSpreadsheet, Filter, ChevronDown } from "lucide-react";
+import { Search, BarChart3, Users, User, Building2, Shield,
+         TrendingUp, TrendingDown, FileText, FileSpreadsheet, Filter, ChevronDown } from "lucide-react";
 import { C, getToday, fmtN } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
+import ModeSelector from "../../components/ModeSelector";
 import ModuleHeader from "../../components/ModuleHeader";
+import DatePicker from "../../components/DatePicker";
 
 const EQUIPE_CODES = [2, 8, 9];
 
@@ -368,7 +370,6 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
   const needsSelect  = ["vendedor","equipe","supervisor"].includes(mode);
   const noData       = needsSelect && !activeCode;
   const showVendedor = ["gerencial","todos","equipe"].includes(mode);
-  const [showMenu, setShowMenu] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const tableRef = useRef(null);
 
@@ -431,38 +432,10 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
   };
 
   return (<>
-    <ModuleHeader icon={FileText} title="LISTA NEGRA" isMobile={isMobile}>
-      {rows.length > 0 && (
-        <div style={{ position:"relative" }}>
-          <button onClick={() => setShowExportMenu(v => !v)}
-            style={{ display:"flex", alignItems:"center", gap:"5px",
-              background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
-              color:"#fff", padding:"6px 12px", borderRadius:"6px",
-              cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
-            <FileText size={13}/> Exportar <ChevronDown size={11}/>
-          </button>
-          {showExportMenu && (
-            <div style={{ position:"absolute", right:0, top:"calc(100% + 4px)",
-              background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px",
-              boxShadow:"0 4px 12px rgba(0,0,0,.15)", zIndex:100, minWidth:"160px",
-              overflow:"hidden" }}>
-              <button onClick={exportToPDF}
-                style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%",
-                  padding:"9px 14px", border:"none", borderBottom:`1px solid ${C.border}`,
-                  background:"#fff", cursor:"pointer", fontSize:"12px", textAlign:"left" }}>
-                <FileText size={13} color={C.primary}/> Exportar PDF
-              </button>
-              <button onClick={exportToExcel}
-                style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%",
-                  padding:"9px 14px", border:"none",
-                    background:"#fff", cursor:"pointer", fontSize:"12px", textAlign:"left" }}>
-                  <FileSpreadsheet size={13} color="#1D6F42"/> Exportar Excel
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </ModuleHeader>
+    <ModuleHeader icon={FileText} title="LISTA NEGRA" isMobile={isMobile}
+      onRefresh={fetchData} loading={loading}
+      onExportExcel={rows.length > 0 ? exportToExcel : undefined}
+      onExportPdf={rows.length > 0 ? exportToPDF : undefined} />
 
     {/* Toolbar */}
     <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,
@@ -483,63 +456,12 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
 
       {/* Dropdown dimensão */}
       {agrupamento === "fornecedor"
-        ? <Dropdown value={dimId} onChange={setDimId} options={fornecedores} placeholder="Selecione fornecedor..." valueKey="id"/>
-        : <Dropdown value={dimId} onChange={setDimId} options={secoes}       placeholder="Selecione seção..."       valueKey="id"/>}
+        ? <SelectModal value={dimId} onChange={setDimId} options={fornecedores} placeholder="Selecione fornecedor..." valueKey="id" isMobile={isMobile}/>
+        : <SelectModal value={dimId} onChange={setDimId} options={secoes}       placeholder="Selecione seção..."       valueKey="id" isMobile={isMobile}/>}
 
-      {/* Data */}
-      <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
-        style={{ padding:"6px 10px", border:`1px solid ${C.border}`, borderRadius:"6px",
-                 fontSize:"12px", outline:"none", fontFamily:"monospace" }}/>
+      <ModeSelector modes={MODES_VISIVEIS} active={mode} onChange={id => { setMode(id); setActiveCode(null); }} isMobile={isMobile} />
 
-      {/* Refresh */}
-      <button onClick={fetchData} disabled={loading||!dimId}
-        style={{ background:"rgba(0,0,0,.07)", border:`1px solid ${C.border}`,
-          padding:"6px 8px", borderRadius:"6px", cursor:"pointer",
-          display:"flex", alignItems:"center", opacity:!dimId?0.5:1 }}>
-        <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
-      </button>
-
-      {/* Modos — mobile: menu hamburguer */}
-      {isMobile ? (<>
-        <button onClick={() => setShowMenu(v => !v)}
-          style={{ marginLeft:"auto", background:C.primary, border:"none", color:"#fff",
-            padding:"6px 10px", borderRadius:"6px", cursor:"pointer" }}>
-          {showMenu ? <X size={16}/> : <Menu size={16}/>}
-        </button>
-        {showMenu && (
-          <div style={{ position:"fixed", top:0, left:0, right:0, bottom:0,
-            background:"rgba(0,0,0,.4)", zIndex:200 }} onClick={() => setShowMenu(false)}>
-            <div style={{ position:"absolute", right:0, top:0, bottom:0, width:"220px",
-              background:"#fff", padding:"16px", display:"flex", flexDirection:"column", gap:"8px" }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ fontWeight:700, color:C.primary, marginBottom:"8px" }}>Modo</div>
-              {MODES_VISIVEIS.map(m => (
-                <button key={m.id} onClick={() => { setMode(m.id); setShowMenu(false); }}
-                  style={{ display:"flex", alignItems:"center", gap:"8px",
-                    padding:"10px 14px", borderRadius:"8px", border:"none", cursor:"pointer",
-                    background:mode===m.id?C.primary:"#f5f5f5",
-                    color:mode===m.id?"#fff":C.text, fontWeight:mode===m.id?700:400 }}>
-                  <m.Icon size={15}/> {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </>) : (
-        <div style={{ marginLeft:"auto", display:"flex", border:`1px solid ${C.border}`,
-          borderRadius:"6px", overflow:"hidden" }}>
-          {MODES_VISIVEIS.map((m, idx) => (
-            <button key={m.id} onClick={() => { setMode(m.id); setActiveCode(null); }}
-              style={{ display:"flex", alignItems:"center", gap:"5px",
-                padding:"6px 10px", border:"none", cursor:"pointer", fontSize:"11px",
-                background:mode===m.id?C.primary:"#fff",
-                color:mode===m.id?"#fff":C.text, fontWeight:mode===m.id?700:400,
-                borderRight:idx<MODES_VISIVEIS.length-1?`1px solid ${C.border}`:"none" }}>
-              <m.Icon size={12}/> {m.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <DatePicker value={dataRef} onChange={setDataRef} isMobile={isMobile} />
     </div>
 
     {/* Sub-toolbar: seletor modo + busca */}
@@ -547,9 +469,9 @@ export default function ModuleListaNegra({ isMobile, token, userInfo = {} }) {
       padding: isMobile?"6px 10px":"6px 16px",
       display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
 
-      {mode==="equipe"     && <Dropdown value={activeCode} onChange={setActiveCode} options={equipes}      placeholder="Selecione equipe..."/>}
-      {mode==="supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione supervisor..."/>}
-      {mode==="vendedor"   && <Dropdown value={activeCode} onChange={setActiveCode} options={vendedores}   placeholder="Selecione vendedor..."/>}
+      {mode==="equipe"     && <SelectModal value={activeCode} onChange={setActiveCode} options={equipes}      placeholder="Selecione equipe..." isMobile={isMobile}/>}
+      {mode==="supervisor" && <SelectModal value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione supervisor..." isMobile={isMobile}/>}
+      {mode==="vendedor"   && <SelectModal value={activeCode} onChange={setActiveCode} options={vendedores}   placeholder="Selecione vendedor..." isMobile={isMobile}/>}
 
       {/* Filtro: só sem compra */}
       <button onClick={() => setApenasNaoComprou(v => !v)}

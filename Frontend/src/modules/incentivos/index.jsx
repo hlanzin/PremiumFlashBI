@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Gift, RefreshCw } from "lucide-react";
+import { Gift } from "lucide-react";
 import { C, fmtN, fmtR } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import ModuleHeader from "../../components/ModuleHeader";
+import { exportCSV } from "../../utils/exportCSV";
 
 const medalha = (pos) => (pos === 1 ? "🥇" : pos === 2 ? "🥈" : pos === 3 ? "🥉" : null);
 // últimos colocados = "lanterninha" (só quando há gente suficiente pra fazer sentido)
@@ -46,7 +47,20 @@ export default function ModuleIncentivo({ isMobile, token, incentivoId = "yopro"
 
   return (
     <>
-      <ModuleHeader icon={Gift} title={nomeExib.toUpperCase()} isMobile={isMobile} />
+      <ModuleHeader icon={Gift} title={nomeExib.toUpperCase()} isMobile={isMobile}
+        onRefresh={fetchDados} loading={loading}
+        onExportExcel={() => {
+          const metricH = isCombo ? "Combos" : "Caixas";
+          const header = isGeral
+            ? ["#", "Vendedor", "Equipe", ...incentivosList.map(i => i.nome.replace("Incentivo ", "").toUpperCase()), "Total"]
+            : ["#", "Vendedor", "Equipe", metricH, ...(isCombo ? [] : ["R$/CX"]), "Prêmio"];
+          const dataRows = ranking.map(v => isGeral
+            ? [String(v.posicao), v.nome_vendedor, v.nome_supervisor || "",
+               ...incentivosList.map(i => fmtR(v.por_incentivo?.[i.id])), fmtR(v.total_premio)]
+            : [String(v.posicao), v.nome_vendedor, v.nome_supervisor || "",
+               fmtN(metricaDe(v)), ...(isCombo ? [] : [fmtR(v.valor_caixa_aplicado)]), fmtR(v.total_premio)]);
+          exportCSV(`Incentivos_${incentivoId}`, header, dataRows);
+        }} />
 
       {/* Barra de resumo */}
       <div style={{ background: "#fff", borderBottom: `2px solid ${C.border}`,
@@ -94,13 +108,6 @@ export default function ModuleIncentivo({ isMobile, token, incentivoId = "yopro"
             {!isGeral && <span>·</span>}
             <span>{fmtR(totalGeral.premio)}</span>
           </div>
-          <button onClick={fetchDados} disabled={loading}
-            style={{ border: `1px solid ${C.border}`, background: "#fff", borderRadius: "6px",
-              padding: "6px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: "5px",
-              fontSize: "11px", color: C.textSub }}>
-            <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-            Atualizar
-          </button>
         </div>
       </div>
 

@@ -4,8 +4,10 @@ import { C, fmtN, fmtR, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders, apiGet } from "../../api";
 import ModuleHeader from "../../components/ModuleHeader";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
+
 import { exportCSV } from "../../utils/exportCSV";
+import DatePicker from "../../components/DatePicker";
 
 const primeiroDiaMes = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`; };
 
@@ -226,15 +228,17 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
 
   return (
     <>
-      <ModuleHeader icon={ClipboardList} title="SUGESTÃO DE PEDIDO" isMobile={isMobile} />
+      <ModuleHeader icon={ClipboardList} title="SUGESTÃO DE PEDIDO" isMobile={isMobile}
+        onExportExcel={exportarExcel}
+        onExportPDF={exportarPDF} />
 
       <div style={{ background: "#fff", borderBottom: `2px solid ${C.border}`,
         padding: isMobile ? "10px 12px" : "12px 20px" }}>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "flex-end" }}>
           <div>
             <LabelCampo>FORNECEDOR</LabelCampo>
-            <Dropdown value={fornSel} onChange={setFornSel} options={fornecedores}
-              placeholder="Selecione..." labelKey="nome" valueKey="id" minWidth="200px" />
+            <SelectModal value={fornSel} onChange={setFornSel} options={fornecedores}
+              placeholder="Selecione..." labelKey="nome" valueKey="id" isMobile={isMobile} minWidth="200px" />
           </div>
           <div>
             <LabelCampo>DIAS DE ESTOQUE</LabelCampo>
@@ -246,26 +250,22 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
             display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "flex-end" }}>
             <div>
               <LabelCampo>VENDA — INÍCIO</LabelCampo>
-              <input type="date" value={diniV} max={getToday()}
-                onChange={e => setDiniV(e.target.value)} style={campo} />
+              <DatePicker value={diniV} onChange={setDiniV} max={getToday()} isMobile={isMobile} />
             </div>
             <div>
               <LabelCampo>VENDA — FIM</LabelCampo>
-              <input type="date" value={dfimV} max={getToday()}
-                onChange={e => setDfimV(e.target.value)} style={campo} />
+              <DatePicker value={dfimV} onChange={setDfimV} max={getToday()} isMobile={isMobile} />
             </div>
           </div>
           <div style={{ borderLeft: `1px solid ${C.border}`, paddingLeft: "10px",
             display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "flex-end" }}>
             <div>
               <LabelCampo>CORTE — INÍCIO</LabelCampo>
-              <input type="date" value={diniC} max={getToday()}
-                onChange={e => setDiniC(e.target.value)} style={campo} />
+              <DatePicker value={diniC} onChange={setDiniC} max={getToday()} isMobile={isMobile} />
             </div>
             <div>
               <LabelCampo>CORTE — FIM</LabelCampo>
-              <input type="date" value={dfimC} max={getToday()}
-                onChange={e => setDfimC(e.target.value)} style={campo} />
+              <DatePicker value={dfimC} onChange={setDfimC} max={getToday()} isMobile={isMobile} />
             </div>
           </div>
           <button onClick={buscar} disabled={!fornSel || loading}
@@ -297,20 +297,6 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
               VALOR ESTIMADO</span>
             <span style={{ fontSize: "13px", fontWeight: 700, color: "#8C6400", fontFamily: C.mono }}>
               {fmtR(totais.valor)}</span>
-          </div>
-          <div style={{ marginLeft: "auto", display: "flex", gap: "6px" }}>
-            <button onClick={exportarExcel}
-              style={{ display: "flex", alignItems: "center", gap: "5px", background: "#1D6F42",
-                border: "none", color: "#fff", padding: "6px 12px", borderRadius: "6px",
-                cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
-              <FileSpreadsheet size={13} /> Excel
-            </button>
-            <button onClick={exportarPDF}
-              style={{ display: "flex", alignItems: "center", gap: "5px", background: "#B91C1C",
-                border: "none", color: "#fff", padding: "6px 12px", borderRadius: "6px",
-                cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
-              <FileText size={13} /> PDF
-            </button>
           </div>
         </div>
       )}

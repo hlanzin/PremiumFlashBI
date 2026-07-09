@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Plus, ChevronDown, ChevronRight, FileSpreadsheet, FileText } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, FileSpreadsheet, FileText } from "lucide-react";
 import { C, getToday, fmtDt as fmtDtTheme } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
+
 
 const STATUS_CORES = {
   "Aberto":           { bg:"#EFF6FF", color:"#2563EB", border:"#BFDBFE" },
@@ -562,7 +563,10 @@ export default function ModuleChamados({ isMobile, token, userInfo={} }) {
 
   return (
     <>
-      <ModuleHeader icon={FileText} title="CHAMADOS DE FREEZER" isMobile={isMobile} />
+      <ModuleHeader icon={FileText} title="CHAMADOS DE FREEZER" isMobile={isMobile}
+        onRefresh={carregar}
+        loading={loading}
+        onExportExcel={chamados.length > 0 ? exportarExcel : undefined} />
 
       {/* Toolbar */}
       <div style={{ background:"#fff", borderBottom:`2px solid ${C.border}`,
@@ -579,25 +583,6 @@ export default function ModuleChamados({ isMobile, token, userInfo={} }) {
           ["","Todos status"],
           ...STATUS_LISTA.map(s=>[s,s]),
         ])}
-
-        <button onClick={carregar} disabled={loading}
-          style={{ background:"rgba(0,0,0,.07)", border:`1.5px solid ${C.border}`,
-                   padding:"7px 10px", borderRadius:"8px", cursor:"pointer",
-                   display:"flex", alignItems:"center" }}>
-          <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
-        </button>
-
-        <button onClick={exportarExcel} disabled={chamados.length === 0}
-          title="Exportar CODCLI, RG, Status e data de abertura"
-          style={{ display:"flex", alignItems:"center", gap:"6px",
-                   background: chamados.length ? C.green : "#ccc", border:"none", color:"#fff",
-                   padding:"8px 12px", borderRadius:"8px",
-                   cursor: chamados.length ? "pointer" : "default",
-                   fontSize:"12px", fontWeight:700,
-                   opacity: chamados.length ? 1 : 0.6 }}>
-          <FileSpreadsheet size={14}/> Excel
-        </button>
-
         <button onClick={()=>setShowForm(v=>!v)}
           style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:"6px",
                    background:showForm?C.primaryDk:C.primary, border:"none", color:"#fff",

@@ -5,6 +5,7 @@ import { C } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders, apiGet } from "../../api";
 import ModuleHeader from "../../components/ModuleHeader";
+import { exportCSV } from "../../utils/exportCSV";
 
 export default function ModuleExclusoes({ isMobile, token, userInfo = {} }) {
   const headers = useAuthHeaders(token);
@@ -54,6 +55,12 @@ export default function ModuleExclusoes({ isMobile, token, userInfo = {} }) {
   const fornecedores = lista.filter(x => x.tipo === "fornecedor");
   const secoes       = lista.filter(x => x.tipo === "secao");
 
+  const handleExportExcel = () => {
+    const header = ["Tipo", "Código", "Descrição"];
+    const dataRows = lista.map(x => [x.tipo === "fornecedor" ? "Fornecedor" : "Seção", String(x.valor), x.descricao || ""]);
+    exportCSV("Exclusoes", header, dataRows);
+  };
+
   const Grupo = ({ titulo, icon: Icon, itens, cor }) => (
     <div style={{ flex: 1, minWidth: isMobile ? "100%" : "280px",
       border: `1px solid ${C.border}`, borderRadius: "8px", overflow: "hidden", background: "#fff" }}>
@@ -88,7 +95,8 @@ export default function ModuleExclusoes({ isMobile, token, userInfo = {} }) {
 
   return (
     <>
-      <ModuleHeader icon={Ban} title="EXCLUSÕES (INDÚSTRIAS / SEÇÕES)" isMobile={isMobile} />
+      <ModuleHeader icon={Ban} title="EXCLUSÕES (INDÚSTRIAS / SEÇÕES)" isMobile={isMobile}
+        onExportExcel={handleExportExcel} />
 
       {/* Form de inclusão */}
       <div style={{ background: "#fff", borderBottom: `2px solid ${C.border}`,

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, RefreshCw, ChevronDown, FileSpreadsheet, Package } from "lucide-react";
+import { Search, ChevronDown, FileSpreadsheet, Package } from "lucide-react";
 import { C, fmt, fmtQty, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
@@ -7,6 +7,8 @@ import Th from "../../components/Th";
 import SkeletonRows from "../../components/SkeletonRows";
 import ModuleHeader from "../../components/ModuleHeader";
 import TableCard from "../../components/TableCard";
+
+import DatePicker from "../../components/DatePicker";
 import { exportCSV } from "../../utils/exportCSV";
 import { useSort } from "../../hooks/useSort";
 
@@ -80,7 +82,10 @@ export default function ModuleEstoque({ isMobile, token }) {
     <>
       <ModuleHeader icon={Package} title="ESTOQUE POR SECAO"
         subtitle={summary.historico ? `historico: ${summary.data_ref}` : null}
-        isMobile={isMobile}>
+        isMobile={isMobile}
+        onRefresh={fetchEstoque}
+        loading={loading}
+        onExportExcel={filtered.length > 0 ? exportarExcel : undefined}>
         {!loading && summary.total_valor > 0 && !isMobile && (
           <div style={{ textAlign: "right" }}>
             <div style={{ color: "rgba(255,220,180,.9)", fontSize: "10px" }}>VALOR TOTAL</div>
@@ -89,13 +94,6 @@ export default function ModuleEstoque({ isMobile, token }) {
             </div>
           </div>
         )}
-        <button onClick={fetchEstoque} disabled={loading}
-          style={{ background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.3)",
-                   color: "#fff", padding: "6px 10px", borderRadius: "6px",
-                   cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
-          <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-          {!isMobile && " Atualizar"}
-        </button>
       </ModuleHeader>
 
       <div style={{
@@ -126,33 +124,7 @@ export default function ModuleEstoque({ isMobile, token }) {
                      width: isMobile ? "auto" : "140px", outline: "none", color: C.text, fontFamily: C.sans }} />
         </div>
 
-        <div style={{
-          display: "flex", alignItems: "center", gap: "6px",
-          border: `1px solid ${C.border}`, borderRadius: "6px",
-          padding: "5px 10px", background: "#fff", marginLeft: isMobile ? "0" : "auto",
-        }}>
-          <span style={{ fontSize: "11px", color: C.textSub, fontWeight: 600 }}>Data</span>
-          <input type="date" value={dataRef} max={hoje}
-            onChange={e => setDataRef(e.target.value)}
-            style={{ border: "none", outline: "none", fontSize: "12px",
-                     fontFamily: C.mono, color: C.text, background: "transparent", cursor: "pointer" }} />
-          {dataRef !== hoje && (
-            <button onClick={() => setDataRef(hoje)}
-              style={{ background: "none", border: "none", color: C.primary,
-                       cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
-              hoje
-            </button>
-          )}
-          {filtered.length > 0 && (
-            <button onClick={exportarExcel}
-              style={{ display: "flex", alignItems: "center", gap: "5px",
-                background: "#1D6F42", border: "none", color: "#fff",
-                padding: "5px 12px", borderRadius: "6px", cursor: "pointer",
-                fontSize: "11px", fontWeight: 700, marginLeft: "8px" }}>
-              <FileSpreadsheet size={13} /> Exportar
-            </button>
-          )}
-        </div>
+        <DatePicker value={dataRef} onChange={setDataRef} max={hoje} isMobile={isMobile} />
       </div>
 
       <TableCard isMobile={isMobile}>

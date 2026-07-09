@@ -4,8 +4,9 @@ import { C, fmtR, fmtDt } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
+import { exportCSV } from "../../utils/exportCSV";
 import TableCard from "../../components/TableCard";
 import { useSort } from "../../hooks/useSort";
 
@@ -90,17 +91,28 @@ export default function ModuleClientesFornecedor({ isMobile, token, userInfo = {
     return r;
   }, [dados, busca, sortCol, sortDir]);
 
+  const handleExportExcel = () => {
+    const header = ["Cliente", "Cidade", "Última Compra", "Último Valor", ...mesLabels, "Ped. Aberto"];
+    const dataRows = rows.map(r => [
+      r.razao_social, r.cidade || "", r.ultima_data || "", fmtR(r.ultimo_valor),
+      ...Array.from({length: 6}, (_, i) => r[`m${i}`] > 0 ? fmtR(r[`m${i}`]) : ""),
+      String(r.pedidos_abertos ?? 0),
+    ]);
+    exportCSV("ClientesFornecedor", header, dataRows);
+  };
+
   return (
     <>
-      <ModuleHeader icon={Users} title="CLIENTES POR FORNECEDOR" isMobile={isMobile} />
+      <ModuleHeader icon={Users} title="CLIENTES POR FORNECEDOR" isMobile={isMobile}
+        onExportExcel={handleExportExcel} />
 
       <div style={{
         background: "#fff", borderBottom: `2px solid ${C.border}`,
         padding: isMobile ? "6px 12px" : "8px 20px",
         display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
       }}>
-        <Dropdown value={fornSel} onChange={setFornSel} options={fornecedores}
-          placeholder="Selecione um fornecedor..." labelKey="nome" valueKey="cod" />
+        <SelectModal value={fornSel} onChange={setFornSel} options={fornecedores}
+          placeholder="Selecione um fornecedor..." labelKey="nome" valueKey="cod" isMobile={isMobile} />
 
         <div style={{ display: "flex", alignItems: "center", gap: "6px",
           border: `1px solid ${C.border}`, borderRadius: "6px",

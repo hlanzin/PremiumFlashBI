@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, ChevronDown, ChevronRight, Settings, Eye,
-         Plus, TrendingUp as BLIcon, TrendingDown, Minus, Search } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, forwardRef, useImperativeHandle, useRef } from "react";
+import { ChevronDown, ChevronRight, Settings, Eye,
+         Plus, TrendingUp as BLIcon, Search } from "lucide-react";
 import { C, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
 import { arrow } from "../../components/ArrowBadge";
 import SkeletonRows from "../../components/SkeletonRows";
+import DatePicker from "../../components/DatePicker";
+import { exportCSV } from "../../utils/exportCSV";
 
 const fmtQtd = (v, u) =>
   v == null ? "—" : `${Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2})} ${u==="CX"?"cx":"un"}`;
@@ -172,12 +174,14 @@ function useCampanhaDados(campanha, token, filtroSup) {
 }
 
 // ── Acompanhamento (layout compartilhado) ─────────────────────────────────────
-function Acompanhamento({campanha, token, cargo, isMobile, filtroSup}) {
+const Acompanhamento = forwardRef(({campanha, token, cargo, isMobile, filtroSup}, ref) => {
   const hoje = getToday();
   const {grupos,loading,error,dataRef,setDataRef,maxData,refetch} =
     useCampanhaDados(campanha, token, filtroSup);
   const headers = useMemo(()=>({Authorization:`Bearer ${token}`}),[token]);
   const [supFiltro,setSupFiltro]=useState(filtroSup??null);
+
+  useImperativeHandle(ref, () => ({ refetch, grupos, unidade: campanha.unidade, dataRef, loading }), [refetch, grupos, campanha.unidade, dataRef, loading]);
 
   return (<>
     <div style={{background:"#fff",borderBottom:`1px solid ${C.border}`,
@@ -198,20 +202,7 @@ function Acompanhamento({campanha, token, cargo, isMobile, filtroSup}) {
         </div>
       )}
 
-      <div style={{display:"flex",alignItems:"center",gap:"5px",border:`1px solid ${C.border}`,
-        borderRadius:"6px",padding:"4px 8px",marginLeft:"auto"}}>
-        <span style={{fontSize:"10px",color:C.textSub,fontWeight:600}}>Data</span>
-        <input type="date" value={dataRef}
-          min={campanha.semana_ini} max={maxData}
-          onChange={e=>setDataRef(e.target.value)}
-          style={{border:"none",outline:"none",fontSize:"11px",fontFamily:C.mono,
-            color:C.text,background:"transparent",cursor:"pointer"}}/>
-      </div>
-      <button onClick={refetch} disabled={loading}
-        style={{background:"rgba(0,0,0,.07)",border:`1px solid ${C.border}`,
-          padding:"5px 8px",borderRadius:"6px",cursor:"pointer",display:"flex",alignItems:"center"}}>
-        <RefreshCw size={12} style={{animation:loading?"spin 1s linear infinite":"none"}}/>
-      </button>
+      <DatePicker value={dataRef} onChange={setDataRef} min={campanha.semana_ini} max={maxData} isMobile={isMobile} />
     </div>
 
     <div style={{margin:"8px 12px"}}>
@@ -220,7 +211,7 @@ function Acompanhamento({campanha, token, cargo, isMobile, filtroSup}) {
         unidade={campanha.unidade} loading={loading} error={error} cargo={cargo}/>
     </div>
   </>);
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONFIGURAÇÃO (sem mudanças estruturais)
@@ -406,12 +397,6 @@ function CampanhaVendedor({campanha, token}) {
             {campanha.semana_ini} → {campanha.semana_fim} · {campanha.unidade}
           </div>
         </div>
-        <button onClick={refetch} disabled={loading}
-          style={{ background:"rgba(255,255,255,.2)", border:"none", color:"#fff",
-                   padding:"5px 8px", borderRadius:"5px", cursor:"pointer",
-                   display:"flex", alignItems:"center" }}>
-          <RefreshCw size={12} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
-        </button>
       </div>
 
       {/* Tabela */}
@@ -424,14 +409,15 @@ function CampanhaVendedor({campanha, token}) {
 function VendedorView({token, userInfo, isMobile}) {
   const [campanhas, setCampanhas] = useState([]);
   const [loading,   setLoading]   = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const headers = useMemo(()=>({Authorization:`Bearer ${token}`}),[token]);
 
-  useEffect(()=>{
+  const fetchCampanhas = useCallback(() => {
     const hoje = getToday();
+    setLoading(true);
     fetch(`${API_BASE}/api/bl/campanhas`,{headers})
       .then(r=>r.json())
       .then(j=>{
-        // Mostra campanhas onde hoje está dentro do período (semana_ini <= hoje <= semana_fim)
         const lista = (j.dados??[]).filter(c =>
           c.semana_ini <= hoje && c.semana_fim >= hoje
         );
@@ -439,10 +425,24 @@ function VendedorView({token, userInfo, isMobile}) {
       })
       .catch(()=>{})
       .finally(()=>setLoading(false));
-  },[headers]);
+  }, [headers]);
+
+  useEffect(()=>{ fetchCampanhas(); },[fetchCampanhas]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey(k => k + 1);
+    fetchCampanhas();
+  }, [fetchCampanhas]);
+
+  const handleExportExcel = useCallback(() => {
+    const header = ["Campanha", "Início", "Fim", "Unidade"];
+    const dataRows = campanhas.map(c => [c.nome, c.semana_ini, c.semana_fim, c.unidade]);
+    exportCSV(`BateuLevou_${getToday()}`, header, dataRows);
+  }, [campanhas]);
 
   return (<>
-    <ModuleHeader icon={BLIcon} title="BATEU LEVOU" isMobile={isMobile}/>
+    <ModuleHeader icon={BLIcon} title="BATEU LEVOU" isMobile={isMobile}
+      onRefresh={handleRefresh} loading={loading} onExportExcel={handleExportExcel}/>
     <div style={{ padding:"12px 16px" }}>
       {loading && (
         <div style={{ textAlign:"center", padding:"48px", color:C.textSub }}>
@@ -455,7 +455,7 @@ function VendedorView({token, userInfo, isMobile}) {
         </div>
       )}
       {!loading && campanhas.map(c=>(
-        <CampanhaVendedor key={c.id} campanha={c} token={token}/>
+        <CampanhaVendedor key={`${c.id}_${refreshKey}`} campanha={c} token={token}/>
       ))}
     </div>
   </>);
@@ -547,9 +547,28 @@ function FornecedorView({token, userInfo, isMobile}) {
   };
 
   const encerrada = campanhaSel && campanhaSel.semana_fim < hoje;
+  const acRef = useRef(null);
+
+  const handleExportExcel = useCallback(() => {
+    const ac = acRef.current;
+    if (!ac) return;
+    const header = ["Supervisor", "Vendedor", "Código", "Meta", "Realizado", "% Ating.", "Realiz. Dia"];
+    const dataRows = ac.grupos.flatMap(g => (g.vendedores ?? []).map(v => [
+      g.vendedores?.[0]?.nome_supervisor ?? `#${g.cod_supervisor}`,
+      v.nome_vendedor,
+      String(v.cod_vendedor),
+      String(v.meta ?? ''),
+      String(v.qt_realizado ?? ''),
+      v.pct_ating != null ? (v.pct_ating * 100).toFixed(2) : '',
+      String(v.qt_dia ?? ''),
+    ]));
+    exportCSV(`BateuLevou_${ac.dataRef}`, header, dataRows);
+  }, []);
 
   return (<>
-    <ModuleHeader icon={BLIcon} title="BATEU LEVOU" isMobile={isMobile}/>
+    <ModuleHeader icon={BLIcon} title="BATEU LEVOU" isMobile={isMobile}
+      onRefresh={() => acRef.current?.refetch()}
+      onExportExcel={handleExportExcel}/>
 
     {/* ── MOBILE: lista em tela cheia → detalhe em tela cheia ── */}
     {isMobile ? (
@@ -696,7 +715,7 @@ function FornecedorView({token, userInfo, isMobile}) {
 
             <div style={{flex:1,overflowY:"auto"}}>
               {aba==="acompanhar"
-                ?<Acompanhamento campanha={campanhaSel} token={token} cargo="fornecedor" isMobile={true}/>
+                ?<Acompanhamento ref={acRef} campanha={campanhaSel} token={token} cargo="fornecedor" isMobile={true}/>
                 :<Configuracao   campanha={campanhaSel} token={token} isMobile={true}/>}
             </div>
           </div>
@@ -826,7 +845,7 @@ function FornecedorView({token, userInfo, isMobile}) {
             )}
             <div style={{flex:1,overflowY:"auto"}}>
               {aba==="acompanhar"
-                ?<Acompanhamento campanha={campanhaSel} token={token} cargo="fornecedor" isMobile={false}/>
+                ?<Acompanhamento ref={acRef} campanha={campanhaSel} token={token} cargo="fornecedor" isMobile={false}/>
                 :<Configuracao   campanha={campanhaSel} token={token} isMobile={false}/>}
             </div>
           </>
@@ -882,9 +901,29 @@ function ViewPadrao({cargo, token, userInfo, isMobile}) {
     setConfirmDel(false);setCampanhaSel(null);loadCampanhas();
   };
 
+  const acRef = useRef(null);
+
+  const handleExportExcel = useCallback(() => {
+    const ac = acRef.current;
+    if (!ac) return;
+    const header = ["Supervisor", "Vendedor", "Código", "Meta", "Realizado", "% Ating.", "Realiz. Dia"];
+    const dataRows = ac.grupos.flatMap(g => (g.vendedores ?? []).map(v => [
+      g.vendedores?.[0]?.nome_supervisor ?? `#${g.cod_supervisor}`,
+      v.nome_vendedor,
+      String(v.cod_vendedor),
+      String(v.meta ?? ''),
+      String(v.qt_realizado ?? ''),
+      v.pct_ating != null ? (v.pct_ating * 100).toFixed(2) : '',
+      String(v.qt_dia ?? ''),
+    ]));
+    exportCSV(`BateuLevou_${ac.dataRef}`, header, dataRows);
+  }, []);
+
   return (<>
     <ModuleHeader icon={BLIcon}
-      title={"BATEU LEVOU" + (campanhaSel ? " — " + campanhaSel.nome : "")} isMobile={isMobile}/>
+      title={"BATEU LEVOU" + (campanhaSel ? " — " + campanhaSel.nome : "")} isMobile={isMobile}
+      onRefresh={() => acRef.current?.refetch()}
+      onExportExcel={handleExportExcel}/>
 
     <div style={{background:"#fff",borderBottom:`2px solid ${C.border}`,
       padding:"8px 16px",display:"flex",alignItems:"center",gap:"8px",flexWrap:"wrap"}}>
@@ -964,7 +1003,7 @@ function ViewPadrao({cargo, token, userInfo, isMobile}) {
 
     {campanhaSel?(
       aba==="acompanhar"
-        ?<Acompanhamento campanha={campanhaSel} token={token} cargo={cargo} isMobile={isMobile}/>
+        ?<Acompanhamento ref={acRef} campanha={campanhaSel} token={token} cargo={cargo} isMobile={isMobile}/>
         :<Configuracao   campanha={campanhaSel} token={token} isMobile={isMobile}/>
     ):(
       <div style={{padding:"48px",textAlign:"center",color:C.textSub}}>

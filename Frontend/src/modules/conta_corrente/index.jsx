@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { RefreshCw, Users, User, Building2, Shield,
+import { Users, User, Building2, Shield,
          ChevronDown, Wallet, CheckCircle, XCircle, Clock, Plus, Minus } from "lucide-react";
 import { C, fmtR, fmtDt, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
 import ModuleHeader from "../../components/ModuleHeader";
 import TableCard from "../../components/TableCard";
 import { arrow } from "../../components/ArrowBadge";
+import { exportCSV } from "../../utils/exportCSV";
 
 const fmtDtHora = v => {
   if (!v) return "—";
@@ -417,6 +417,28 @@ export default function ModuleContaCorrente({ isMobile, token, userInfo = {} }) 
   const totUtilizado = saldos.reduce((a,r)=>a+(r.vlcorrente??0),0);
   const totDisp      = saldos.reduce((a,r)=>a+(r.disponivel??0),0);
 
+  const handleRefresh = () => {
+    if(aba==="saldos")    fetchSaldos();
+    if(aba==="pendentes") fetchPendentes();
+    if(aba==="historico") fetchHistorico();
+  };
+
+  const handleExportExcel = () => {
+    if (aba === "saldos") {
+      const h = ["Vendedor", "Código", "Supervisor", "Utilizado", "Limite", "Disponível"];
+      exportCSV("ContaCorrente_Saldos", h, saldosFiltrados.map(r => [r.nome_vendedor, String(r.cod_vendedor), r.nome_supervisor||"", fmtR(r.vlcorrente), fmtR(r.vllimcred), fmtR(r.disponivel)]));
+    } else if (aba === "pendentes") {
+      const h = ["Data", "Vendedor", "Tipo", "Valor", "Histórico"];
+      exportCSV("ContaCorrente_Pendentes", h, pendentes.map(s => [fmtDtHora(s.criado_em), s.nome_vendedor, s.tipo, fmtR(s.valor), s.historico]));
+    } else if (aba === "historico") {
+      const h = ["Data", "Vendedor", "Tipo", "Valor", "Histórico", "Status", "Resolvido por"];
+      exportCSV("ContaCorrente_Historico", h, historico.map(s => [fmtDtHora(s.criado_em), s.nome_vendedor, s.tipo, fmtR(s.valor), s.historico, s.status, s.resolvido_por||""]));
+    } else if (aba === "extrato") {
+      const h = ["Data", "Rotina", "Saldo Ant.", "Saldo Novo", "Diferença", "Histórico"];
+      exportCSV(`ContaCorrente_Extrato_${extratoRca}`, h, extrato.map(e => [fmtDt(e.data_mov), e.rotina, fmtR(e.vlcorrenteant), fmtR(e.vlcorrente), fmtR((e.vlcorrente||0)-(e.vlcorrenteant||0)), e.historico]));
+    }
+  };
+
   const abas_visiveis = isAdmin
     ? ["saldos","pendentes","historico"]
     : cargo === "vendedor"
@@ -424,7 +446,8 @@ export default function ModuleContaCorrente({ isMobile, token, userInfo = {} }) 
     : ["saldos","historico"];
 
   return (<>
-    <ModuleHeader icon={Wallet} title="CONTA CORRENTE RCA" isMobile={isMobile}>
+    <ModuleHeader icon={Wallet} title="CONTA CORRENTE RCA" isMobile={isMobile}
+      onRefresh={handleRefresh} loading={loading} onExportExcel={handleExportExcel}>
       {aba==="saldos" && saldos.length > 0 && (
         <div style={{ display:"flex", gap:"16px", fontSize:"11px" }}>
           {[["Limite Total",fmtR(totLimite),C.gold],
@@ -484,16 +507,6 @@ export default function ModuleContaCorrente({ isMobile, token, userInfo = {} }) 
         </button>
       )}
 
-      <button onClick={()=>{
-        if(aba==="saldos")    fetchSaldos();
-        if(aba==="pendentes") fetchPendentes();
-        if(aba==="historico") fetchHistorico();
-      }} disabled={loading}
-        style={{ background:"rgba(0,0,0,.07)", border:`1px solid ${C.border}`,
-          padding:"6px 8px", borderRadius:"6px", cursor:"pointer",
-          display:"flex", alignItems:"center" }}>
-        <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
-      </button>
     </div>
 
     {/* Conteúdo */}

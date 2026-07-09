@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { RefreshCw, Users, User, Building2, Shield, ChevronDown, Menu, X, FileText, Banknote } from "lucide-react";
+import { Users, User, Building2, Shield, ChevronDown, FileText, Banknote } from "lucide-react";
 import { C, fmtR, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
+import { exportCSV } from "../../utils/exportCSV";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
+import ModeSelector from "../../components/ModeSelector";
 import ModuleHeader from "../../components/ModuleHeader";
+import DatePicker from "../../components/DatePicker";
 
 const pctTroca = (v) => {
   if (v == null) return { label: "—", style: { color: C.textSub } };
@@ -139,7 +142,7 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dataRef, setDataRef] = useState(getToday());
-  const [showMenu, setShowMenu] = useState(false);
+
   const tableRef = useRef(null);
 
   const supervisores = useMemo(() => {
@@ -225,25 +228,23 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
   };
 
   return (<>
-      <ModuleHeader icon={Banknote} title="TROCA" isMobile={isMobile}>
-        {rows.length > 0 && mode !== "todas_equipes" && (
-          <button onClick={exportToPDF}
-            style={{ background: "rgba(255,255,255,.15)", border: "1px solid rgba(255,255,255,.3)",
-              color: "#fff", padding: "6px 12px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>
-            <FileText size={13} /> PDF
-          </button>
-        )}
-      </ModuleHeader>
+      <ModuleHeader icon={Banknote} title="TROCA" isMobile={isMobile}
+        onRefresh={fetchData} loading={loading}
+        onExportExcel={rows.length > 0 && mode !== "todas_equipes" ? () => {
+          const header = ["VENDEDOR","PLF VENDA","PLF CARTEIRA","PLF TOTAL","TROCA","% TROCA","FLEX TOTAL","% FLEX TROCA"];
+          const dataRows = rows.map((row, i) => {
+            const pct = pctTroca(row.pct_troca);
+            const pft = pctFlexTroca(row.pct_flex_troca);
+            return [row.nome_vendedor, fmtR(row.plf_venda), fmtR(row.plf_cart), fmtR(row.plf_total), fmtR(row.troca), pct.label, fmtR(row.flex_total), pft.label];
+          });
+          exportCSV(`Troca_${dataRef}`, header, dataRows);
+        } : undefined}
+        onExportPdf={rows.length > 0 && mode !== "todas_equipes" ? exportToPDF : undefined} />
 
     <div style={{ background: "#fff", borderBottom: `2px solid ${C.border}`,
       padding: isMobile ? "6px 10px" : "8px 16px",
       display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-      <input type="date" value={dataRef} onChange={e => setDataRef(e.target.value)}
-        style={{ padding: "6px 10px", border: `1px solid ${C.border}`, borderRadius: "6px", fontSize: "12px", outline: "none", fontFamily: "monospace" }} />
-      <button onClick={fetchData} disabled={loading}
-        style={{ background: "rgba(0,0,0,.07)", border: `1px solid ${C.border}`, padding: "6px 8px", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center" }}>
-        <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-      </button>
+      <ModeSelector modes={MODES_VIS} active={mode} onChange={id => { setMode(id); setActiveCode(null); }} isMobile={isMobile} />
       {isAdmin && (
         <button onClick={() => setShowDebug(v => !v)}
           style={{ padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700,
@@ -252,47 +253,15 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
           🔬 Debug SQL
         </button>
       )}
-      {isMobile ? (<>
-        <button onClick={() => setShowMenu(v => !v)}
-          style={{ marginLeft: "auto", background: C.primary, border: "none", color: "#fff", padding: "6px 10px", borderRadius: "6px", cursor: "pointer" }}>
-          {showMenu ? <X size={16} /> : <Menu size={16} />}
-        </button>
-        {showMenu && (
-          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,.4)", zIndex: 200 }}
-            onClick={() => setShowMenu(false)}>
-            <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: "220px", background: "#fff", padding: "16px", display: "flex", flexDirection: "column", gap: "8px" }}
-              onClick={e => e.stopPropagation()}>
-              <div style={{ fontWeight: 700, color: C.primary, marginBottom: "8px" }}>Modo</div>
-              {MODES_VIS.map(m => (
-                <button key={m.id} onClick={() => { setMode(m.id); setActiveCode(null); setShowMenu(false); }}
-                  style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", borderRadius: "8px", border: "none", cursor: "pointer",
-                    background: mode === m.id ? C.primary : "#f5f5f5", color: mode === m.id ? "#fff" : C.text, fontWeight: mode === m.id ? 700 : 400 }}>
-                  <m.Icon size={15} /> {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </>) : (
-        <div style={{ marginLeft: "auto", display: "flex", border: `1px solid ${C.border}`, borderRadius: "6px", overflow: "hidden" }}>
-          {MODES_VIS.map((m, idx) => (
-            <button key={m.id} onClick={() => { setMode(m.id); setActiveCode(null); }}
-              style={{ display: "flex", alignItems: "center", gap: "5px", padding: "6px 10px", border: "none", cursor: "pointer", fontSize: "11px",
-                background: mode === m.id ? C.primary : "#fff", color: mode === m.id ? "#fff" : C.text, fontWeight: mode === m.id ? 700 : 400,
-                borderRight: idx < MODES_VIS.length - 1 ? `1px solid ${C.border}` : "none" }}>
-              <m.Icon size={12} /> {m.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <DatePicker value={dataRef} onChange={setDataRef} isMobile={isMobile} />
     </div>
 
     {mode !== "todas_equipes" && (
       <div style={{ background: "#fff", borderBottom: `1px solid ${C.border}`,
         padding: isMobile ? "6px 10px" : "6px 16px", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-        {mode === "equipe"     && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione equipe..." />}
-        {mode === "supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione supervisor..." />}
-        {mode === "vendedor"   && <Dropdown value={activeCode} onChange={setActiveCode} options={vendedores} placeholder="Selecione vendedor..." />}
+        {mode === "equipe"     && <SelectModal value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione equipe..." isMobile={isMobile} />}
+        {mode === "supervisor" && <SelectModal value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione supervisor..." isMobile={isMobile} />}
+        {mode === "vendedor"   && <SelectModal value={activeCode} onChange={setActiveCode} options={vendedores} placeholder="Selecione vendedor..." isMobile={isMobile} />}
         {rows.length > 0 && (
           <div style={{ display: "flex", gap: "12px", fontSize: "11px", flexWrap: "wrap" }}>
             <span><b>{rows.length}</b> vendedores</span>

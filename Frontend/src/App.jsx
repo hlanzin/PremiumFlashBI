@@ -1,4 +1,9 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import { patchFetch } from "./api";
+
+// ponytail: global fetch wrapper dispatches "unauthorized" on 401
+patchFetch();
+
 import Login          from "./auth/Login";
 import ModuleFaturamento  from "./modules/faturamento";
 import ModuleDistNumerica from "./modules/dist_numerica";
@@ -21,8 +26,9 @@ import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
   BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, ShoppingBag, Banknote, Wallet, Users,
-  LogOut, Menu, X, ChevronRight, ChevronDown, Candy, Ban, ClipboardList, Gift,
+  Candy, Ban, ClipboardList, Menu,
 } from "lucide-react";
+import Sidebar from "./components/Sidebar";
 
 // ── Registro de módulos ───────────────────────────────────────────────────────
 const BI_MODULES = [
@@ -53,9 +59,6 @@ const INCENTIVOS = [
   { id:"caixas", label:"Batata Hyts" },
   { id:"gulozitos", label:"Gulozitos" },
 ];
-
-const SIDEBAR_W     = 220;   // largura expandida
-const SIDEBAR_W_COL = 56;    // largura colapsada (só ícones)
 
 export default function App() {
   const isMobile = useIsMobile();
@@ -114,7 +117,6 @@ export default function App() {
     ? ModuleIncentivo
     : (BI_MODULES.find(m => m.id === activeModule)?.component ?? ModuleFaturamento);
   const collapsed    = !isMobile && sidebarCollapsed;
-  const sw           = collapsed ? SIDEBAR_W_COL : SIDEBAR_W;
 
   const handleNav = (id) => {
     setActiveModule(id);
@@ -127,196 +129,30 @@ export default function App() {
     if (isMobile) setSidebarOpen(false);
   };
 
-  // Sidebar content (compartilhado entre mobile e desktop)
-  const SidebarContent = () => (
-    <div style={{
-      display:"flex", flexDirection:"column", height:"100%",
-      fontFamily: C.sans,
-    }}>
-      {/* Logo */}
-      <div style={{
-        padding: collapsed ? "18px 0" : "16px 18px",
-        borderBottom:`1px solid rgba(255,255,255,.12)`,
-        display:"flex", alignItems:"center",
-        justifyContent: collapsed ? "center" : "space-between",
-      }}>
-        {!collapsed && (
-          <div>
-            <div style={{ fontWeight:900, fontSize:"17px", color:"#fff", letterSpacing:"0.06em", lineHeight:1 }}>PREMIUM</div>
-            <div style={{ fontWeight:700, fontSize:"8px", color:C.gold, letterSpacing:"0.16em", marginTop:"2px" }}>DISTRIBUIDORA · BI</div>
-          </div>
-        )}
-        {/* Botão colapsar — só desktop */}
-        {!isMobile && (
-          <button onClick={() => setSidebarCollapsed(v => !v)}
-            style={{ background:"rgba(255,255,255,.1)", border:"none", color:"#fff",
-                     width:"28px", height:"28px", borderRadius:"6px", cursor:"pointer",
-                     display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-            {collapsed
-              ? <ChevronRight size={15}/>
-              : <Menu size={15}/>}
-          </button>
-        )}
-        {/* Botão fechar — só mobile */}
-        {isMobile && (
-          <button onClick={() => setSidebarOpen(false)}
-            style={{ background:"none", border:"none", color:"rgba(255,255,255,.7)",
-                     cursor:"pointer", padding:"4px", marginLeft:"auto" }}>
-            <X size={18}/>
-          </button>
-        )}
-      </div>
 
-      {/* Itens de navegação */}
-      <nav style={{ flex:1, padding:"10px 0", overflowY:"auto" }}>
-        {modulosVisiveis.map(({ id, label, icon: Icon }) => {
-          const active = activeModule === id;
-          return (
-            <button key={id} onClick={() => handleNav(id)}
-              title={collapsed ? label : undefined}
-              style={{
-                display:"flex", alignItems:"center",
-                gap: collapsed ? 0 : "10px",
-                justifyContent: collapsed ? "center" : "flex-start",
-                width:"100%", padding: collapsed ? "11px 0" : "10px 18px",
-                border:"none", cursor:"pointer", fontFamily:C.sans,
-                fontSize:"13px", fontWeight: active ? 700 : 400,
-                background: active
-                  ? "rgba(255,255,255,.15)"
-                  : "transparent",
-                color: active ? "#fff" : "rgba(255,255,255,.65)",
-                borderLeft: active && !collapsed
-                  ? `3px solid ${C.gold}`
-                  : "3px solid transparent",
-                transition:"all .15s",
-              }}>
-              <Icon size={17} style={{ flexShrink:0 }}/>
-              {!collapsed && <span>{label}</span>}
-            </button>
-          );
-        })}
-
-        {/* ── Incentivos (dropdown) ─────────────────────────────────────── */}
-        <button
-          onClick={() => {
-            if (collapsed) { setSidebarCollapsed(false); setIncentivosOpen(true); }
-            else setIncentivosOpen(o => !o);
-          }}
-          title={collapsed ? "Incentivos" : undefined}
-          style={{
-            display:"flex", alignItems:"center",
-            gap: collapsed ? 0 : "10px",
-            justifyContent: collapsed ? "center" : "flex-start",
-            width:"100%", padding: collapsed ? "11px 0" : "10px 18px",
-            border:"none", cursor:"pointer", fontFamily:C.sans,
-            fontSize:"13px", fontWeight: activeModule === "incentivos" ? 700 : 400,
-            background: activeModule === "incentivos" ? "rgba(255,255,255,.15)" : "transparent",
-            color: activeModule === "incentivos" ? "#fff" : "rgba(255,255,255,.65)",
-            borderLeft: activeModule === "incentivos" && !collapsed ? `3px solid ${C.gold}` : "3px solid transparent",
-            transition:"all .15s",
-          }}>
-          <Gift size={17} style={{ flexShrink:0 }}/>
-          {!collapsed && <span style={{ flex:1, textAlign:"left" }}>Incentivos</span>}
-          {!collapsed && (incentivosOpen
-            ? <ChevronDown size={15} style={{ flexShrink:0 }}/>
-            : <ChevronRight size={15} style={{ flexShrink:0 }}/>)}
-        </button>
-
-        {/* Sub-itens dos incentivos */}
-        {!collapsed && incentivosOpen && INCENTIVOS.map(inc => {
-          const active = activeModule === "incentivos" && activeIncentivo === inc.id;
-          return (
-            <button key={inc.id} onClick={() => handleNavIncentivo(inc.id)}
-              style={{
-                display:"flex", alignItems:"center", gap:"8px",
-                width:"100%", padding:"8px 18px 8px 44px",
-                border:"none", cursor:"pointer", fontFamily:C.sans,
-                fontSize:"12px", fontWeight: active ? 700 : 400,
-                background: active ? "rgba(255,255,255,.12)" : "transparent",
-                color: active ? "#fff" : "rgba(255,255,255,.55)",
-                borderLeft: active ? `3px solid ${C.gold}` : "3px solid transparent",
-                transition:"all .15s",
-              }}>
-              <span style={{ width:5, height:5, borderRadius:"50%",
-                background: active ? C.gold : "rgba(255,255,255,.4)", flexShrink:0 }}/>
-              {inc.label}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Usuário + logout */}
-      <div style={{
-        borderTop:`1px solid rgba(255,255,255,.12)`,
-        padding: collapsed ? "12px 0" : "12px 18px",
-      }}>
-        {!collapsed && (
-          <div style={{ fontSize:"11px", color:"rgba(255,255,255,.5)", marginBottom:"8px",
-                        whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-            {auth.userInfo.nome || auth.userInfo.username}
-          </div>
-        )}
-        <button onClick={handleLogout}
-          title={collapsed ? "Sair" : undefined}
-          style={{
-            display:"flex", alignItems:"center",
-            gap: collapsed ? 0 : "8px",
-            justifyContent: collapsed ? "center" : "flex-start",
-            width:"100%", background:"rgba(255,255,255,.08)",
-            border:"1px solid rgba(255,255,255,.15)", color:"rgba(255,255,255,.7)",
-            padding: collapsed ? "8px 0" : "7px 10px",
-            borderRadius:"6px", cursor:"pointer", fontSize:"12px", fontFamily:C.sans,
-          }}>
-          <LogOut size={14}/>
-          {!collapsed && "Sair"}
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <div style={{ minHeight:"100vh", background:C.bg, fontFamily:C.sans,
                   fontSize:"13px", color:C.text, display:"flex" }}>
       <style>{GLOBAL_CSS}</style>
 
-      {/* ── Sidebar desktop ── */}
-      {!isMobile && (
-        <div style={{
-          width:`${sw}px`, minHeight:"100vh", flexShrink:0,
-          background:`linear-gradient(180deg,${C.primaryDk} 0%,${C.header} 100%)`,
-          position:"sticky", top:0, height:"100vh",
-          transition:"width .2s ease",
-          boxShadow:"2px 0 8px rgba(0,0,0,.25)",
-          overflow:"hidden",
-        }}>
-          <SidebarContent/>
-        </div>
-      )}
-
-      {/* ── Gaveta mobile ── */}
-      {isMobile && (
-        <>
-          {/* Overlay */}
-          <div onClick={() => setSidebarOpen(false)}
-            style={{
-              position:"fixed", inset:0, background:"rgba(0,0,0,.5)", zIndex:99,
-              opacity: sidebarOpen ? 1 : 0,
-              pointerEvents: sidebarOpen ? "auto" : "none",
-              transition:"opacity .25s ease",
-            }}/>
-          {/* Drawer */}
-          <div style={{
-            position:"fixed", top:0, left:0, bottom:0,
-            width:`${SIDEBAR_W}px`, zIndex:100,
-            background:`linear-gradient(180deg,${C.primaryDk} 0%,${C.header} 100%)`,
-            boxShadow:"4px 0 16px rgba(0,0,0,.4)",
-            transform: sidebarOpen ? "translateX(0)" : `translateX(-${SIDEBAR_W}px)`,
-            transition:"transform .25s ease",
-          }}>
-            <SidebarContent/>
-          </div>
-        </>
-      )}
+      <Sidebar
+        isMobile={isMobile}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        modulos={modulosVisiveis}
+        activeModule={activeModule}
+        onNav={handleNav}
+        incentivosOpen={incentivosOpen}
+        setIncentivosOpen={setIncentivosOpen}
+        collapsed={collapsed}
+        setCollapsed={setSidebarCollapsed}
+        activeIncentivo={activeIncentivo}
+        onNavIncentivo={handleNavIncentivo}
+        incentivosList={INCENTIVOS}
+        userNome={auth.userInfo?.nome || auth.userInfo?.username}
+        onLogout={handleLogout}
+      />
 
       {/* ── Conteúdo principal ── */}
       <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column" }}>

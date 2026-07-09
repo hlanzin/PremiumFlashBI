@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { RefreshCw, ChevronDown, TrendingUp, TrendingDown, Minus, FileText, Star } from "lucide-react";
+import { ChevronDown, TrendingUp, TrendingDown, Minus, FileText, Star } from "lucide-react";
 import { C, fmt, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
+import { exportCSV } from "../../utils/exportCSV";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
+import TableCard from "../../components/TableCard";
 import { arrow, medal } from "../../components/ArrowBadge";
 import SkeletonRows from "../../components/SkeletonRows";
+import DatePicker from "../../components/DatePicker";
 import { useSort } from "../../hooks/useSort";
 
 export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
@@ -153,53 +156,44 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
     <>
       <ModuleHeader icon={Star} title="RANKING DE VENDEDORES"
         titleExtra={<>Total: <b>{fmt(tot.fat)}</b> · Meta: <b>{fmt(tot.meta)}</b> · Média: <b>{fmt(tot.media)}</b></>}
-        isMobile={isMobile}>
-        <button onClick={fetchData} disabled={loading}
-          style={{ background: "rgba(0,0,0,.25)", border: "1px solid rgba(255,255,255,.3)", color: "#fff",
-                   padding: "6px 10px", borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "12px" }}>
-          <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-        </button>
-        {rows.length > 0 && (
-          <button onClick={exportToPDF}
-            style={{ display: "flex", alignItems: "center", gap: "5px", background: "rgba(255,255,255,.15)",
-              border: "1px solid rgba(255,255,255,.3)", color: "#fff", padding: "6px 12px",
-              borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 700 }}>
-            <FileText size={13} /> PDF
-          </button>
-        )}
-      </ModuleHeader>
+        isMobile={isMobile}
+        onRefresh={fetchData} loading={loading}
+        onExportExcel={rows.length > 0 ? () => {
+          const header = ["#","VENDEDOR","META","FATURAMENTO","% ATING","TENDÊNCIA","RAF"];
+          const dataRows = sorted.map((r,i) => [
+            i+1, r.nome_vendedor ?? `#${r.cod_vendedor}`,
+            fmt(r.meta), fmt(r.faturamento),
+            fmtPct(r.pct_atingido), fmtPct(r.tendencia), fmt(r.resta_a_fazer),
+          ]);
+          exportCSV(`Ranking_${dataRef}`, header, dataRows);
+        } : undefined}
+        onExportPdf={rows.length > 0 ? exportToPDF : undefined} />
+
 
       <div style={{
         background: "#fff", borderBottom: `2px solid ${C.border}`,
         padding: isMobile ? "6px 12px" : "8px 20px",
         display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px",
-          border: `1px solid ${C.border}`, borderRadius: "6px", padding: "5px 10px", background: "#fff" }}>
-          <span style={{ fontSize: "11px", color: C.textSub, fontWeight: 600, whiteSpace: "nowrap" }}>Data</span>
-          <input type="date" value={dataRef} max={getToday()}
-            onChange={e => setDataRef(e.target.value)}
-            style={{ border: "none", outline: "none", fontSize: "12px", fontFamily: C.mono,
-                     color: C.text, background: "transparent", cursor: "pointer" }} />
-        </div>
-
         {(cargo === "gerencial" || cargo === "admin") && (
-          <Dropdown value={supSel} onChange={setSupSel} options={supervisores} placeholder="Todos supervisores..." />
+          <SelectModal value={supSel} onChange={setSupSel} options={supervisores} placeholder="Todos supervisores..." isMobile={isMobile} />
         )}
 
         {isAdmin && (
           <button onClick={() => setShowDebug(v => !v)}
-            style={{ marginLeft: "auto", padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700,
+            style={{ padding: "5px 10px", borderRadius: "6px", fontSize: "11px", fontWeight: 700,
               cursor: "pointer", border: `1.5px solid ${showDebug ? "#7C3AED" : "#CBD5E1"}`,
               background: showDebug ? "#7C3AED" : "#fff", color: showDebug ? "#fff" : "#64748b" }}>
             🔬 Debug
           </button>
         )}
+
+        <div style={{ marginLeft: "auto" }}>
+          <DatePicker value={dataRef} onChange={setDataRef} max={getToday()} isMobile={isMobile} />
+        </div>
       </div>
 
-      <div style={{ margin: isMobile ? "8px" : "12px 16px", background: "#fff",
-        border: `1px solid ${C.border}`, borderRadius: "4px", overflow: "hidden",
-        boxShadow: `0 1px 6px rgba(170,0,0,.1)` }}>
+      <TableCard>
         {loading && <SkeletonRows count={6} height={36} />}
         {error && <div style={{ padding: "24px", textAlign: "center", color: C.red }}>{error}</div>}
         {!loading && !error && (
@@ -277,7 +271,7 @@ export default function ModuleRanking({ isMobile, token, userInfo = {} }) {
             )}
           </div>
         )}
-      </div>
+      </TableCard>
 
       {isAdmin && showDebug && sorted.length > 0 && (
         <div style={{ margin: "0 16px 16px", background: "#fff", border: "1.5px solid #7C3AED",

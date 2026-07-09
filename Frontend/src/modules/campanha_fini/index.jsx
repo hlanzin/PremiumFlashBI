@@ -5,6 +5,7 @@ import { API_BASE } from "../../config";
 import { useAuthHeaders, apiGet } from "../../api";
 import ModuleHeader from "../../components/ModuleHeader";
 import TableCard from "../../components/TableCard";
+
 import { arrow } from "../../components/ArrowBadge";
 import { exportCSV } from "../../utils/exportCSV";
 
@@ -196,7 +197,8 @@ export default function ModuleCampanhaFini({ isMobile, token, userInfo = {} }) {
 
   return (
     <>
-      <ModuleHeader icon={Candy} title="CAMPANHA FINI" isMobile={isMobile} />
+      <ModuleHeader icon={Candy} title="CAMPANHA FINI" isMobile={isMobile}
+        onExportExcel={dados.length > 0 ? exportarExcel : undefined} />
 
       {/* Toolbar */}
       <div style={{ background: "#fff", borderBottom: `2px solid ${C.border}`,
@@ -221,14 +223,6 @@ export default function ModuleCampanhaFini({ isMobile, token, userInfo = {} }) {
                      width: isMobile ? "auto" : "160px", outline: "none", color: C.text, fontFamily: C.sans }} />
         </div>
 
-        {dados.length > 0 && (
-          <button onClick={exportarExcel}
-            style={{ display: "flex", alignItems: "center", gap: "5px", background: "#1D6F42",
-                     border: "none", color: "#fff", padding: "5px 12px", borderRadius: "6px",
-                     cursor: "pointer", fontSize: "11px", fontWeight: 700 }}>
-            <FileSpreadsheet size={13} /> Exportar
-          </button>
-        )}
       </div>
 
       {/* Resumo geral */}

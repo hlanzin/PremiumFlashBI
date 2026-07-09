@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { RefreshCw, Search, BarChart3, Users, User, Building2, Shield,
-         ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus, Menu, X, FileText } from "lucide-react";
+import { RefreshCw, BarChart3, Users, User, Building2, Shield,
+         ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { C, fmt, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
+import { exportCSV } from "../../utils/exportCSV";
 import Th from "../../components/Th";
-import Dropdown from "../../components/Dropdown";
+import SelectModal from "../../components/SelectModal";
+import ModeSelector from "../../components/ModeSelector";
 import ModuleHeader from "../../components/ModuleHeader";
 import TableCard from "../../components/TableCard";
+import DatePicker from "../../components/DatePicker";
 import { arrow } from "../../components/ArrowBadge";
 import SkeletonRows from "../../components/SkeletonRows";
 
@@ -407,9 +410,12 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
   const [showDebug,   setShowDebug]   = useState(false);
   const [sortCol,     setSortCol]     = useState("secao");
   const [sortDir,     setSortDir]     = useState("asc");
-  const [search,      setSearch]      = useState("");
+  const [showFiltros, setShowFiltros] = useState(false);
+  const [filtroSecoes, setFiltroSecoes] = useState(new Set());
+  const toggleSecao = cod => setFiltroSecoes(p => { const n = new Set(p); n.has(cod) ? n.delete(cod) : n.add(cod); return n; });
+  const limparFiltros = () => setFiltroSecoes(new Set());
   const [todosData,   setTodosData]   = useState([]);
-  const [tabsOpen,    setTabsOpen]    = useState(false);
+
   const hoje = getToday();
   const [dataRef,     setDataRef]     = useState(hoje);
 
@@ -464,17 +470,15 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const secoesUnicas = useMemo(() => {
+    const map = new Map();
+    data.forEach(r => { if (!map.has(r.cod_secao)) map.set(r.cod_secao, r.nome_secao ?? r.secao ?? `#${r.cod_secao}`); });
+    return [...map.entries()].map(([cod, nome]) => ({ cod, nome }));
+  }, [data]);
+
   const rows = useMemo(() => {
     let r = [...data];
-    if (search) {
-      const s = search.toLowerCase();
-      r = r.filter(row =>
-        (row.secao??"").toLowerCase().includes(s) ||
-        (row.nome_secao??"").toLowerCase().includes(s) ||
-        (row.descricao??"").toLowerCase().includes(s) ||
-        (row.nome_supervisor??"").toLowerCase().includes(s) ||
-        String(row.cod_secao??"").includes(s));
-    }
+    if (filtroSecoes.size > 0) r = r.filter(row => filtroSecoes.has(row.cod_secao));
     const grupoOrder = Object.keys(GRUPOS);
     const gIdx = cod => { const g=getGrupo(cod); if(!g) return 9999; const i=grupoOrder.indexOf(g); return i===-1?9999:i; };
     r.sort((a,b) => {
@@ -485,7 +489,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
       return sortDir==="asc" ? (av<bv?-1:av>bv?1:0) : (av>bv?-1:av<bv?1:0);
     });
     return r;
-  }, [data, search, sortCol, sortDir]);
+  }, [data, filtroSecoes, sortCol, sortDir]);
 
   const tot = {
     meta: rows.reduce((s,r) => s+(r.valor_meta_secao  ??0), 0),
@@ -499,7 +503,7 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
   const totPctDia = tot.nec>0  ? (tot.dia/tot.nec)*100   : null;
 
   const handleSort  = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
-  const changeMode  = id  => { setMode(id); setActiveCode(null); setSearch(""); setTabsOpen(false); };
+  const changeMode  = id  => { setMode(id); setActiveCode(null); setFiltroSecoes(new Set()); };
   const [consolidado, setConsolidado] = useState(false);
   const showVendedor = mode === "todos" || mode === "equipe";
   const needsSelect  = ["vendedor","equipe","supervisor"].includes(mode);
@@ -661,17 +665,23 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
         titleExtra={<>
           Dias consultados: <b>{summary.dias_consulta}</b> · Decorridos: <b>{summary.dias_decorridos}</b> · Mês: <b>{summary.dias_mes}</b>
           {dataRef !== hoje && <> · Data: {dataRef}</>}
-        </>}>
+        </>}
+        onRefresh={fetchData} loading={loading}
+        onExportExcel={rows.length > 0 ? () => {
+          const header = ["RCA","VENDEDOR","FAMILIA","OBJETIVO","REALIZADO","% ATING","% TEND.","R.A.F","NECESS/DIA","REALIZ/DIA","% DIA","STATUS"];
+          const dataRows = rows.map((row,i) => {
+            const pct = row.valor_meta_secao > 0 ? ((row.valor_faturado_mes_atual??0)/row.valor_meta_secao)*100 : null;
+            const tend = row.tendencia_pct;
+            const pctDia = row.necessidade_dia > 0 ? (row.realizado_dia/row.necessidade_dia)*100 : null;
+            const nome = showVendedor ? [row.cod_vendedor, row.nome_vendedor] : [];
+            return [...nome, row.secao, fmt(row.valor_meta_secao), fmt(Math.max(0, row.valor_faturado_mes_atual??0)), fmtPct(pct), fmtPct(tend), fmt(row.resta_a_fazer), fmt(row.necessidade_dia), fmt(row.realizado_dia), fmtPct(pctDia), arrow(tend) ?? "—"];
+          });
+          exportCSV(`Faturamento_${dataRef}`, header, dataRows);
+        } : undefined}
+        onExportPdf={rows.length > 0 ? exportToPDF : undefined}>
         {!loading && data.length>0 && !isMobile && (
           <><Gauge label="% REAL" pct={totPct}/><Gauge label="% TEND." pct={totTend}/></>
         )}
-        <button onClick={fetchData} disabled={loading}
-          style={{ background:"rgba(0,0,0,.25)", border:"1px solid rgba(255,255,255,.3)",
-                   color:"#fff", padding:isMobile?"6px":"7px 12px", borderRadius:"6px",
-                   cursor:"pointer", display:"flex", alignItems:"center", gap:"4px", fontSize:"12px" }}>
-          <RefreshCw size={13} style={{ animation:loading?"spin 1s linear infinite":"none" }}/>
-          {!isMobile && " Atualizar"}
-        </button>
         {isAdmin && (
           <button onClick={() => setShowDebug(v=>!v)}
             style={{ padding:"5px 10px", borderRadius:"6px", fontSize:"11px", fontWeight:700,
@@ -679,15 +689,6 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
               background: showDebug?"#7C3AED":"rgba(255,255,255,.15)",
               color:"#fff" }}>
             🔬 Debug SQL
-          </button>
-        )}
-        {rows.length > 0 && (
-          <button onClick={exportToPDF}
-            style={{ display:"flex", alignItems:"center", gap:"5px",
-              background:"rgba(255,255,255,.15)", border:"1px solid rgba(255,255,255,.3)",
-              color:"#fff", padding:isMobile?"6px":"6px 12px", borderRadius:"6px",
-              cursor:"pointer", fontSize:"12px", fontWeight:700 }}>
-            <FileText size={13}/> {!isMobile && "Exportar PDF"}
           </button>
         )}
       </ModuleHeader>
@@ -712,87 +713,57 @@ export default function ModuleFaturamento({ isMobile, token, userInfo = {} }) {
                     padding:isMobile?"6px 12px":"8px 20px",
                     display:"flex", alignItems:"center", gap:"8px", flexWrap:"wrap" }}>
 
-        {/* Mobile: hamburguer */}
-        {isMobile ? (
-          <div style={{ display:"flex", alignItems:"center", gap:"8px", width:"100%" }}>
-            <button onClick={() => setTabsOpen(o=>!o)}
-              style={{ display:"flex", alignItems:"center", gap:"6px", padding:"7px 12px",
-                       background:C.primary, border:"none", color:"#fff", borderRadius:"6px",
-                       cursor:"pointer", fontSize:"12px", fontWeight:700, flex:1 }}>
-              {tabsOpen?<X size={14}/>:<Menu size={14}/>}
-              {MODES_VISIVEIS.find(m=>m.id===mode)?.label}
-              <ChevronDown size={12} style={{ marginLeft:"auto" }}/>
+        {/* Modo */}
+        <ModeSelector modes={MODES_VISIVEIS} active={mode} onChange={changeMode} isMobile={isMobile} />
+
+        {mode==="equipe"     && <SelectModal value={activeCode} onChange={setActiveCode} options={equipes}     placeholder="Selecione uma equipe..." isMobile={isMobile}/>}
+        {mode==="vendedor"   && <SelectModal value={activeCode} onChange={setActiveCode} options={vendedores}  placeholder="Selecione um vendedor..." isMobile={isMobile}/>}
+        {mode==="supervisor" && <SelectModal value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..." isMobile={isMobile}/>}
+
+        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:"8px" }}>
+          <DatePicker value={dataRef} onChange={setDataRef} max={hoje} isMobile={isMobile} />
+
+          <div style={{ position:"relative" }}>
+            <button onClick={() => setShowFiltros(v=>!v)}
+              style={{ padding:"5px 8px", borderRadius:"6px",
+                border:`1.5px solid ${filtroSecoes.size>0?C.primary:C.border}`,
+                fontSize:"12px", fontWeight:700, cursor:"pointer",
+                display:"flex", alignItems:"center", gap:"4px",
+                background: filtroSecoes.size>0 ? C.primary : "#fff",
+                color: filtroSecoes.size>0 ? "#fff" : C.text }}>
+              ⚙ Filtros {filtroSecoes.size>0 && `(${filtroSecoes.size})`}
             </button>
+            {showFiltros && (
+              <div style={{ position:"absolute", top:"calc(100% + 4px)", right:0,
+                background:"#fff", border:`1px solid ${C.border}`, borderRadius:"8px",
+                boxShadow:"0 6px 20px rgba(0,0,0,.15)", zIndex:200,
+                width: isMobile?"calc(100vw - 32px)":"280px",
+                maxHeight:"360px", overflow:"hidden", display:"flex", flexDirection:"column" }}>
+                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                  padding:"10px 14px", borderBottom:`1px solid ${C.border}`, background:"#FAFAFA" }}>
+                  <span style={{ fontWeight:700, fontSize:"12px" }}>Filtrar Seções</span>
+                  <div style={{ display:"flex", gap:"8px" }}>
+                    {filtroSecoes.size>0 && <button onClick={() => { limparFiltros(); }}
+                      style={{ fontSize:"11px", color:C.red, background:"none", border:"none", cursor:"pointer", fontWeight:700 }}>
+                      Limpar</button>}
+                    <button onClick={() => setShowFiltros(false)}
+                      style={{ background:"none", border:"none", cursor:"pointer", fontSize:"16px", color:C.textSub }}>×</button>
+                  </div>
+                </div>
+                <div style={{ overflowY:"auto", flex:1 }}>
+                  {secoesUnicas.length === 0 && <div style={{ padding:"16px", textAlign:"center", color:C.textSub, fontSize:"12px" }}>Nenhuma seção disponível</div>}
+                  {secoesUnicas.map(s => (
+                    <label key={s.cod} style={{ display:"flex", alignItems:"center", gap:"8px", padding:"7px 14px",
+                      cursor:"pointer", background:filtroSecoes.has(s.cod)?"#FFF0F0":"transparent", borderBottom:`1px solid #F5F5F5` }}>
+                      <input type="checkbox" checked={filtroSecoes.has(s.cod)} onChange={() => toggleSecao(s.cod)} style={{ accentColor:C.primary }}/>
+                      <span style={{ fontSize:"12px" }}>{s.nome}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        ) : (
-          <div style={{ display:"flex", border:`1px solid ${C.border}`, borderRadius:"6px", overflow:"hidden" }}>
-            {MODES_VISIVEIS.map(({ id, label, Icon }) => (
-              <button key={id} onClick={() => changeMode(id)}
-                style={{ display:"flex", alignItems:"center", gap:"5px", padding:"6px 13px",
-                         fontSize:"12px", cursor:"pointer", border:"none", fontFamily:C.sans,
-                         background:mode===id?C.primary:"#fff", color:mode===id?"#fff":C.text,
-                         fontWeight:mode===id?700:400, borderRight:`1px solid ${C.border}`, transition:"all .15s" }}>
-                <Icon size={13}/>{label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Dropdown mobile de modos */}
-        {isMobile && tabsOpen && (
-          <div style={{ width:"100%", background:"#fff", border:`1px solid ${C.border}`, borderRadius:"6px", overflow:"hidden" }}>
-            {MODES_VISIVEIS.map(({ id, label, Icon }) => (
-              <button key={id} onClick={() => changeMode(id)}
-                style={{ display:"flex", alignItems:"center", gap:"8px", padding:"10px 14px",
-                         width:"100%", border:"none", borderBottom:`1px solid ${C.border}`,
-                         background:mode===id?"#FFF0F0":"#fff", color:mode===id?C.primary:C.text,
-                         fontWeight:mode===id?700:400, cursor:"pointer", fontFamily:C.sans, fontSize:"13px" }}>
-                <Icon size={15}/>{label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {mode==="equipe"     && <Dropdown value={activeCode} onChange={setActiveCode} options={equipes}     placeholder="Selecione uma equipe..."/>}
-        {mode==="vendedor"   && <Dropdown value={activeCode} onChange={setActiveCode} options={vendedores}  placeholder="Selecione um vendedor..."/>}
-        {mode==="supervisor" && <Dropdown value={activeCode} onChange={setActiveCode} options={supervisores} placeholder="Selecione um supervisor..."/>}
-
-        {/* Busca */}
-          <div style={{ display:"flex", alignItems:"center", gap:"6px",
-                        border:`1px solid ${C.border}`, borderRadius:"6px",
-                        padding:"5px 10px", background:C.bg }}>
-            <Search size={12} style={{ color:C.textSub }}/>
-            <input placeholder="Filtrar..." value={search} onChange={e=>setSearch(e.target.value)}
-              style={{ border:"none", background:"transparent", fontSize:"12px",
-                       width:"120px", outline:"none", color:C.text, fontFamily:C.sans }}/>
-          </div>
-
-        {/* Seletor de data */}
-        <div style={{ display:"flex", alignItems:"center", gap:"6px",
-                      border:`1px solid ${C.border}`, borderRadius:"6px",
-                      padding:"5px 10px", background:"#fff",
-                      marginLeft: isMobile?"0":"auto" }}>
-          <span style={{ fontSize:"11px", color:C.textSub, fontWeight:600, whiteSpace:"nowrap" }}>Data</span>
-          <input type="date" value={dataRef} max={hoje}
-            onChange={e => setDataRef(e.target.value)}
-            style={{ border:"none", outline:"none", fontSize:"12px",
-                     fontFamily:C.mono, color:C.text, background:"transparent", cursor:"pointer" }}/>
-          {dataRef !== hoje && (
-            <button onClick={() => setDataRef(hoje)}
-              style={{ background:"none", border:"none", color:C.primary,
-                       cursor:"pointer", fontSize:"11px", fontWeight:700, padding:"0 2px" }}>
-              hoje
-            </button>
-          )}
         </div>
-
-        {/* Busca mobile */}
-        {isMobile && !tabsOpen && (
-          <input placeholder="Filtrar..." value={search} onChange={e=>setSearch(e.target.value)}
-            style={{ width:"100%", border:`1px solid ${C.border}`, borderRadius:"6px",
-                     padding:"7px 10px", fontSize:"12px", outline:"none",
-                     color:C.text, fontFamily:C.sans, background:C.bg }}/>
-        )}
       </div>
 
       {/* Modo Todas Equipes — um card por supervisor */}
