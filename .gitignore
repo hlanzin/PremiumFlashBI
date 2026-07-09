@@ -9,3 +9,6 @@ flashbi_users.db
 Backend/flashbi_users.db
 Frontend/.env
 Frontend - Copia/
+.agents/
+.claude/
+skills-lock.json
