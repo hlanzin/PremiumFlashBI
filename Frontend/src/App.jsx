@@ -21,12 +21,13 @@ import ModuleCampanhaFini from "./modules/campanha_fini"
 import ModuleExclusoes from "./modules/exclusoes";
 import ModuleSugestaoPedido from "./modules/sugestao_pedido";
 import ModuleIncentivo from "./modules/incentivos";
+import ModuleAlertas from "./modules/alertas";
 const ModulePedidos = lazy(() => import("./modules/pedidos"));
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
   BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, ShoppingBag, Banknote, Wallet, Users,
-  Candy, Ban, ClipboardList, Menu,
+  Candy, Ban, ClipboardList, Menu, AlertTriangle,
 } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 
@@ -48,6 +49,7 @@ const BI_MODULES = [
   { id:"exclusoes", label:"Exclusões", icon:Ban, component:ModuleExclusoes, cargos:["admin"] },
   { id:"campanha_fini", label:"Campanha Fini", icon:Candy, component:ModuleCampanhaFini, cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"sugestao_pedido", label:"Sugestão de Pedido", icon:ClipboardList, component:ModuleSugestaoPedido, cargos:["admin","gerencial"] },
+  { id:"alertas", label:"Alertas RCA", icon:AlertTriangle, component:ModuleAlertas, cargos:null },
 ];
 
 // ── Incentivos (dropdown na sidebar) ──────────────────────────────────────────

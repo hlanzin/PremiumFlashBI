@@ -28,7 +28,7 @@ export default function SelectModal({ value, onChange, options, placeholder, lab
     display: "flex", alignItems: "center", gap: isMobile ? "8px" : "6px",
     width: "100%", padding: isMobile ? "12px 14px" : "7px 10px", border: "none",
     borderBottom: `1px solid ${C.border}`,
-    cursor: "pointer", fontSize: isMobile ? "13px" : "11px", fontFamily: C.sans,
+    cursor: "pointer", fontSize: isMobile ? "13px" : "11px", fontFamily: C.sans, whiteSpace: "nowrap",
     background: ativo ? C.rowEven : "#fff",
     color: ativo ? C.primary : C.text,
     fontWeight: ativo ? 700 : 400,
@@ -79,13 +79,13 @@ export default function SelectModal({ value, onChange, options, placeholder, lab
   }
 
   return (
-    <div style={{ position: "relative", display: "inline-block", minWidth: "150px" }}>
+    <div style={{ position: "relative", width: "max-content", minWidth: "150px" }}>
       <button onClick={() => setOpen(v => !v)} style={triggerStyle}>
         {current?.[labelKey] ?? placeholder}
         <ChevronDown size={13} style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", color: C.textSub, pointerEvents: "none" }} />
       </button>
       {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 200,
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 200, minWidth: "100%",
           background: "#fff", border: `1px solid ${C.border}`, borderRadius: "8px",
           boxShadow: "0 6px 20px rgba(0,0,0,.15)",
           maxHeight: "300px", overflow: "hidden", display: "flex", flexDirection: "column" }}>

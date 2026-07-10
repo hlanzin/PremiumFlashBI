@@ -293,9 +293,9 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
   const headers = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token]);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/dn`, { headers })
+    fetch(`${API_BASE}/api/dn?agrupamento=${agrupamento}`, { headers })
       .then(r => r.json()).then(j => setTodosData(j.dados ?? [])).catch(() => {});
-  }, []);
+  }, [agrupamento, headers]);
 
   const vendedores = useMemo(() => {
     const map = new Map();
@@ -428,7 +428,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
 
         <div style={{ display:"flex", border:`1px solid ${C.border}`, borderRadius:"6px", overflow:"hidden" }}>
           {[["fornecedor","Fornecedor"],["secao","Seção"]].map(([id,label]) => (
-            <button key={id} onClick={() => setAgrupamento(id)}
+            <button key={id} onClick={() => { setAgrupamento(id); setFiltroDims(new Set()); }}
               style={{ padding:"6px 12px", border:"none", cursor:"pointer",
                        fontSize:"12px", fontFamily:C.sans,
                        background:agrupamento===id?C.primary:"#fff",
