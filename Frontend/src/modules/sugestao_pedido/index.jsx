@@ -230,7 +230,7 @@ export default function ModuleSugestaoPedido({ isMobile, token, userInfo = {} })
     <>
       <ModuleHeader icon={ClipboardList} title="SUGESTÃO DE PEDIDO" isMobile={isMobile}
         onExportExcel={exportarExcel}
-        onExportPDF={exportarPDF} />
+        onExportPdf={exportarPDF} />
 
       <div style={{ background: "#fff", borderBottom: `2px solid ${C.border}`,
         padding: isMobile ? "10px 12px" : "12px 20px" }}>
