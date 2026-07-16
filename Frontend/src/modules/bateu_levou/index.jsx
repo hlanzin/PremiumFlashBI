@@ -5,6 +5,7 @@ import { C, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
+import TableCard from "../../components/TableCard";
 import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
 import { arrow } from "../../components/ArrowBadge";
@@ -22,14 +23,15 @@ const semanaAtualIni = () => {
 };
 
 // ── VendedorRow expansível ────────────────────────────────────────────────────
-function VendedorRow({v, unidade, isExpanded, onToggle}) {
+function VendedorRow({v, unidade, isExpanded, onToggle, zebra}) {
   const pct=v.pct_ating;
+  const bgBase = zebra ? (C.rowEven ?? "#fff") : (C.rowOdd ?? "#FAFAFA");
   const td=(ex={})=>({padding:"7px 8px",borderBottom:`1px solid ${C.border}`,
-    verticalAlign:"middle",background:"#fff",...ex});
+    verticalAlign:"middle",background:bgBase,...ex});
   return (<>
     <tr onClick={onToggle} style={{cursor:"pointer"}}
         onMouseEnter={e=>e.currentTarget.style.background=C.rowHover}
-        onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+        onMouseLeave={e=>e.currentTarget.style.background=bgBase}>
       <td style={td({width:"32px",textAlign:"center"})}>
         {isExpanded?<ChevronDown size={14} color={C.textSub}/>:<ChevronRight size={14} color={C.textSub}/>}
       </td>
@@ -68,11 +70,41 @@ function VendedorRow({v, unidade, isExpanded, onToggle}) {
 // ── Tabela de acompanhamento (reutilizada em todos os layouts) ─────────────────
 function TabelaAcompanhamento({grupos, unidade, loading, error, cargo}) {
   const [expanded, setExpanded] = useState({});
-  const TH=({label,align})=>(
-    <th style={{padding:"6px 8px",background:C.subHeader,color:"#fff",fontSize:"10px",
-      fontWeight:700,textAlign:align??"left",whiteSpace:"nowrap",
-      border:`1px solid ${C.primaryDk}`,letterSpacing:"0.04em"}}>{label}</th>
-  );
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState("desc");
+
+  const onSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("desc"); }
+  };
+
+  // % atingimento é calculado (não é campo direto do vendedor)
+  const valorCol = (v, col) => {
+    if (col === "pct") return (v.meta ?? 0) > 0 ? (v.qt_realizado ?? 0) / v.meta * 100 : -1;
+    return v[col];
+  };
+  const COLS_TEXTO = new Set(["nome_vendedor"]);
+  const ordenar = (vends) => {
+    if (!sortCol) return vends;
+    const arr = [...vends];
+    arr.sort((a, b) => {
+      let av = valorCol(a, sortCol), bv = valorCol(b, sortCol);
+      const an = av == null || av === "", bn = bv == null || bv === "";
+      if (an && bn) return 0;
+      if (an) return 1;
+      if (bn) return -1;
+      if (!COLS_TEXTO.has(sortCol)) {
+        const na = typeof av === "number" ? av : Number(av);
+        const nb = typeof bv === "number" ? bv : Number(bv);
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) return sortDir === "asc" ? na - nb : nb - na;
+      }
+      return sortDir === "asc"
+        ? String(av).localeCompare(String(bv), "pt-BR")
+        : String(bv).localeCompare(String(av), "pt-BR");
+    });
+    return arr;
+  };
+
   const allVends = grupos.flatMap(g=>g.vendedores??[]);
   if (loading) return <div style={{padding:"24px",textAlign:"center",color:C.textSub,fontSize:"12px"}}>
     Carregando...</div>;
@@ -81,33 +113,34 @@ function TabelaAcompanhamento({grupos, unidade, loading, error, cargo}) {
     Nenhum dado.</div>;
   return (
     <>{grupos.map(grupo=>{
-      const vends=grupo.vendedores??[];
+      const vends=ordenar(grupo.vendedores??[]);
       const nomeSup=vends[0]?.nome_supervisor??`Supervisor #${grupo.cod_supervisor}`;
       const totM=vends.reduce((s,v)=>s+(v.meta??0),0);
       const totR=vends.reduce((s,v)=>s+(v.qt_realizado??0),0);
       const totD=vends.reduce((s,v)=>s+(v.qt_dia??0),0);
       const totP=totM>0?(totR/totM)*100:null;
       return (
-        <div key={grupo.cod_supervisor} style={{marginBottom:"8px"}}>
-          {grupos.length>1&&<div style={{padding:"5px 10px",background:"#f4f4f4",
+        <TableCard key={grupo.cod_supervisor} style={{margin:"0 0 12px 0"}}>
+          {grupos.length>1&&<div style={{padding:"7px 12px",background:"#f4f4f4",
             borderBottom:`1px solid ${C.border}`,fontSize:"11px",fontWeight:700,color:C.text}}>
             {nomeSup}
           </div>}
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12px"}}>
               <thead><tr>
-                <TH label=""/><TH label="VENDEDOR"/>
-                <TH label="META"        align="right"/>
-                <TH label="REALIZADO"   align="right"/>
-                <TH label="% ATING"     align="center"/>
-                <TH label="REALIZ. DIA" align="right"/>
-                <TH label="STATUS"      align="center"/>
+                <Th label="" />
+                <Th label="VENDEDOR"    col="nome_vendedor"  sortCol={sortCol} sortDir={sortDir} onSort={onSort}/>
+                <Th label="META"        col="meta"           sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                <Th label="REALIZADO"   col="qt_realizado"   sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                <Th label="% ATING"     col="pct"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
+                <Th label="REALIZ. DIA" col="qt_dia"          sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                <Th label="STATUS"      align="center"/>
               </tr></thead>
               <tbody>
-                {vends.map(v=>{
+                {vends.map((v,i)=>{
                   const key=`${grupo.cod_supervisor}_${v.cod_vendedor}`;
                   return <VendedorRow key={key} v={v} unidade={unidade}
-                    isExpanded={!!expanded[key]}
+                    isExpanded={!!expanded[key]} zebra={i%2===0}
                     onToggle={()=>setExpanded(ex=>({...ex,[key]:!ex[key]}))}/>;
                 })}
               </tbody>
@@ -138,7 +171,7 @@ function TabelaAcompanhamento({grupos, unidade, loading, error, cargo}) {
               )}
             </table>
           </div>
-        </div>
+        </TableCard>
       );
     })}</>
   );
@@ -157,16 +190,27 @@ function useCampanhaDados(campanha, token, filtroSup) {
   // Reseta a data para o dia final da campanha sempre que a campanha mudar
   useEffect(()=>{ setDataRef(maxData); }, [campanha.id]);
 
+  // ID da requisição em curso — evita que uma resposta ANTIGA (de uma troca
+  // rápida entre campanhas/datas) chegue fora de ordem e sobrescreva os
+  // dados corretos da requisição mais recente. Só a última busca disparada
+  // tem permissão de atualizar o estado quando sua resposta chega.
+  const requestIdRef = useRef(0);
+
   const fetch_ = useCallback(async()=>{
+    const meuId = ++requestIdRef.current;
     setLoading(true); setError(null);
     try {
       let url=`${API_BASE}/api/bl/campanhas/${campanha.id}/dados?data=${dataRef}`;
       if (filtroSup) url+=`&filtro_supervisor=${filtroSup}`;
       const res=await fetch(url,{headers});
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setGrupos((await res.json()).dados??[]);
-    } catch(e){setError(e.message);}
-    finally{setLoading(false);}
+      const json = await res.json();
+      if (meuId === requestIdRef.current) setGrupos(json.dados??[]);
+    } catch(e){
+      if (meuId === requestIdRef.current) setError(e.message);
+    } finally {
+      if (meuId === requestIdRef.current) setLoading(false);
+    }
   },[campanha.id,dataRef,filtroSup,headers]);
 
   useEffect(()=>{fetch_();},[fetch_]);
@@ -219,6 +263,9 @@ const Acompanhamento = forwardRef(({campanha, token, cargo, isMobile, filtroSup}
 function Configuracao({campanha, token, isMobile}) {
   const headers = useMemo(()=>({Authorization:`Bearer ${token}`,"Content-Type":"application/json"}),[token]);
   const [todosVendData,setTodosVendData]=useState([]);
+  // ID da requisição em curso — mesma proteção contra resposta fora de
+  // ordem usada no useCampanhaDados, aplicada aqui à troca de supervisor.
+  const supRequestIdRef = useRef(0);
   const [supervisores, setSupervisores] =useState([]);
   const [supSel,       setSupSel]       =useState(null);
   const [todosProdutos,setTodosProdutos]=useState([]);
@@ -247,6 +294,7 @@ function Configuracao({campanha, token, isMobile}) {
 
   useEffect(()=>{
     if(!supSel) return;
+    const meuId = ++supRequestIdRef.current;
     setLoadingSup(true);
     const vendMap=new Map();
     todosVendData.forEach(r=>{if(r.cod_supervisor===supSel&&r.cod_vendedor&&!vendMap.has(r.cod_vendedor))vendMap.set(r.cod_vendedor,r.nome_vendedor);});
@@ -256,9 +304,10 @@ function Configuracao({campanha, token, isMobile}) {
       fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/produtos`,{headers}).then(r=>r.json()),
       fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{headers}).then(r=>r.json()),
     ]).then(([jProd,jMetas])=>{
+      if (meuId !== supRequestIdRef.current) return; // resposta antiga, descarta
       setHabilitados(new Set((jProd.dados??[]).map(p=>p.codprod)));
       const m={};(jMetas.dados??[]).forEach(x=>{m[x.cod_vendedor]=x.meta;});setMetas(m);
-    }).catch(()=>{}).finally(()=>setLoadingSup(false));
+    }).catch(()=>{}).finally(()=>{ if (meuId === supRequestIdRef.current) setLoadingSup(false); });
   },[supSel,campanha.id,todosVendData]);
 
   const prodFiltrados=useMemo(()=>{
