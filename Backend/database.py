@@ -47,6 +47,12 @@ def _get_pool():
             increment=1,
             getmode=oracledb.POOL_GETMODE_WAIT,   # espera se todas ocupadas
             timeout=300,                           # fecha ociosas após 5 min
+            ping_interval=60,                      # valida conexão parada há
+                                                    # mais de 60s antes de
+                                                    # entregar — descarta e
+                                                    # recria se estiver morta
+                                                    # (evita usar conexão que
+                                                    # a rede já derrubou)
         )
         return _pool
 
@@ -103,10 +109,23 @@ def cache_clear() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # API pública — mesma assinatura de antes (drop-in replacement)
 # ─────────────────────────────────────────────────────────────────────────────
+# Códigos Oracle que indicam conexão morta/perdida (não erro de SQL/dados) —
+# nesses casos vale tentar de novo com uma conexão nova do pool, em vez de
+# estourar erro pro usuário por causa de uma queda de rede momentânea.
+_ERROS_CONEXAO_MORTA = {"ORA-03113", "ORA-03135", "ORA-03114", "ORA-02396", "ORA-00028", "DPY-4011", "DPY-1001", "DPY-4024"}
+
+
+def _e_erro_de_conexao(exc: Exception) -> bool:
+    msg = str(exc)
+    return any(codigo in msg for codigo in _ERROS_CONEXAO_MORTA)
+
+
 def execute_query(sql: str, params=None,
                   use_cache: bool = True) -> List[Dict[str, Any]]:
     """SELECT com pool + cache TTL de 60s.
-    params pode ser list (bind posicional) ou dict (bind nomeado)."""
+    params pode ser list (bind posicional) ou dict (bind nomeado).
+    Se a conexão cair no meio (rede/firewall), tenta 1x mais automaticamente
+    antes de propagar o erro."""
     if params is None:
         params = []
 
@@ -116,14 +135,27 @@ def execute_query(sql: str, params=None,
         if cached is not None:
             return cached
 
-    conn = get_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute(sql, params)
-        columns = [col[0].lower() for col in cursor.description]
-        rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
-    finally:
-        conn.close()    # devolve ao pool
+    ultimo_erro = None
+    for tentativa in range(2):   # tenta 1x, e se cair por conexão morta, +1x
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+            columns = [col[0].lower() for col in cursor.description]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            conn.close()   # devolve ao pool
+            break
+        except Exception as e:
+            ultimo_erro = e
+            try:
+                conn.close()
+            except Exception:
+                pass
+            if tentativa == 0 and _e_erro_de_conexao(e):
+                continue   # tenta de novo com conexão nova
+            raise
+    else:
+        raise ultimo_erro
 
     if key:
         _cache_set(key, rows)

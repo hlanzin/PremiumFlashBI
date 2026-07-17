@@ -513,7 +513,8 @@ export default function ModuleChamados({ isMobile, token, userInfo={} }) {
 
   useEffect(()=>{ carregar(); }, [carregar]);
 
-  // Exporta os chamados (já filtrados) para CSV: CODCLI, RG, Status, Data de abertura
+  // Exporta os chamados (já filtrados) para CSV: CODCLI, cliente, endereço
+  // completo (cidade/bairro/rua/número/cep), RG do freezer, status e data
   const exportarExcel = useCallback(() => {
     if (chamados.length === 0) return;
 
@@ -524,9 +525,15 @@ export default function ModuleChamados({ isMobile, token, userInfo={} }) {
       return `${dia}/${m}/${y} ${t?.slice(0,5) ?? ""}`.trim();
     };
 
-    const cabecalho = ["CODCLI", "RG FREEZER", "STATUS", "DATA ABERTURA"];
+    const cabecalho = ["CODCLI", "CLIENTE", "CIDADE", "BAIRRO", "ENDEREÇO", "NÚMERO", "CEP", "RG FREEZER", "STATUS", "DATA ABERTURA"];
     const linhas = chamados.map(c => [
       c.cod_cliente ?? "",
+      c.nome_cliente ?? "",
+      c.cidade ?? "",
+      c.bairro ?? "",
+      c.endereco ?? "",
+      c.numero ?? "",
+      c.cep ?? "",
       c.rg_freezer ?? "",
       c.status ?? "",
       fmtData(c.criado_em),
