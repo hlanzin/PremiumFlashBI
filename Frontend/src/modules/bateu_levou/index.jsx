@@ -16,6 +16,9 @@ import { exportCSV } from "../../utils/exportCSV";
 const fmtQtd = (v, u) =>
   v == null ? "—" : `${Number(v).toLocaleString("pt-BR",{minimumFractionDigits:2})} ${u==="CX"?"cx":"un"}`;
 
+// Positivação conta CLIENTES, não caixas/unidades — número inteiro, sem sufixo
+const fmtClientes = (v) => v == null ? "—" : Number(v).toLocaleString("pt-BR");
+
 const semanaAtualIni = () => {
   const d=new Date(), day=d.getDay();
   d.setDate(d.getDate()-day);
@@ -23,28 +26,31 @@ const semanaAtualIni = () => {
 };
 
 // ── VendedorRow expansível ────────────────────────────────────────────────────
-function VendedorRow({v, unidade, isExpanded, onToggle, zebra}) {
+function VendedorRow({v, unidade, tipo, isExpanded, onToggle, zebra}) {
   const pct=v.pct_ating;
+  const isPositivacao = tipo === "positivacao";
+  const temDetalhe = (v.produtos?.length ?? 0) > 0;
+  const fmt = (n) => isPositivacao ? fmtClientes(n) : fmtQtd(n, unidade);
   const bgBase = zebra ? (C.rowEven ?? "#fff") : (C.rowOdd ?? "#FAFAFA");
   const td=(ex={})=>({padding:"7px 8px",borderBottom:`1px solid ${C.border}`,
     verticalAlign:"middle",background:bgBase,...ex});
   return (<>
-    <tr onClick={onToggle} style={{cursor:"pointer"}}
+    <tr onClick={temDetalhe?onToggle:undefined} style={{cursor:temDetalhe?"pointer":"default"}}
         onMouseEnter={e=>e.currentTarget.style.background=C.rowHover}
         onMouseLeave={e=>e.currentTarget.style.background=bgBase}>
       <td style={td({width:"32px",textAlign:"center"})}>
-        {isExpanded?<ChevronDown size={14} color={C.textSub}/>:<ChevronRight size={14} color={C.textSub}/>}
+        {temDetalhe && (isExpanded?<ChevronDown size={14} color={C.textSub}/>:<ChevronRight size={14} color={C.textSub}/>)}
       </td>
       <td style={td({fontWeight:700})}>
         {v.nome_vendedor}
         <span style={{fontSize:"10px",color:C.textSub,fontFamily:C.mono,marginLeft:"6px"}}>#{v.cod_vendedor}</span>
       </td>
       <td style={td({textAlign:"right",fontFamily:C.mono})}>
-        {v.meta>0?fmtQtd(v.meta,unidade):<span style={{color:C.textSub}}>—</span>}
+        {v.meta>0?fmt(v.meta):<span style={{color:C.textSub}}>—</span>}
       </td>
-      <td style={td({textAlign:"right",fontFamily:C.mono,fontWeight:600})}>{fmtQtd(v.qt_realizado,unidade)}</td>
+      <td style={td({textAlign:"right",fontFamily:C.mono,fontWeight:600})}>{fmt(v.qt_realizado)}</td>
       <td style={td({textAlign:"center"})}><span style={pctStyle(pct)}>{fmtPct(pct)}</span></td>
-      <td style={td({textAlign:"right",fontFamily:C.mono,fontWeight:600,color:C.primary})}>{fmtQtd(v.qt_dia,unidade)}</td>
+      <td style={td({textAlign:"right",fontFamily:C.mono,fontWeight:600,color:C.primary})}>{fmt(v.qt_dia)}</td>
       <td style={td({textAlign:"center"})}>{arrow(pct)}</td>
     </tr>
     {isExpanded && v.produtos.map(p=>(
@@ -68,7 +74,8 @@ function VendedorRow({v, unidade, isExpanded, onToggle, zebra}) {
 }
 
 // ── Tabela de acompanhamento (reutilizada em todos os layouts) ─────────────────
-function TabelaAcompanhamento({grupos, unidade, loading, error, cargo}) {
+function TabelaAcompanhamento({grupos, unidade, tipo, loading, error, cargo}) {
+  const isPositivacao = tipo === "positivacao";
   const [expanded, setExpanded] = useState({});
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("desc");
@@ -131,15 +138,15 @@ function TabelaAcompanhamento({grupos, unidade, loading, error, cargo}) {
                 <Th label="" />
                 <Th label="VENDEDOR"    col="nome_vendedor"  sortCol={sortCol} sortDir={sortDir} onSort={onSort}/>
                 <Th label="META"        col="meta"           sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
-                <Th label="REALIZADO"   col="qt_realizado"   sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                <Th label={isPositivacao?"POSITIVADOS":"REALIZADO"} col="qt_realizado"   sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
                 <Th label="% ATING"     col="pct"            sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="center"/>
-                <Th label="REALIZ. DIA" col="qt_dia"          sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
+                <Th label={isPositivacao?"POSITIVOU HOJE":"REALIZ. DIA"} col="qt_dia"          sortCol={sortCol} sortDir={sortDir} onSort={onSort} align="right"/>
                 <Th label="STATUS"      align="center"/>
               </tr></thead>
               <tbody>
                 {vends.map((v,i)=>{
                   const key=`${grupo.cod_supervisor}_${v.cod_vendedor}`;
-                  return <VendedorRow key={key} v={v} unidade={unidade}
+                  return <VendedorRow key={key} v={v} unidade={unidade} tipo={tipo}
                     isExpanded={!!expanded[key]} zebra={i%2===0}
                     onToggle={()=>setExpanded(ex=>({...ex,[key]:!ex[key]}))}/>;
                 })}
@@ -152,16 +159,16 @@ function TabelaAcompanhamento({grupos, unidade, loading, error, cargo}) {
                       TOTAL ({vends.length})
                     </td>
                     <td style={{padding:"6px 8px",border:`1px solid ${C.primaryDk}`,textAlign:"right",fontFamily:C.mono}}>
-                      {fmtQtd(totM,unidade)}
+                      {isPositivacao?fmtClientes(totM):fmtQtd(totM,unidade)}
                     </td>
                     <td style={{padding:"6px 8px",border:`1px solid ${C.primaryDk}`,textAlign:"right",fontFamily:C.mono}}>
-                      {fmtQtd(totR,unidade)}
+                      {isPositivacao?fmtClientes(totR):fmtQtd(totR,unidade)}
                     </td>
                     <td style={{padding:"6px 8px",border:`1px solid ${C.primaryDk}`,textAlign:"center"}}>
                       <span style={pctStyle(totP)}>{fmtPct(totP)}</span>
                     </td>
                     <td style={{padding:"6px 8px",border:`1px solid ${C.primaryDk}`,textAlign:"right",fontFamily:C.mono}}>
-                      {fmtQtd(totD,unidade)}
+                      {isPositivacao?fmtClientes(totD):fmtQtd(totD,unidade)}
                     </td>
                     <td style={{padding:"6px 8px",border:`1px solid ${C.primaryDk}`,textAlign:"center"}}>
                       {arrow(totP)}
@@ -252,7 +259,7 @@ const Acompanhamento = forwardRef(({campanha, token, cargo, isMobile, filtroSup}
     <div style={{margin:"8px 12px"}}>
       <TabelaAcompanhamento
         grupos={supFiltro?grupos.filter(g=>g.cod_supervisor===supFiltro):grupos}
-        unidade={campanha.unidade} loading={loading} error={error} cargo={cargo}/>
+        unidade={campanha.unidade} tipo={campanha.tipo} loading={loading} error={error} cargo={cargo}/>
     </div>
   </>);
 });
@@ -278,18 +285,31 @@ function Configuracao({campanha, token, isMobile}) {
   const [searchProd,   setSearchProd]   =useState("");
 
   useEffect(()=>{
-    Promise.all([
-      fetch(`${API_BASE}/api/bl/produtos/buscar?codsec=${campanha.codsec}`,{headers}).then(r=>r.json()),
-      fetch(`${API_BASE}/api/faturamento`,{headers}).then(r=>r.json()),
-    ]).then(([jProd,jFat])=>{
-      setTodosProdutos(jProd.dados??[]);
-      const rows=jFat.dados??[];
-      setTodosVendData(rows);
-      const supMap=new Map();
-      rows.forEach(r=>{if(r.cod_supervisor&&!supMap.has(r.cod_supervisor))supMap.set(r.cod_supervisor,r.nome_supervisor);});
-      setSupervisores(Array.from(supMap.entries()).map(([cod_supervisor,nome_supervisor])=>({cod_supervisor,nome_supervisor}))
-        .sort((a,b)=>a.nome_supervisor.localeCompare(b.nome_supervisor)));
-    }).catch(()=>{});
+    // Reseta a seleção ao trocar de campanha — evita ficar com supervisor/
+    // produtos/metas da campanha ANTERIOR "grudados" na tela por um instante
+    setSupSel(null); setHabilitados(new Set()); setMetas({}); setVendedores([]);
+
+    // Positivação NÃO usa lista de produtos — o critério é o fornecedor
+    // inteiro (mesmo escopo da elegibilidade). Só busca produtos para
+    // campanhas tipo='produto'.
+    if (campanha.tipo !== "positivacao") {
+      fetch(`${API_BASE}/api/bl/produtos/buscar?codsec=${campanha.codsec}`,{headers}).then(r=>r.json())
+        .then(jProd=>setTodosProdutos(jProd.dados??[]))
+        .catch(e=>{console.error("Erro ao buscar produtos:",e); setTodosProdutos([]);});
+    } else {
+      setTodosProdutos([]);
+    }
+
+    fetch(`${API_BASE}/api/faturamento`,{headers}).then(r=>r.json())
+      .then(jFat=>{
+        const rows=jFat.dados??[];
+        setTodosVendData(rows);
+        const supMap=new Map();
+        rows.forEach(r=>{if(r.cod_supervisor&&!supMap.has(r.cod_supervisor))supMap.set(r.cod_supervisor,r.nome_supervisor);});
+        setSupervisores(Array.from(supMap.entries()).map(([cod_supervisor,nome_supervisor])=>({cod_supervisor,nome_supervisor}))
+          .sort((a,b)=>a.nome_supervisor.localeCompare(b.nome_supervisor)));
+      })
+      .catch(e=>{console.error("Erro ao buscar supervisores:",e); setSupervisores([]);});
   },[campanha.id]);
 
   useEffect(()=>{
@@ -300,10 +320,11 @@ function Configuracao({campanha, token, isMobile}) {
     todosVendData.forEach(r=>{if(r.cod_supervisor===supSel&&r.cod_vendedor&&!vendMap.has(r.cod_vendedor))vendMap.set(r.cod_vendedor,r.nome_vendedor);});
     setVendedores(Array.from(vendMap.entries()).map(([cod_vendedor,nome_vendedor])=>({cod_vendedor,nome_vendedor}))
       .sort((a,b)=>a.nome_vendedor.localeCompare(b.nome_vendedor)));
-    Promise.all([
-      fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/produtos`,{headers}).then(r=>r.json()),
-      fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{headers}).then(r=>r.json()),
-    ]).then(([jProd,jMetas])=>{
+    const buscas = campanha.tipo === "positivacao"
+      ? [Promise.resolve({dados:[]}), fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{headers}).then(r=>r.json())]
+      : [fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/produtos`,{headers}).then(r=>r.json()),
+         fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{headers}).then(r=>r.json())];
+    Promise.all(buscas).then(([jProd,jMetas])=>{
       if (meuId !== supRequestIdRef.current) return; // resposta antiga, descarta
       setHabilitados(new Set((jProd.dados??[]).map(p=>p.codprod)));
       const m={};(jMetas.dados??[]).forEach(x=>{m[x.cod_vendedor]=x.meta;});setMetas(m);
@@ -324,17 +345,44 @@ function Configuracao({campanha, token, isMobile}) {
     if(!supSel) return;
     setSalvando(true);setMsg("");
     try {
-      const prodMap=Object.fromEntries(todosProdutos.map(p=>[p.codprod,p.descricao]));
-      await Promise.all([
-        fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/produtos`,{
-          method:"PUT",headers,body:JSON.stringify({cod_supervisor:supSel,codprods:[...habilitados],prod_map:prodMap}),}),
+      const chamadas=[
         fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{
           method:"PUT",headers,body:JSON.stringify({cod_supervisor:supSel,
             metas:Object.entries(metas).map(([k,v])=>({cod_vendedor:Number(k),meta:Number(v)||0}))}),}),
-      ]);
-      setMsg(`Salvo! ${habilitados.size} produto(s).`);setTimeout(()=>setMsg(""),3000);
+      ];
+      if (campanha.tipo !== "positivacao") {
+        const prodMap=Object.fromEntries(todosProdutos.map(p=>[p.codprod,p.descricao]));
+        chamadas.push(fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/produtos`,{
+          method:"PUT",headers,body:JSON.stringify({cod_supervisor:supSel,codprods:[...habilitados],prod_map:prodMap}),}));
+      }
+      await Promise.all(chamadas);
+      setMsg(campanha.tipo==="positivacao" ? "Metas salvas!" : `Salvo! ${habilitados.size} produto(s).`);
+      setTimeout(()=>setMsg(""),3000);
     } catch {setMsg("Erro ao salvar.");}
     finally {setSalvando(false);}
+  };
+
+  // Só para campanhas tipo='positivacao': sugere a meta de cada vendedor
+  // como o tamanho da lista negra dele. Preenche os campos — ainda editáveis
+  // e ainda é preciso clicar em "Salvar" para gravar de fato. Não sobrescreve
+  // metas que o usuário já tenha ajustado manualmente, a menos que confirme.
+  const [preenchendoAuto, setPreenchendoAuto] = useState(false);
+  const preencherMetaAutomatica = async () => {
+    if (!supSel) return;
+    setPreenchendoAuto(true); setMsg("");
+    try {
+      const r = await fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/meta-sugerida`, {headers});
+      const j = await r.json();
+      const sugestoes = j.dados ?? [];
+      setMetas(prev => {
+        const novo = {...prev};
+        sugestoes.forEach(s => { novo[s.cod_vendedor] = String(s.meta_sugerida); });
+        return novo;
+      });
+      setMsg(`${sugestoes.length} meta(s) sugerida(s) — revise e clique em Salvar.`);
+      setTimeout(()=>setMsg(""),4000);
+    } catch { setMsg("Erro ao buscar meta sugerida."); }
+    finally { setPreenchendoAuto(false); }
   };
 
   const unLabel=campanha.unidade==="CX"?"cx":"un";
@@ -359,10 +407,10 @@ function Configuracao({campanha, token, isMobile}) {
     {!supSel&&<div style={{padding:"32px",textAlign:"center",color:C.textSub}}>Selecione um supervisor.</div>}
     {supSel&&loadingSup&&<div style={{padding:"32px",textAlign:"center",color:C.textSub}}>Carregando...</div>}
     {supSel&&!loadingSup&&(<>
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"280px 1fr",gap:"16px",alignItems:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:(isMobile||campanha.tipo==="positivacao")?"1fr":"280px 1fr",gap:"16px",alignItems:"start"}}>
         <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:"8px",overflow:"hidden"}}>
           <div style={{padding:"10px 14px",background:C.subHeader,color:"#fff",fontWeight:700,fontSize:"12px"}}>
-            META POR VENDEDOR <span style={{fontSize:"10px",fontWeight:400,opacity:.75}}>({unLabel})</span>
+            META POR VENDEDOR {campanha.tipo!=="positivacao" && <span style={{fontSize:"10px",fontWeight:400,opacity:.75}}>({unLabel})</span>}
           </div>
           <div style={{maxHeight:"400px",overflowY:"auto"}}>
             {vendedores.map((v,i)=>(
@@ -376,11 +424,26 @@ function Configuracao({campanha, token, isMobile}) {
                   onChange={e=>setMetas(m=>({...m,[v.cod_vendedor]:e.target.value}))}
                   style={{width:"72px",padding:"5px 8px",textAlign:"right",border:`1px solid ${C.border}`,
                     borderRadius:"4px",fontSize:"12px",fontFamily:C.mono,outline:"none",flexShrink:0}}/>
-                <span style={{fontSize:"10px",color:C.textSub,width:"18px",flexShrink:0}}>{unLabel}</span>
+                {campanha.tipo!=="positivacao" && <span style={{fontSize:"10px",color:C.textSub,width:"18px",flexShrink:0}}>{unLabel}</span>}
               </div>
             ))}
+            {vendedores.length===0 && (
+              <div style={{padding:"20px",textAlign:"center",fontSize:"11px",color:C.textSub}}>
+                Nenhum vendedor deste supervisor.
+              </div>
+            )}
           </div>
         </div>
+        {campanha.tipo==="positivacao" ? (
+          <div style={{background:"#FFF9E6",border:`1px solid ${C.gold ?? "#E5C97A"}`,borderRadius:"8px",
+            padding:"14px",fontSize:"12px",color:C.text,gridColumn:isMobile?undefined:"1 / -1"}}>
+            💡 <b>Positivação não usa lista de produtos.</b> Qualquer compra do
+            cliente (de qualquer produto do fornecedor da campanha) conta como
+            positivação — o critério é só o cliente ter saído da lista negra
+            comprando de novo. Defina a meta de cada vendedor (ou use "Preencher
+            meta automaticamente" abaixo) e clique em Salvar.
+          </div>
+        ) : (
         <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:"8px",overflow:"hidden"}}>
           <div style={{padding:"10px 14px",background:C.subHeader,color:"#fff",display:"flex",alignItems:"center",gap:"8px"}}>
             <span style={{fontWeight:700,fontSize:"12px"}}>PRODUTOS ELEGÍVEIS</span>
@@ -412,6 +475,7 @@ function Configuracao({campanha, token, isMobile}) {
             </table>
           </div>
         </div>
+        )}
       </div>
       <div style={{marginTop:"14px",display:"flex",alignItems:"center",gap:"12px"}}>
         <button onClick={salvar} disabled={salvando}
@@ -419,6 +483,15 @@ function Configuracao({campanha, token, isMobile}) {
             borderRadius:"6px",cursor:"pointer",fontSize:"13px",fontWeight:700}}>
           {salvando?"Salvando...":"Salvar"}
         </button>
+        {campanha.tipo==="positivacao" && (
+          <button onClick={preencherMetaAutomatica} disabled={preenchendoAuto || !supSel}
+            title="Sugere a meta de cada vendedor = tamanho da lista negra dele"
+            style={{background:"#fff",border:`1px solid ${C.primary}`,color:C.primary,padding:"10px 20px",
+              borderRadius:"6px",cursor:"pointer",fontSize:"13px",fontWeight:700,
+              opacity:(preenchendoAuto || !supSel)?0.5:1}}>
+            {preenchendoAuto?"Calculando...":"Preencher meta automaticamente"}
+          </button>
+        )}
         {msg&&<span style={{fontSize:"12px",fontWeight:600,color:msg.includes("Erro")?C.red:C.green}}>{msg}</span>}
       </div>
     </>)}
@@ -443,13 +516,14 @@ function CampanhaVendedor({campanha, token}) {
         <div>
           <div style={{ color:"#fff", fontWeight:700, fontSize:"13px" }}>{campanha.nome}</div>
           <div style={{ color:"rgba(255,255,255,.7)", fontSize:"10px", marginTop:"2px" }}>
-            {campanha.semana_ini} → {campanha.semana_fim} · {campanha.unidade}
+            {campanha.semana_ini} → {campanha.semana_fim}
+            {campanha.tipo!=="positivacao" && ` · ${campanha.unidade}`}
           </div>
         </div>
       </div>
 
       {/* Tabela */}
-      <TabelaAcompanhamento grupos={grupos} unidade={campanha.unidade}
+      <TabelaAcompanhamento grupos={grupos} unidade={campanha.unidade} tipo={campanha.tipo}
         loading={loading} error={error} cargo="vendedor"/>
     </div>
   );
@@ -526,10 +600,40 @@ function FornecedorView({token, userInfo, isMobile}) {
   const [salvandoCamp, setSalvandoCamp] = useState(false);
   const [confirmDel,   setConfirmDel]   = useState(false);
   const [novaNome,     setNovaNome]     = useState("");
+  const [novaTipo,     setNovaTipo]     = useState("produto");   // 'produto' | 'positivacao'
   const [novaCodsec,   setNovaCodsec]   = useState("");
+  const [novaCodfornec,setNovaCodfornec]= useState("");
   const [novaUnidade,  setNovaUnidade]  = useState("UN");
   const [novaIni,      setNovaIni]      = useState("");
   const [novaFim,      setNovaFim]      = useState("");
+
+  // Seções e fornecedores COM NOME (mesmo endpoint que já popula a Lista
+  // Negra/DN) — usados para os dropdowns de CODSEC/CODFORNEC na criação.
+  const [secoesOpts,      setSecoesOpts]      = useState([]);
+  const [fornecedoresOpts,setFornecedoresOpts]= useState([]);
+  const headersBase = useMemo(()=>({Authorization:`Bearer ${token}`}),[token]);
+  useEffect(() => {
+    fetch(`${API_BASE}/api/lista-negra/secoes`,{headers:headersBase}).then(r=>r.json())
+      .then(j=>setSecoesOpts(j.dados??[])).catch(()=>{});
+    fetch(`${API_BASE}/api/lista-negra/fornecedores`,{headers:headersBase}).then(r=>r.json())
+      .then(j=>setFornecedoresOpts(j.dados??[])).catch(()=>{});
+  }, [token]);
+
+  // Espelha a lista do backend só para exibir/ocultar a opção "Por
+  // Positivação" no formulário — a validação de verdade é sempre no servidor.
+  const FORNEC_POSITIVACAO = [1658, 2041];
+  const meusFornecPositivacao = (userInfo.codfornecs ?? []).filter(c => FORNEC_POSITIVACAO.includes(c));
+  const podePositivacao = meusFornecPositivacao.length > 0;
+  // Mesmos códigos autorizados, mas com o NOME (vindo do endpoint da Lista
+  // Negra/DN) para preencher o dropdown em vez de mostrar só o número
+  const opcoesFornecPositivacao = fornecedoresOpts.filter(f => meusFornecPositivacao.includes(f.id));
+
+  // Auto-seleciona o fornecedor quando só há um autorizado (evita passo extra)
+  useEffect(() => {
+    if (novaTipo === "positivacao" && meusFornecPositivacao.length === 1) {
+      setNovaCodfornec(String(meusFornecPositivacao[0]));
+    }
+  }, [novaTipo]);
   const [criando,      setCriando]      = useState(false);
 
   const headers = useMemo(()=>({Authorization:`Bearer ${token}`,"Content-Type":"application/json"}),[token]);
@@ -584,13 +688,20 @@ function FornecedorView({token, userInfo, isMobile}) {
   };
 
   const criarCampanha=async()=>{
-    if(!novaNome||!novaCodsec||!novaIni||!novaFim) return;
+    if(!novaNome||!novaIni||!novaFim) return;
+    if(novaTipo==="produto" && !novaCodsec) return;
+    if(novaTipo==="positivacao" && !novaCodfornec) return;
     setCriando(true);
     try {
+      const body = novaTipo==="produto"
+        ? {nome:novaNome, tipo:"produto", codsec:Number(novaCodsec),
+           unidade:novaUnidade, semana_ini:novaIni, semana_fim:novaFim}
+        : {nome:novaNome, tipo:"positivacao", codfornec:Number(novaCodfornec),
+           unidade:"UN", semana_ini:novaIni, semana_fim:novaFim};
       await fetch(`${API_BASE}/api/bl/campanhas`,{method:"POST",headers,
-        body:JSON.stringify({nome:novaNome,codsec:Number(novaCodsec),
-          unidade:novaUnidade,semana_ini:novaIni,semana_fim:novaFim})});
-      setShowNova(false);setNovaNome("");setNovaCodsec("");setNovaIni("");setNovaFim("");
+        body:JSON.stringify(body)});
+      setShowNova(false);setNovaNome("");setNovaTipo("produto");
+      setNovaCodsec("");setNovaCodfornec("");setNovaIni("");setNovaFim("");
       loadCampanhas();
     } finally {setCriando(false);}
   };
@@ -644,14 +755,32 @@ function FornecedorView({token, userInfo, isMobile}) {
                 <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                   <input value={novaNome} onChange={e=>setNovaNome(e.target.value)} placeholder="Nome da campanha"
                     style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
-                  <div style={{display:"flex",gap:"8px"}}>
-                    <input value={novaCodsec} onChange={e=>setNovaCodsec(e.target.value)} placeholder="CODSEC" type="number"
-                      style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
-                    <select value={novaUnidade} onChange={e=>setNovaUnidade(e.target.value)}
+                  {podePositivacao && (
+                    <select value={novaTipo} onChange={e=>setNovaTipo(e.target.value)}
                       style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
-                      <option value="UN">UN</option><option value="CX">CX</option>
+                      <option value="produto">Por Produto</option>
+                      <option value="positivacao">Por Positivação</option>
                     </select>
-                  </div>
+                  )}
+                  {novaTipo==="produto" ? (
+                    <div style={{display:"flex",gap:"8px"}}>
+                      <select value={novaCodsec} onChange={e=>setNovaCodsec(e.target.value)}
+                        style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
+                        <option value="">Selecione a seção...</option>
+                        {secoesOpts.map(s=><option key={s.id} value={s.id}>{s.nome}</option>)}
+                      </select>
+                      <select value={novaUnidade} onChange={e=>setNovaUnidade(e.target.value)}
+                        style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
+                        <option value="UN">UN</option><option value="CX">CX</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <select value={novaCodfornec} onChange={e=>setNovaCodfornec(e.target.value)}
+                      style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
+                      <option value="">Selecione o fornecedor...</option>
+                      {opcoesFornecPositivacao.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+                    </select>
+                  )}
                   <div style={{display:"flex",gap:"8px"}}>
                     <input type="date" value={novaIni} onChange={e=>setNovaIni(e.target.value)}
                       style={{flex:1,padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}/>
@@ -793,14 +922,32 @@ function FornecedorView({token, userInfo, isMobile}) {
             <div style={{display:"flex",flexDirection:"column",gap:"6px"}}>
               <input value={novaNome} onChange={e=>setNovaNome(e.target.value)} placeholder="Nome"
                 style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
-              <div style={{display:"flex",gap:"6px"}}>
-                <input value={novaCodsec} onChange={e=>setNovaCodsec(e.target.value)} placeholder="CODSEC" type="number"
-                  style={{flex:1,padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
-                <select value={novaUnidade} onChange={e=>setNovaUnidade(e.target.value)}
+              {podePositivacao && (
+                <select value={novaTipo} onChange={e=>setNovaTipo(e.target.value)}
                   style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
-                  <option value="UN">UN</option><option value="CX">CX</option>
+                  <option value="produto">Por Produto</option>
+                  <option value="positivacao">Por Positivação</option>
                 </select>
-              </div>
+              )}
+              {novaTipo==="produto" ? (
+                <div style={{display:"flex",gap:"6px"}}>
+                  <select value={novaCodsec} onChange={e=>setNovaCodsec(e.target.value)}
+                    style={{flex:1,padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
+                    <option value="">Selecione a seção...</option>
+                    {secoesOpts.map(s=><option key={s.id} value={s.id}>{s.nome}</option>)}
+                  </select>
+                  <select value={novaUnidade} onChange={e=>setNovaUnidade(e.target.value)}
+                    style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
+                    <option value="UN">UN</option><option value="CX">CX</option>
+                  </select>
+                </div>
+              ) : (
+                <select value={novaCodfornec} onChange={e=>setNovaCodfornec(e.target.value)}
+                  style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
+                  <option value="">Selecione o fornecedor...</option>
+                  {opcoesFornecPositivacao.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+                </select>
+              )}
               <input type="date" value={novaIni} onChange={e=>setNovaIni(e.target.value)}
                 style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>
               <input type="date" value={novaFim} onChange={e=>setNovaFim(e.target.value)}

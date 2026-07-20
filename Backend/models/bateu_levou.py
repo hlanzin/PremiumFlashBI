@@ -17,7 +17,9 @@ def create_bl_tables():
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 nome        TEXT    NOT NULL,
                 usuario_id  INTEGER NOT NULL REFERENCES usuarios(id),
-                codsec      INTEGER NOT NULL,
+                tipo        TEXT    NOT NULL DEFAULT 'produto',  -- 'produto' | 'positivacao'
+                codsec      INTEGER,                             -- usado quando tipo='produto'
+                codfornec   INTEGER,                             -- usado quando tipo='positivacao'
                 unidade     TEXT    NOT NULL DEFAULT 'UN',
                 semana_ini  TEXT    NOT NULL,
                 semana_fim  TEXT    NOT NULL,
@@ -48,18 +50,36 @@ def create_bl_tables():
 
 
 # ── Campanhas ─────────────────────────────────────────────────────────────────
-def criar_campanha(usuario_id, nome, codsec, unidade, semana_ini, semana_fim) -> int:
+def criar_campanha(usuario_id, nome, semana_ini, semana_fim,
+                    tipo="produto", codsec=None, codfornec=None, unidade="UN") -> int:
+    """
+    tipo='produto'     -> codsec obrigatório (seção dos produtos elegíveis)
+    tipo='positivacao' -> codfornec obrigatório (fornecedor cujo critério de
+                           Lista Negra define os clientes elegíveis); usa
+                           codsec=0 como placeholder (SQLite não permite tirar
+                           o NOT NULL de codsec sem reconstruir a tabela, e
+                           não é necessário — 0 nunca colide com CODSEC real)
+    """
+    if tipo not in ("produto", "positivacao"):
+        raise ValueError("tipo deve ser 'produto' ou 'positivacao'")
+    if tipo == "produto" and codsec is None:
+        raise ValueError("codsec é obrigatório para campanha tipo='produto'")
+    if tipo == "positivacao" and codfornec is None:
+        raise ValueError("codfornec é obrigatório para campanha tipo='positivacao'")
+
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO bl_campanhas(usuario_id,nome,codsec,unidade,semana_ini,semana_fim) VALUES(?,?,?,?,?,?)",
-            (usuario_id, nome, codsec, unidade, semana_ini, semana_fim))
+            "INSERT INTO bl_campanhas(usuario_id,nome,tipo,codsec,codfornec,unidade,semana_ini,semana_fim) "
+            "VALUES(?,?,?,?,?,?,?,?)",
+            (usuario_id, nome, tipo, codsec if codsec is not None else 0,
+             codfornec, unidade, semana_ini, semana_fim))
         return cur.lastrowid
 
 
 def listar_campanhas(usuario_id=None, semana_ini=None) -> list:
     with get_db() as conn:
         q = """
-            SELECT c.id, c.nome, c.codsec, c.unidade, c.semana_ini, c.semana_fim,
+            SELECT c.id, c.nome, c.tipo, c.codsec, c.codfornec, c.unidade, c.semana_ini, c.semana_fim,
                    c.ativa, c.usuario_id, u.username, u.nome AS nome_fornecedor
             FROM bl_campanhas c JOIN usuarios u ON u.id = c.usuario_id
             WHERE 1=1

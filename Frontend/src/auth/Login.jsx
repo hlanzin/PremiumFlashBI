@@ -21,10 +21,10 @@ export default function Login({ onLogin }) {
         const j = await res.json();
         throw new Error(j.detail ?? "Credenciais inválidas.");
       }
-      const { access_token, username: respUser, nome, cargo, cod_winthor, secoes } = await res.json();
+      const { access_token, username: respUser, nome, cargo, cod_winthor, secoes, codfornecs } = await res.json();
       localStorage.setItem("flash_token",    access_token);
-      localStorage.setItem("flash_userinfo", JSON.stringify({ username: respUser, nome, cargo, cod_winthor, secoes }));
-      onLogin(access_token, { username: respUser, nome, cargo, cod_winthor, secoes });
+      localStorage.setItem("flash_userinfo", JSON.stringify({ username: respUser, nome, cargo, cod_winthor, secoes, codfornecs }));
+      onLogin(access_token, { username: respUser, nome, cargo, cod_winthor, secoes, codfornecs });
     } catch (err) {
       setError(err.message);
     } finally {

@@ -12,6 +12,9 @@ from models.bateu_levou import (
 from sql.bateu_levou_sql import (
     sql_322_supervisor, agregar_por_vendedor,
 )
+from sql.bateu_levou_positivacao_sql import (
+    build_positivacao_sql, agregar_positivacao_por_vendedor,
+)
 
 create_bl_tables()
 
@@ -37,8 +40,16 @@ def _check(campanha_id, u) -> dict:
 
 
 # ── Campanhas ─────────────────────────────────────────────────────────────────
+# Fornecedores autorizados a ver/criar campanhas do tipo "positivação"
+FORNEC_POSITIVACAO = {1658, 2041}
+
+
 class CampanhaCreate(BaseModel):
-    nome: str; codsec: int; unidade: str = "UN"
+    nome: str
+    tipo: str = "produto"           # 'produto' | 'positivacao'
+    codsec:    Optional[int] = None  # obrigatório se tipo='produto'
+    codfornec: Optional[int] = None  # obrigatório se tipo='positivacao'
+    unidade: str = "UN"
     semana_ini: str; semana_fim: str
 
 class CampanhaUpdate(BaseModel):
@@ -52,14 +63,39 @@ class CampanhaUpdate(BaseModel):
 def post_campanha(body: CampanhaCreate, u: CurrentUser = Depends(get_current_user)):
     if not (u.is_fornecedor or u.is_gerencial): raise FORBIDDEN
     if body.unidade not in ("UN","CX"): raise HTTPException(400,"unidade deve ser UN ou CX.")
-    return {"id": criar_campanha(_uid(u), body.nome, body.codsec, body.unidade,
-                                 body.semana_ini, body.semana_fim), "ok": True}
+    if body.tipo not in ("produto","positivacao"):
+        raise HTTPException(400,"tipo deve ser 'produto' ou 'positivacao'.")
+    if body.tipo == "produto" and body.codsec is None:
+        raise HTTPException(400,"codsec é obrigatório para campanha tipo='produto'.")
+    if body.tipo == "positivacao":
+        if body.codfornec is None:
+            raise HTTPException(400,"codfornec é obrigatório para campanha tipo='positivacao'.")
+        # Fornecedor só pode criar campanha de positivação para os próprios
+        # códigos vinculados, e só se algum deles estiver na lista autorizada
+        if u.is_fornecedor and (
+            not set(u.codfornecs) & FORNEC_POSITIVACAO
+            or body.codfornec not in u.codfornecs
+        ):
+            raise FORBIDDEN
+    try:
+        cid = criar_campanha(_uid(u), body.nome, body.semana_ini, body.semana_fim,
+                             tipo=body.tipo, codsec=body.codsec, codfornec=body.codfornec,
+                             unidade=body.unidade)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"id": cid, "ok": True}
 
 
 @router.get("/campanhas")
 def get_campanhas(semana_ini: Optional[str] = None, u: CurrentUser = Depends(get_current_user)):
     uid = _uid(u) if u.is_fornecedor else None
-    return {"dados": listar_campanhas(usuario_id=uid, semana_ini=semana_ini)}
+    campanhas = listar_campanhas(usuario_id=uid, semana_ini=semana_ini)
+    # Campanhas tipo='positivacao' só aparecem para fornecedor cujo código
+    # vinculado esteja entre os autorizados (1658/2041). Admin/gerencial
+    # (uid=None acima) sempre vê tudo, sem essa restrição.
+    if u.is_fornecedor and not (set(u.codfornecs) & FORNEC_POSITIVACAO):
+        campanhas = [c for c in campanhas if c["tipo"] != "positivacao"]
+    return {"dados": campanhas}
 
 
 @router.put("/campanhas/{cid}")
@@ -128,13 +164,44 @@ def put_metas_sup(cid: int, sup: int, body: MetasSupervisorBody,
     return {"ok": True}
 
 
+@router.get("/campanhas/{cid}/supervisor/{sup}/meta-sugerida")
+def get_meta_sugerida(cid: int, sup: int, u: CurrentUser = Depends(get_current_user)):
+    """
+    Só para campanhas tipo='positivacao': sugere a meta de cada vendedor
+    como o tamanho da lista negra dele (fornecedor da campanha) ao início
+    da semana. O admin/fornecedor pode aceitar ou ajustar manualmente
+    depois (ver PUT /metas) — ou deixar 0 para 'sem meta'.
+    """
+    camp = _check(cid, u)
+    if camp["tipo"] != "positivacao":
+        raise HTTPException(400, "Meta sugerida só se aplica a campanhas tipo='positivacao'.")
+    sql, _ = build_positivacao_sql(camp["codfornec"], camp["semana_ini"],
+                                    camp["semana_ini"], cod_supervisor=sup)
+    try:
+        rows = execute_query(sql, [])
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    agregado = agregar_positivacao_por_vendedor(rows, {})
+    return {"dados": [{"cod_vendedor": v["cod_vendedor"], "nome_vendedor": v["nome_vendedor"],
+                        "meta_sugerida": v["elegiveis_total"]} for v in agregado]}
+
+
 # ── Busca produtos Oracle ─────────────────────────────────────────────────────
 @router.get("/produtos/buscar")
-def buscar_produtos(codsec: int, q: Optional[str] = None,
+def buscar_produtos(codsec: Optional[int] = None, codfornec: Optional[int] = None,
+                    q: Optional[str] = None,
                     u: CurrentUser = Depends(get_current_user)):
     if not (u.is_fornecedor or u.is_gerencial): raise FORBIDDEN
+    if not codsec and not codfornec:
+        raise HTTPException(400, "Informe codsec ou codfornec.")
     try:
-        params = {"codsec": codsec}
+        params = {}
+        condicoes = []
+        if codsec:
+            condicoes.append("PCPRODUT.CODSEC=:codsec"); params["codsec"] = codsec
+        if codfornec:
+            condicoes.append("PCPRODUT.CODFORNEC=:codfornec"); params["codfornec"] = codfornec
+        filtro_dim = " AND ".join(condicoes)
         filtro = ""
         if q and q.strip():
             filtro = "AND UPPER(PCPRODUT.DESCRICAO) LIKE UPPER(:q)"
@@ -143,7 +210,7 @@ def buscar_produtos(codsec: int, q: Optional[str] = None,
             SELECT CODPROD, DESCRICAO, QTUNITCX FROM (
                 SELECT PCPRODUT.CODPROD, PCPRODUT.DESCRICAO, PCPRODUT.QTUNITCX
                 FROM PCPRODUT
-                WHERE PCPRODUT.CODSEC=:codsec AND PCPRODUT.DTEXCLUSAO IS NULL {filtro}
+                WHERE {filtro_dim} AND PCPRODUT.DTEXCLUSAO IS NULL {filtro}
                 ORDER BY PCPRODUT.DESCRICAO
             ) WHERE ROWNUM <= 200
         """
@@ -221,14 +288,49 @@ def get_dados(cid: int, data: Optional[str] = None,
     from datetime import date as _date
     fechamento = semana_fim < _date.today().isoformat()
 
-    # Define quais supervisores processar
+    resultado = []
+
+    if camp["tipo"] == "positivacao":
+        # NÃO depende de "produtos habilitados" nem de supervisor configurado
+        # — o único critério é o fornecedor. Roda uma query só (todo o
+        # fornecedor) e agrupa por supervisor/vendedor em Python.
+        sup_filtro = None
+        if u.is_supervisor:
+            sup_filtro = u.cod_winthor
+        elif filtro_supervisor:
+            sup_filtro = filtro_supervisor
+
+        sql, _ = build_positivacao_sql(camp["codfornec"], semana_ini, dr, cod_supervisor=sup_filtro, fechamento=fechamento)
+        try:
+            rows = execute_query(sql, [])
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+        if u.is_vendedor:
+            rows = [r for r in rows if r.get("cod_vendedor") == u.cod_winthor]
+
+        por_sup: dict = {}
+        for r in rows:
+            sup = r.get("cod_supervisor")
+            if sup is None: continue
+            por_sup.setdefault(sup, []).append(r)
+
+        for sup, sup_rows in por_sup.items():
+            metas_sup = {k: v for (s, k), v in todas_metas.items() if s == sup}
+            vendedores = agregar_positivacao_por_vendedor(sup_rows, metas_sup)
+            vendedores = _com_sem_real(vendedores, metas_sup, sup, u, execute_query)
+            if vendedores:
+                resultado.append({"cod_supervisor": sup, "vendedores": vendedores})
+
+        return {"campanha": camp, "data_ref": dr, "unidade": unidade, "dados": resultado}
+
+    # ── tipo='produto' (comportamento original) ───────────────────────────
     sups = listar_supervisores_campanha(cid)
     if u.is_supervisor:
         sups = [u.cod_winthor] if u.cod_winthor in sups else []
     elif filtro_supervisor:
         sups = [filtro_supervisor] if filtro_supervisor in sups else []
 
-    resultado = []
     for sup in sups:
         prods = listar_produtos_supervisor(cid, sup)
         if not prods: continue
@@ -246,35 +348,7 @@ def get_dados(cid: int, data: Optional[str] = None,
             rows = [r for r in rows if r.get("cod_vendedor") == u.cod_winthor]
 
         vendedores = agregar_por_vendedor(rows, metas_sup)
-
-        # Adiciona vendedores com meta mas sem pedidos no período
-        # Busca os nomes no Oracle para não mostrar só o código
-        vend_com_real = {v["cod_vendedor"] for v in vendedores}
-        sem_real = [cod_v for cod_v, meta in metas_sup.items()
-                    if cod_v not in vend_com_real and meta > 0
-                    and (not u.is_vendedor or cod_v == u.cod_winthor)]
-
-        if sem_real:
-            try:
-                in_list = ",".join(str(c) for c in sem_real)
-                nome_sql = f"""
-                    SELECT CODUSUR, NOME FROM PCUSUARI
-                    WHERE CODUSUR IN ({in_list})
-                """
-                nomes = {r["codusur"]: r["nome"]
-                         for r in execute_query(nome_sql, [])}
-            except Exception:
-                nomes = {}
-
-            for cod_v in sem_real:
-                vendedores.append({
-                    "cod_vendedor":  cod_v,
-                    "nome_vendedor": nomes.get(cod_v, f"#{cod_v}"),
-                    "cod_supervisor": sup, "nome_supervisor": "",
-                    "meta": float(metas_sup[cod_v]),
-                    "qt_realizado": 0.0, "qt_dia": 0.0,
-                    "pct_ating": 0.0, "produtos": [],
-                })
+        vendedores = _com_sem_real(vendedores, metas_sup, sup, u, execute_query)
 
         if vendedores:
             resultado.append({
@@ -284,6 +358,33 @@ def get_dados(cid: int, data: Optional[str] = None,
 
     return {"campanha": camp, "data_ref": dr,
             "unidade": unidade, "dados": resultado}
+
+
+def _com_sem_real(vendedores, metas_sup, sup, u, execute_query):
+    """Adiciona vendedores com meta mas sem dados no período — busca nomes
+    no Oracle para não mostrar só o código. Compartilhado pelos dois tipos."""
+    vend_com_real = {v["cod_vendedor"] for v in vendedores}
+    sem_real = [cod_v for cod_v, meta in metas_sup.items()
+                if cod_v not in vend_com_real and meta > 0
+                and (not u.is_vendedor or cod_v == u.cod_winthor)]
+    if not sem_real:
+        return vendedores
+    try:
+        in_list = ",".join(str(c) for c in sem_real)
+        nomes = {r["codusur"]: r["nome"] for r in execute_query(
+            f"SELECT CODUSUR, NOME FROM PCUSUARI WHERE CODUSUR IN ({in_list})", [])}
+    except Exception:
+        nomes = {}
+    for cod_v in sem_real:
+        vendedores.append({
+            "cod_vendedor":  cod_v,
+            "nome_vendedor": nomes.get(cod_v, f"#{cod_v}"),
+            "cod_supervisor": sup, "nome_supervisor": "",
+            "meta": float(metas_sup[cod_v]),
+            "qt_realizado": 0.0, "qt_dia": 0.0,
+            "pct_ating": 0.0, "produtos": [],
+        })
+    return vendedores
 
 
 # ── Exclusão de campanha (admin) ──────────────────────────────────────────────
