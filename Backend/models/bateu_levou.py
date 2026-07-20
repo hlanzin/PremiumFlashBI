@@ -20,6 +20,7 @@ def create_bl_tables():
                 tipo        TEXT    NOT NULL DEFAULT 'produto',  -- 'produto' | 'positivacao'
                 codsec      INTEGER,                             -- usado quando tipo='produto'
                 codfornec   INTEGER,                             -- usado quando tipo='positivacao'
+                positivacao_modo TEXT DEFAULT 'cliente',          -- 'cliente' | 'produto' (só tipo='positivacao')
                 unidade     TEXT    NOT NULL DEFAULT 'UN',
                 semana_ini  TEXT    NOT NULL,
                 semana_fim  TEXT    NOT NULL,
@@ -51,7 +52,8 @@ def create_bl_tables():
 
 # ── Campanhas ─────────────────────────────────────────────────────────────────
 def criar_campanha(usuario_id, nome, semana_ini, semana_fim,
-                    tipo="produto", codsec=None, codfornec=None, unidade="UN") -> int:
+                    tipo="produto", codsec=None, codfornec=None,
+                    positivacao_modo="cliente", unidade="UN") -> int:
     """
     tipo='produto'     -> codsec obrigatório (seção dos produtos elegíveis)
     tipo='positivacao' -> codfornec obrigatório (fornecedor cujo critério de
@@ -59,6 +61,10 @@ def criar_campanha(usuario_id, nome, semana_ini, semana_fim,
                            codsec=0 como placeholder (SQLite não permite tirar
                            o NOT NULL de codsec sem reconstruir a tabela, e
                            não é necessário — 0 nunca colide com CODSEC real)
+                           positivacao_modo='cliente' (padrão, qualquer
+                           produto do fornecedor conta) ou 'produto' (só
+                           conta produto específico habilitado por supervisor,
+                           configurado depois na tela de Configuração)
     """
     if tipo not in ("produto", "positivacao"):
         raise ValueError("tipo deve ser 'produto' ou 'positivacao'")
@@ -66,20 +72,23 @@ def criar_campanha(usuario_id, nome, semana_ini, semana_fim,
         raise ValueError("codsec é obrigatório para campanha tipo='produto'")
     if tipo == "positivacao" and codfornec is None:
         raise ValueError("codfornec é obrigatório para campanha tipo='positivacao'")
+    if positivacao_modo not in ("cliente", "produto"):
+        raise ValueError("positivacao_modo deve ser 'cliente' ou 'produto'")
 
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO bl_campanhas(usuario_id,nome,tipo,codsec,codfornec,unidade,semana_ini,semana_fim) "
-            "VALUES(?,?,?,?,?,?,?,?)",
+            "INSERT INTO bl_campanhas(usuario_id,nome,tipo,codsec,codfornec,positivacao_modo,unidade,semana_ini,semana_fim) "
+            "VALUES(?,?,?,?,?,?,?,?,?)",
             (usuario_id, nome, tipo, codsec if codsec is not None else 0,
-             codfornec, unidade, semana_ini, semana_fim))
+             codfornec, positivacao_modo, unidade, semana_ini, semana_fim))
         return cur.lastrowid
 
 
 def listar_campanhas(usuario_id=None, semana_ini=None) -> list:
     with get_db() as conn:
         q = """
-            SELECT c.id, c.nome, c.tipo, c.codsec, c.codfornec, c.unidade, c.semana_ini, c.semana_fim,
+            SELECT c.id, c.nome, c.tipo, c.codsec, c.codfornec, c.positivacao_modo,
+                   c.unidade, c.semana_ini, c.semana_fim,
                    c.ativa, c.usuario_id, u.username, u.nome AS nome_fornecedor
             FROM bl_campanhas c JOIN usuarios u ON u.id = c.usuario_id
             WHERE 1=1

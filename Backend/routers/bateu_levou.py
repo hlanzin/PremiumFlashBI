@@ -49,6 +49,7 @@ class CampanhaCreate(BaseModel):
     tipo: str = "produto"           # 'produto' | 'positivacao'
     codsec:    Optional[int] = None  # obrigatório se tipo='produto'
     codfornec: Optional[int] = None  # obrigatório se tipo='positivacao'
+    positivacao_modo: str = "cliente"  # 'cliente' | 'produto' (só tipo='positivacao')
     unidade: str = "UN"
     semana_ini: str; semana_fim: str
 
@@ -65,6 +66,8 @@ def post_campanha(body: CampanhaCreate, u: CurrentUser = Depends(get_current_use
     if body.unidade not in ("UN","CX"): raise HTTPException(400,"unidade deve ser UN ou CX.")
     if body.tipo not in ("produto","positivacao"):
         raise HTTPException(400,"tipo deve ser 'produto' ou 'positivacao'.")
+    if body.positivacao_modo not in ("cliente","produto"):
+        raise HTTPException(400,"positivacao_modo deve ser 'cliente' ou 'produto'.")
     if body.tipo == "produto" and body.codsec is None:
         raise HTTPException(400,"codsec é obrigatório para campanha tipo='produto'.")
     if body.tipo == "positivacao":
@@ -80,7 +83,7 @@ def post_campanha(body: CampanhaCreate, u: CurrentUser = Depends(get_current_use
     try:
         cid = criar_campanha(_uid(u), body.nome, body.semana_ini, body.semana_fim,
                              tipo=body.tipo, codsec=body.codsec, codfornec=body.codfornec,
-                             unidade=body.unidade)
+                             positivacao_modo=body.positivacao_modo, unidade=body.unidade)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"id": cid, "ok": True}
@@ -175,8 +178,16 @@ def get_meta_sugerida(cid: int, sup: int, u: CurrentUser = Depends(get_current_u
     camp = _check(cid, u)
     if camp["tipo"] != "positivacao":
         raise HTTPException(400, "Meta sugerida só se aplica a campanhas tipo='positivacao'.")
+
+    codprods = None
+    if camp["positivacao_modo"] == "produto":
+        prods = listar_produtos_supervisor(cid, sup)
+        if not prods:
+            return {"dados": []}
+        codprods = [p["codprod"] for p in prods]
+
     sql, _ = build_positivacao_sql(camp["codfornec"], camp["semana_ini"],
-                                    camp["semana_ini"], cod_supervisor=sup)
+                                    camp["semana_ini"], cod_supervisor=sup, codprods=codprods)
     try:
         rows = execute_query(sql, [])
     except Exception as e:
@@ -290,10 +301,11 @@ def get_dados(cid: int, data: Optional[str] = None,
 
     resultado = []
 
-    if camp["tipo"] == "positivacao":
-        # NÃO depende de "produtos habilitados" nem de supervisor configurado
-        # — o único critério é o fornecedor. Roda uma query só (todo o
-        # fornecedor) e agrupa por supervisor/vendedor em Python.
+    if camp["tipo"] == "positivacao" and camp["positivacao_modo"] == "cliente":
+        # Modo CLIENTE: não depende de "produtos habilitados" nem de
+        # supervisor configurado — o único critério é o fornecedor. Roda
+        # uma query só (todo o fornecedor) e agrupa por supervisor/vendedor
+        # em Python.
         sup_filtro = None
         if u.is_supervisor:
             sup_filtro = u.cod_winthor
@@ -324,7 +336,10 @@ def get_dados(cid: int, data: Optional[str] = None,
 
         return {"campanha": camp, "data_ref": dr, "unidade": unidade, "dados": resultado}
 
-    # ── tipo='produto' (comportamento original) ───────────────────────────
+    # ── tipo='produto' OU tipo='positivacao' com modo='produto' ───────────
+    # As duas compartilham a mesma estrutura: supervisor configurado com
+    # lista de produtos habilitados (bl_supervisor_produtos) — só muda a
+    # query (venda normal vs elegibilidade de lista negra + positivação).
     sups = listar_supervisores_campanha(cid)
     if u.is_supervisor:
         sups = [u.cod_winthor] if u.cod_winthor in sups else []
@@ -337,17 +352,27 @@ def get_dados(cid: int, data: Optional[str] = None,
         codprods  = [p["codprod"] for p in prods]
         metas_sup = {k: v for (s, k), v in todas_metas.items() if s == sup}
 
-        sql = sql_322_supervisor(codprods, unidade, semana_ini, dr, sup, fechamento=fechamento)
-        try:
-            rows = execute_query(sql, [])
-        except Exception as e:
-            raise HTTPException(500, str(e))
+        if camp["tipo"] == "positivacao":
+            sql, _ = build_positivacao_sql(camp["codfornec"], semana_ini, dr, cod_supervisor=sup,
+                                            fechamento=fechamento, codprods=codprods)
+            try:
+                rows = execute_query(sql, [])
+            except Exception as e:
+                raise HTTPException(500, str(e))
+            if u.is_vendedor:
+                rows = [r for r in rows if r.get("cod_vendedor") == u.cod_winthor]
+            vendedores = agregar_positivacao_por_vendedor(rows, metas_sup)
+        else:
+            sql = sql_322_supervisor(codprods, unidade, semana_ini, dr, sup, fechamento=fechamento)
+            try:
+                rows = execute_query(sql, [])
+            except Exception as e:
+                raise HTTPException(500, str(e))
+            # Vendedor só vê a própria linha
+            if u.is_vendedor:
+                rows = [r for r in rows if r.get("cod_vendedor") == u.cod_winthor]
+            vendedores = agregar_por_vendedor(rows, metas_sup)
 
-        # Vendedor só vê a própria linha
-        if u.is_vendedor:
-            rows = [r for r in rows if r.get("cod_vendedor") == u.cod_winthor]
-
-        vendedores = agregar_por_vendedor(rows, metas_sup)
         vendedores = _com_sem_real(vendedores, metas_sup, sup, u, execute_query)
 
         if vendedores:

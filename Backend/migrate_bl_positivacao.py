@@ -1,7 +1,10 @@
 """
-Migração da tabela bl_campanhas: adiciona TIPO ('produto' | 'positivacao')
-e CODFORNEC (fornecedor cujo critério de Lista Negra define os clientes
-elegíveis, usado só quando tipo='positivacao').
+Migração da tabela bl_campanhas: adiciona TIPO ('produto' | 'positivacao'),
+CODFORNEC (fornecedor cujo critério de Lista Negra define os clientes
+elegíveis, usado só quando tipo='positivacao') e POSITIVACAO_MODO
+('cliente' | 'produto' — se qualquer produto do fornecedor conta, ou só
+uma lista específica habilitada por supervisor, mesmo padrão do tipo
+'produto').
 
 Rode UMA VEZ na pasta Backend/:
     python migrate_bl_positivacao.py
@@ -23,9 +26,11 @@ if not cols:
 
 has_tipo      = "tipo" in cols
 has_codfornec = "codfornec" in cols
+has_modo      = "positivacao_modo" in cols
 
-print(f"coluna 'tipo' existe:      {has_tipo}")
-print(f"coluna 'codfornec' existe: {has_codfornec}")
+print(f"coluna 'tipo' existe:             {has_tipo}")
+print(f"coluna 'codfornec' existe:        {has_codfornec}")
+print(f"coluna 'positivacao_modo' existe: {has_modo}")
 
 if not has_tipo:
     print("Adicionando coluna 'tipo' (default 'produto', preserva campanhas existentes)...")
@@ -34,6 +39,10 @@ if not has_tipo:
 if not has_codfornec:
     print("Adicionando coluna 'codfornec' (nullable, só usada em tipo='positivacao')...")
     conn.execute("ALTER TABLE bl_campanhas ADD COLUMN codfornec INTEGER")
+
+if not has_modo:
+    print("Adicionando coluna 'positivacao_modo' (default 'cliente')...")
+    conn.execute("ALTER TABLE bl_campanhas ADD COLUMN positivacao_modo TEXT DEFAULT 'cliente'")
 
 conn.commit()
 conn.close()

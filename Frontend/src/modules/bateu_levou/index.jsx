@@ -284,16 +284,24 @@ function Configuracao({campanha, token, isMobile}) {
   const [msg,          setMsg]          =useState("");
   const [searchProd,   setSearchProd]   =useState("");
 
+  // Verdadeiro quando esta campanha precisa da tela de "produtos
+  // habilitados": tipo='produto' sempre, ou tipo='positivacao' só quando
+  // o modo escolhido foi 'produto' (não 'cliente').
+  const usaProdutos = campanha.tipo === "produto" || campanha.positivacao_modo === "produto";
+
   useEffect(()=>{
     // Reseta a seleção ao trocar de campanha — evita ficar com supervisor/
     // produtos/metas da campanha ANTERIOR "grudados" na tela por um instante
     setSupSel(null); setHabilitados(new Set()); setMetas({}); setVendedores([]);
 
-    // Positivação NÃO usa lista de produtos — o critério é o fornecedor
-    // inteiro (mesmo escopo da elegibilidade). Só busca produtos para
-    // campanhas tipo='produto'.
-    if (campanha.tipo !== "positivacao") {
-      fetch(`${API_BASE}/api/bl/produtos/buscar?codsec=${campanha.codsec}`,{headers}).then(r=>r.json())
+    // Positivação modo='cliente' NÃO usa lista de produtos — o critério é
+    // o fornecedor inteiro. tipo='produto' ou positivação modo='produto'
+    // buscam por codsec/codfornec respectivamente.
+    if (usaProdutos) {
+      const param = campanha.tipo === "positivacao"
+        ? `codfornec=${campanha.codfornec}`
+        : `codsec=${campanha.codsec}`;
+      fetch(`${API_BASE}/api/bl/produtos/buscar?${param}`,{headers}).then(r=>r.json())
         .then(jProd=>setTodosProdutos(jProd.dados??[]))
         .catch(e=>{console.error("Erro ao buscar produtos:",e); setTodosProdutos([]);});
     } else {
@@ -320,10 +328,10 @@ function Configuracao({campanha, token, isMobile}) {
     todosVendData.forEach(r=>{if(r.cod_supervisor===supSel&&r.cod_vendedor&&!vendMap.has(r.cod_vendedor))vendMap.set(r.cod_vendedor,r.nome_vendedor);});
     setVendedores(Array.from(vendMap.entries()).map(([cod_vendedor,nome_vendedor])=>({cod_vendedor,nome_vendedor}))
       .sort((a,b)=>a.nome_vendedor.localeCompare(b.nome_vendedor)));
-    const buscas = campanha.tipo === "positivacao"
-      ? [Promise.resolve({dados:[]}), fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{headers}).then(r=>r.json())]
-      : [fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/produtos`,{headers}).then(r=>r.json()),
-         fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{headers}).then(r=>r.json())];
+    const buscas = usaProdutos
+      ? [fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/produtos`,{headers}).then(r=>r.json()),
+         fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{headers}).then(r=>r.json())]
+      : [Promise.resolve({dados:[]}), fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/metas`,{headers}).then(r=>r.json())];
     Promise.all(buscas).then(([jProd,jMetas])=>{
       if (meuId !== supRequestIdRef.current) return; // resposta antiga, descarta
       setHabilitados(new Set((jProd.dados??[]).map(p=>p.codprod)));
@@ -350,13 +358,13 @@ function Configuracao({campanha, token, isMobile}) {
           method:"PUT",headers,body:JSON.stringify({cod_supervisor:supSel,
             metas:Object.entries(metas).map(([k,v])=>({cod_vendedor:Number(k),meta:Number(v)||0}))}),}),
       ];
-      if (campanha.tipo !== "positivacao") {
+      if (usaProdutos) {
         const prodMap=Object.fromEntries(todosProdutos.map(p=>[p.codprod,p.descricao]));
         chamadas.push(fetch(`${API_BASE}/api/bl/campanhas/${campanha.id}/supervisor/${supSel}/produtos`,{
           method:"PUT",headers,body:JSON.stringify({cod_supervisor:supSel,codprods:[...habilitados],prod_map:prodMap}),}));
       }
       await Promise.all(chamadas);
-      setMsg(campanha.tipo==="positivacao" ? "Metas salvas!" : `Salvo! ${habilitados.size} produto(s).`);
+      setMsg(usaProdutos ? `Salvo! ${habilitados.size} produto(s).` : "Metas salvas!");
       setTimeout(()=>setMsg(""),3000);
     } catch {setMsg("Erro ao salvar.");}
     finally {setSalvando(false);}
@@ -407,10 +415,10 @@ function Configuracao({campanha, token, isMobile}) {
     {!supSel&&<div style={{padding:"32px",textAlign:"center",color:C.textSub}}>Selecione um supervisor.</div>}
     {supSel&&loadingSup&&<div style={{padding:"32px",textAlign:"center",color:C.textSub}}>Carregando...</div>}
     {supSel&&!loadingSup&&(<>
-      <div style={{display:"grid",gridTemplateColumns:(isMobile||campanha.tipo==="positivacao")?"1fr":"280px 1fr",gap:"16px",alignItems:"start"}}>
+      <div style={{display:"grid",gridTemplateColumns:(isMobile||!usaProdutos)?"1fr":"280px 1fr",gap:"16px",alignItems:"start"}}>
         <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:"8px",overflow:"hidden"}}>
           <div style={{padding:"10px 14px",background:C.subHeader,color:"#fff",fontWeight:700,fontSize:"12px"}}>
-            META POR VENDEDOR {campanha.tipo!=="positivacao" && <span style={{fontSize:"10px",fontWeight:400,opacity:.75}}>({unLabel})</span>}
+            META POR VENDEDOR {usaProdutos && <span style={{fontSize:"10px",fontWeight:400,opacity:.75}}>({unLabel})</span>}
           </div>
           <div style={{maxHeight:"400px",overflowY:"auto"}}>
             {vendedores.map((v,i)=>(
@@ -424,7 +432,7 @@ function Configuracao({campanha, token, isMobile}) {
                   onChange={e=>setMetas(m=>({...m,[v.cod_vendedor]:e.target.value}))}
                   style={{width:"72px",padding:"5px 8px",textAlign:"right",border:`1px solid ${C.border}`,
                     borderRadius:"4px",fontSize:"12px",fontFamily:C.mono,outline:"none",flexShrink:0}}/>
-                {campanha.tipo!=="positivacao" && <span style={{fontSize:"10px",color:C.textSub,width:"18px",flexShrink:0}}>{unLabel}</span>}
+                {usaProdutos && <span style={{fontSize:"10px",color:C.textSub,width:"18px",flexShrink:0}}>{unLabel}</span>}
               </div>
             ))}
             {vendedores.length===0 && (
@@ -434,14 +442,14 @@ function Configuracao({campanha, token, isMobile}) {
             )}
           </div>
         </div>
-        {campanha.tipo==="positivacao" ? (
+        {!usaProdutos ? (
           <div style={{background:"#FFF9E6",border:`1px solid ${C.gold ?? "#E5C97A"}`,borderRadius:"8px",
             padding:"14px",fontSize:"12px",color:C.text,gridColumn:isMobile?undefined:"1 / -1"}}>
-            💡 <b>Positivação não usa lista de produtos.</b> Qualquer compra do
-            cliente (de qualquer produto do fornecedor da campanha) conta como
-            positivação — o critério é só o cliente ter saído da lista negra
-            comprando de novo. Defina a meta de cada vendedor (ou use "Preencher
-            meta automaticamente" abaixo) e clique em Salvar.
+            💡 <b>Positivação de cliente não usa lista de produtos.</b> Qualquer
+            compra do cliente (de qualquer produto do fornecedor da campanha)
+            conta como positivação — o critério é só o cliente ter saído da
+            lista negra comprando de novo. Defina a meta de cada vendedor (ou
+            use "Preencher meta automaticamente" abaixo) e clique em Salvar.
           </div>
         ) : (
         <div style={{background:"#fff",border:`1px solid ${C.border}`,borderRadius:"8px",overflow:"hidden"}}>
@@ -601,6 +609,7 @@ function FornecedorView({token, userInfo, isMobile}) {
   const [confirmDel,   setConfirmDel]   = useState(false);
   const [novaNome,     setNovaNome]     = useState("");
   const [novaTipo,     setNovaTipo]     = useState("produto");   // 'produto' | 'positivacao'
+  const [novaModo,     setNovaModo]     = useState("cliente");   // 'cliente' | 'produto' (só quando novaTipo='positivacao')
   const [novaCodsec,   setNovaCodsec]   = useState("");
   const [novaCodfornec,setNovaCodfornec]= useState("");
   const [novaUnidade,  setNovaUnidade]  = useState("UN");
@@ -697,10 +706,11 @@ function FornecedorView({token, userInfo, isMobile}) {
         ? {nome:novaNome, tipo:"produto", codsec:Number(novaCodsec),
            unidade:novaUnidade, semana_ini:novaIni, semana_fim:novaFim}
         : {nome:novaNome, tipo:"positivacao", codfornec:Number(novaCodfornec),
+           positivacao_modo:novaModo,
            unidade:"UN", semana_ini:novaIni, semana_fim:novaFim};
       await fetch(`${API_BASE}/api/bl/campanhas`,{method:"POST",headers,
         body:JSON.stringify(body)});
-      setShowNova(false);setNovaNome("");setNovaTipo("produto");
+      setShowNova(false);setNovaNome("");setNovaTipo("produto");setNovaModo("cliente");
       setNovaCodsec("");setNovaCodfornec("");setNovaIni("");setNovaFim("");
       loadCampanhas();
     } finally {setCriando(false);}
@@ -775,11 +785,18 @@ function FornecedorView({token, userInfo, isMobile}) {
                       </select>
                     </div>
                   ) : (
-                    <select value={novaCodfornec} onChange={e=>setNovaCodfornec(e.target.value)}
-                      style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
-                      <option value="">Selecione o fornecedor...</option>
-                      {opcoesFornecPositivacao.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
-                    </select>
+                    <>
+                      <select value={novaCodfornec} onChange={e=>setNovaCodfornec(e.target.value)}
+                        style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
+                        <option value="">Selecione o fornecedor...</option>
+                        {opcoesFornecPositivacao.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+                      </select>
+                      <select value={novaModo} onChange={e=>setNovaModo(e.target.value)}
+                        style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
+                        <option value="cliente">Positivação de Cliente (qualquer produto conta)</option>
+                        <option value="produto">Positivação de Produto (produtos específicos)</option>
+                      </select>
+                    </>
                   )}
                   <div style={{display:"flex",gap:"8px"}}>
                     <input type="date" value={novaIni} onChange={e=>setNovaIni(e.target.value)}
@@ -942,11 +959,18 @@ function FornecedorView({token, userInfo, isMobile}) {
                   </select>
                 </div>
               ) : (
-                <select value={novaCodfornec} onChange={e=>setNovaCodfornec(e.target.value)}
-                  style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
-                  <option value="">Selecione o fornecedor...</option>
-                  {opcoesFornecPositivacao.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
-                </select>
+                <>
+                  <select value={novaCodfornec} onChange={e=>setNovaCodfornec(e.target.value)}
+                    style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
+                    <option value="">Selecione o fornecedor...</option>
+                    {opcoesFornecPositivacao.map(f=><option key={f.id} value={f.id}>{f.nome}</option>)}
+                  </select>
+                  <select value={novaModo} onChange={e=>setNovaModo(e.target.value)}
+                    style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>
+                    <option value="cliente">Positivação de Cliente</option>
+                    <option value="produto">Positivação de Produto</option>
+                  </select>
+                </>
               )}
               <input type="date" value={novaIni} onChange={e=>setNovaIni(e.target.value)}
                 style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}/>

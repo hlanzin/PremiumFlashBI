@@ -1,10 +1,16 @@
 """
 Campanhas tipo 'positivação': conta quantos clientes que estavam na Lista
 Negra do fornecedor (mesmo critério do módulo Lista Negra) ao INÍCIO da
-campanha voltaram a comprar — QUALQUER produto DAQUELE FORNECEDOR (mesmo
-escopo usado para definir a elegibilidade — não uma lista de produtos
-específicos) — durante a semana da campanha. Não depende de "produtos
-habilitados" nenhum; o único critério é o fornecedor.
+campanha voltaram a comprar — durante a semana da campanha.
+
+A ELEGIBILIDADE (quem está na lista negra) é SEMPRE baseada no fornecedor
+inteiro, independente do modo abaixo. Já o critério de "positivou" tem
+dois modos (campanha.positivacao_modo):
+
+  'cliente' (codprods=None) -> QUALQUER produto do fornecedor conta.
+  'produto' (codprods=[...]) -> só conta se comprar um dos produtos
+                                 específicos habilitados pelo supervisor
+                                 (mesma lista "x ou y" do tipo 'produto').
 
 Elegibilidade (mesma lógica de sql/lista_negra_sql.py):
   BASE_META    = cliente comprou do fornecedor nos últimos 3 meses
@@ -14,11 +20,8 @@ Elegibilidade (mesma lógica de sql/lista_negra_sql.py):
   CART_ABERTA  = já tem pedido em aberto do fornecedor no mês corrente
                  (antes da campanha começar) -> NÃO entra na lista negra
   ELEGIVEIS    = BASE_META menos FAT_MES menos CART_ABERTA
-
-Positivação = elegível que comprou QUALQUER produto do MESMO fornecedor
-entre o início da semana e a data de referência.
 """
-from typing import Optional
+from typing import List, Optional
 from config import FILIAL
 
 
@@ -28,13 +31,18 @@ def build_positivacao_sql(
     date_ref: str,
     cod_supervisor: Optional[int] = None,
     fechamento: bool = False,
+    codprods: Optional[List[int]] = None,
 ) -> tuple:
     """
     Uma linha por cliente ELEGÍVEL (estava na lista negra do fornecedor ao
-    início da campanha), com flags positivou_realizado (comprou QUALQUER
-    produto do fornecedor entre semana_ini e ontem) e positivou_hoje
-    (comprou hoje). A agregação por vendedor é feita em Python — ver
+    início da campanha), com flags positivou_realizado e positivou_hoje.
+    A agregação por vendedor é feita em Python — ver
     agregar_positivacao_por_vendedor().
+
+    codprods=None -> positivação de CLIENTE: qualquer produto do fornecedor
+                      conta como "voltou a comprar".
+    codprods=[...] -> positivação de PRODUTO: só conta se comprar um dos
+                       produtos da lista (mesmo padrão do tipo 'produto').
 
     fechamento=False (semana em curso, mesmo padrão do tipo 'produto'):
         positivou_realizado = semana_ini → date_ref - 1 (ontem)
@@ -51,6 +59,14 @@ def build_positivacao_sql(
         janela_realizado = "BETWEEN P.DT_SEMANA_INI AND P.DT_HOJE"
     else:
         janela_realizado = "BETWEEN P.DT_SEMANA_INI AND P.DT_ONTEM"
+
+    # Modo 'produto': só conta como positivação se comprar um dos produtos
+    # da lista. Modo 'cliente' (codprods=None): qualquer produto do
+    # fornecedor conta — o filtro de fornecedor já vem do JOIN PCPRODUT.
+    filtro_positivou_prod = (
+        f"AND PCMOV.CODPROD IN ({','.join(str(p) for p in codprods)})"
+        if codprods else ""
+    )
 
     sql = f"""
 WITH PARAMS AS (
@@ -135,6 +151,7 @@ POSITIVOU_REALIZADO AS (
         INNER JOIN PCPRODUT ON PCPRODUT.CODPROD     = PCMOV.CODPROD
         CROSS JOIN PARAMS P
     WHERE PCPRODUT.CODFORNEC = {codfornec}
+      {filtro_positivou_prod}
       AND PCMOV.DTMOV       {janela_realizado}
       AND PCNFSAID.DTSAIDA  {janela_realizado}
       AND PCMOV.CODFILIAL    IN ('{FILIAL}')
@@ -154,6 +171,7 @@ POSITIVOU_HOJE AS (
         INNER JOIN PCPRODUT ON PCPRODUT.CODPROD     = PCMOV.CODPROD
         CROSS JOIN PARAMS P
     WHERE PCPRODUT.CODFORNEC = {codfornec}
+      {filtro_positivou_prod}
       AND {("1=0" if fechamento else "PCMOV.DTMOV = P.DT_HOJE AND PCNFSAID.DTSAIDA = P.DT_HOJE")}
       AND PCMOV.CODFILIAL    IN ('{FILIAL}')
       AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
