@@ -13,7 +13,7 @@ from sql.bateu_levou_sql import (
     sql_322_supervisor, agregar_por_vendedor,
 )
 from sql.bateu_levou_positivacao_sql import (
-    build_positivacao_sql, agregar_positivacao_por_vendedor,
+    build_positivacao_sql, agregar_positivacao_por_vendedor, build_debug_cliente_sql,
 )
 
 create_bl_tables()
@@ -195,6 +195,83 @@ def get_meta_sugerida(cid: int, sup: int, u: CurrentUser = Depends(get_current_u
     agregado = agregar_positivacao_por_vendedor(rows, {})
     return {"dados": [{"cod_vendedor": v["cod_vendedor"], "nome_vendedor": v["nome_vendedor"],
                         "meta_sugerida": v["elegiveis_total"]} for v in agregado]}
+
+
+# ── Debug: por que um cliente específico não aparece como positivado ─────────
+@router.get("/campanhas/{cid}/debug-cliente/{codcli}")
+def debug_cliente(cid: int, codcli: int, data: Optional[str] = None,
+                   u: CurrentUser = Depends(get_current_user)):
+    """
+    Diagnóstico pra investigar um cliente que comprou mas não apareceu como
+    positivado. Mostra cada etapa (elegibilidade, vendedor/supervisor,
+    produtos habilitados quando modo='produto') pra achar onde ele cai fora.
+    """
+    camp = _check(cid, u)
+    if camp["tipo"] != "positivacao":
+        raise HTTPException(400, "Debug só se aplica a campanhas tipo='positivacao'.")
+
+    dr = parse_data(data)
+    from datetime import date as _date
+    fechamento = camp["semana_fim"] < _date.today().isoformat()
+
+    sup = None
+    prods = []
+    codprods = None
+    if camp["positivacao_modo"] == "produto":
+        sup_rows = execute_query(
+            "SELECT U1.CODSUPERVISOR AS cod_supervisor FROM PCCLIENT C "
+            "LEFT JOIN PCUSUARI U1 ON U1.CODUSUR = C.CODUSUR1 WHERE C.CODCLI = :codcli",
+            {"codcli": codcli})
+        sup = sup_rows[0]["cod_supervisor"] if sup_rows else None
+        if sup is not None:
+            prods = listar_produtos_supervisor(cid, sup)
+        codprods = [p["codprod"] for p in prods] if prods else None
+
+    sql = build_debug_cliente_sql(camp["codfornec"], camp["semana_ini"], dr, codcli,
+                                   fechamento=fechamento, codprods=codprods)
+    try:
+        rows = execute_query(sql, [])
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    if not rows:
+        return {"encontrado": False, "diagnostico": ["Cliente não encontrado em PCCLIENT."]}
+
+    row = rows[0]
+    diagnostico = []
+    if row.get("cod_supervisor") is None:
+        diagnostico.append(
+            "O vendedor cadastrado no cliente (CODUSUR1) não bate com nenhum "
+            "registro em PCUSUARI — por isso o cliente não tem supervisor "
+            "associado e some do relatório mesmo se for elegível e comprar.")
+    if camp["positivacao_modo"] == "produto":
+        if sup is None:
+            diagnostico.append("Não foi possível achar o supervisor do cliente, "
+                                "então também não dá pra saber quais produtos estão habilitados.")
+        elif not prods:
+            diagnostico.append(
+                f"O supervisor #{sup} deste cliente não tem NENHUM produto habilitado "
+                "nesta campanha — o cliente nunca é considerado, mesmo comprando.")
+    if not row.get("eh_elegivel"):
+        if row.get("eh_fat_mes"):
+            diagnostico.append("Cliente já tinha comprado do fornecedor neste mês, "
+                                "ANTES da campanha começar — por isso não entrou na lista de elegíveis.")
+        elif row.get("eh_cart_aberta"):
+            diagnostico.append("Cliente já tinha pedido em aberto do fornecedor antes "
+                                "da campanha começar — não entrou na lista de elegíveis.")
+        elif not row.get("eh_base_meta"):
+            diagnostico.append("Cliente não tem compra do fornecedor nos 3 meses "
+                                "anteriores à campanha — não se enquadra no critério de elegibilidade.")
+    elif not row.get("positivou_realizado") and not row.get("positivou_hoje"):
+        diagnostico.append("Cliente é elegível, mas não foi encontrada nenhuma venda "
+                            "dos produtos considerados dentro da janela da campanha.")
+
+    return {
+        "encontrado": True,
+        "supervisor_configurado_com_produtos": bool(prods) if camp["positivacao_modo"] == "produto" else None,
+        "produtos_habilitados": [p["codprod"] for p in prods] if prods else None,
+        "diagnostico": diagnostico or ["Nada de anormal encontrado — deveria aparecer no relatório."],
+        "dados": row,
+    }
 
 
 # ── Busca produtos Oracle ─────────────────────────────────────────────────────
@@ -407,7 +484,7 @@ def _com_sem_real(vendedores, metas_sup, sup, u, execute_query):
             "cod_supervisor": sup, "nome_supervisor": "",
             "meta": float(metas_sup[cod_v]),
             "qt_realizado": 0.0, "qt_dia": 0.0,
-            "pct_ating": 0.0, "produtos": [],
+            "pct_ating": 0.0, "produtos": [], "clientes": [],
         })
     return vendedores
 

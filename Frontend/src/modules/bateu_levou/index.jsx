@@ -29,7 +29,8 @@ const semanaAtualIni = () => {
 function VendedorRow({v, unidade, tipo, isExpanded, onToggle, zebra}) {
   const pct=v.pct_ating;
   const isPositivacao = tipo === "positivacao";
-  const temDetalhe = (v.produtos?.length ?? 0) > 0;
+  const detalhe = isPositivacao ? (v.clientes ?? []) : (v.produtos ?? []);
+  const temDetalhe = detalhe.length > 0;
   const fmt = (n) => isPositivacao ? fmtClientes(n) : fmtQtd(n, unidade);
   const bgBase = zebra ? (C.rowEven ?? "#fff") : (C.rowOdd ?? "#FAFAFA");
   const td=(ex={})=>({padding:"7px 8px",borderBottom:`1px solid ${C.border}`,
@@ -53,7 +54,28 @@ function VendedorRow({v, unidade, tipo, isExpanded, onToggle, zebra}) {
       <td style={td({textAlign:"right",fontFamily:C.mono,fontWeight:600,color:C.primary})}>{fmt(v.qt_dia)}</td>
       <td style={td({textAlign:"center"})}>{arrow(pct)}</td>
     </tr>
-    {isExpanded && v.produtos.map(p=>(
+    {isExpanded && isPositivacao && detalhe.map(cli=>(
+      <tr key={cli.cod_cliente} style={{background:"#FFFAF0"}}>
+        <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`}}/>
+        <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`,
+          paddingLeft:"24px",fontSize:"11px",color:C.textSub}}>
+          <span style={{fontFamily:C.mono,marginRight:"6px",color:C.primary}}>#{cli.cod_cliente}</span>
+          {cli.razao_social}
+        </td>
+        <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`}}/>
+        <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`,
+          textAlign:"center",fontFamily:C.mono,fontSize:"11px",color:"#16A34A",fontWeight:700}}>
+          {cli.positivou_realizado ? "✓" : ""}
+        </td>
+        <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`}}/>
+        <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`,
+          textAlign:"center",fontFamily:C.mono,fontSize:"11px",color:C.primary,fontWeight:700}}>
+          {cli.positivou_hoje ? "✓ hoje" : ""}
+        </td>
+        <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`}}/>
+      </tr>
+    ))}
+    {isExpanded && !isPositivacao && detalhe.map(p=>(
       <tr key={p.codprod} style={{background:"#FFFAF0"}}>
         <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`}}/>
         <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`,
