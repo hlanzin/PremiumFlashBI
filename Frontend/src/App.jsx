@@ -9,6 +9,7 @@ import ModuleFaturamento  from "./modules/faturamento";
 import ModuleDistNumerica from "./modules/dist_numerica";
 import ModuleEstoque      from "./modules/estoque";
 import ModuleRanking      from "./modules/ranking";
+import ModuleRankingClientes from "./modules/ranking_clientes";
 import ModuleBateuLevou   from "./modules/bateu_levou";
 import ModuleAdmin        from "./modules/admin";
 import ModuleChamados     from "./modules/chamados";
@@ -27,7 +28,7 @@ import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
   BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, ShoppingBag, Banknote, Wallet, Users,
-  Candy, Ban, ClipboardList, Menu, AlertTriangle,
+  Candy, Ban, ClipboardList, Menu, AlertTriangle, Trophy,
 } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 
@@ -43,6 +44,7 @@ const BI_MODULES = [
   { id:"conta_corrente",    label:"Conta Corrente",    icon:Wallet,   component:ModuleContaCorrente, cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"clientes_forn",   label:"Clientes",          icon:Users,        component:ModuleClientesForn,  cargos:["admin","gerencial","fornecedor"] },
   { id:"vendas_produto",  label:"Vendas Produto",     icon:ShoppingBag,  component:ModuleVendasProduto, cargos:["admin","gerencial","fornecedor"] },
+  { id:"ranking_clientes", label:"Ranking Clientes",  icon:Trophy,       component:ModuleRankingClientes, cargos:["admin","gerencial","fornecedor","supervisor","vendedor"] },
   { id:"estoque",       label:"Estoque",           icon:Package,     component:ModuleEstoque,      cargos:null },
   { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"admin",         label:"Admin",             icon:Settings,    component:ModuleAdmin,        cargos:["admin"] },
