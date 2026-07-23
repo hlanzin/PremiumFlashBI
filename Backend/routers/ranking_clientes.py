@@ -69,10 +69,14 @@ def get_vendedores_supervisor(cod_supervisor: int, u: CurrentUser = Depends(get_
     if u.is_supervisor and u.cod_winthor != cod_supervisor:
         raise HTTPException(403, "Acesso negado")
     try:
+        # Sem exclusão de código de vendedor aqui — diferente do Bateu Levou
+        # (que tira 2/10/160/180 por serem contas de uso interno da
+        # campanha), aqui é só um filtro de carteira: todo vendedor real da
+        # equipe deve poder ser selecionado, igual o Faturamento em modo
+        # gerencial já inclui esses códigos nos totais.
         sql = """SELECT PCUSUARI.CODUSUR AS cod_vendedor, PCUSUARI.NOME AS nome_vendedor
                  FROM PCUSUARI
                  WHERE PCUSUARI.CODSUPERVISOR = :sup
-                   AND PCUSUARI.CODUSUR NOT IN (2,10,160,180)
                    AND PCUSUARI.NOME LIKE 'PMU%'
                  ORDER BY PCUSUARI.NOME"""
         rows = execute_query(sql, {"sup": cod_supervisor})

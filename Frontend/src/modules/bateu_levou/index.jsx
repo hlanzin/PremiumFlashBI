@@ -61,6 +61,10 @@ function VendedorRow({v, unidade, tipo, isExpanded, onToggle, zebra}) {
           paddingLeft:"24px",fontSize:"11px",color:C.textSub}}>
           <span style={{fontFamily:C.mono,marginRight:"6px",color:C.primary}}>#{cli.cod_cliente}</span>
           {cli.razao_social}
+          {cli.eh_novo && (
+            <span style={{marginLeft:"6px",background:"#DBEAFE",color:"#1D4ED8",fontSize:"9px",
+              fontWeight:700,padding:"1px 6px",borderRadius:"8px"}}>NOVO</span>
+          )}
         </td>
         <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`}}/>
         <td style={{padding:"5px 8px",borderBottom:`1px dashed ${C.border}`,

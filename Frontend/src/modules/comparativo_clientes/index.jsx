@@ -1,24 +1,22 @@
 import { useState, useEffect, useMemo } from "react";
-import { GitCompare, Search, TrendingUp, TrendingDown, X } from "lucide-react";
-import { C, fmtR, fmtN } from "../../theme";
+import { GitCompare, Search, TrendingUp, TrendingDown, X, List } from "lucide-react";
+import { C, fmtR, fmtN, fmtDt } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
-import Th from "../../components/Th";
 import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
-import TableCard from "../../components/TableCard";
 import SkeletonRows from "../../components/SkeletonRows";
 import Modal from "../../components/Modal";
 import LineChartCompare from "../../components/LineChartCompare";
 import { exportCSV } from "../../utils/exportCSV";
-import { useSort } from "../../hooks/useSort";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 
 const STATUS_CFG = {
-  novo:       { label: "Novo",       plural: "Novos",       bg: "#DBEAFE", fg: "#1D4ED8" },
-  recorrente: { label: "Recorrente", plural: "Recorrentes",  bg: "#DCFCE7", fg: "#15803D" },
-  perdido:    { label: "Perdido",    plural: "Perdidos",     bg: "#FEE2E2", fg: "#B91C1C" },
+  novo:           { label: "Novo",           plural: "Novos",           bg: "#DBEAFE", fg: "#1D4ED8" },
+  recorrente:     { label: "Recorrente",     plural: "Recorrentes",     bg: "#DCFCE7", fg: "#15803D" },
+  perdido:        { label: "Perdido",        plural: "Perdidos",        bg: "#FEE2E2", fg: "#B91C1C" },
+  perdido_no_ano: { label: "Perdido no Ano", plural: "Perdidos no Ano", bg: "#FFEDD5", fg: "#C2410C" },
 };
 
 function fmtDeltaPct(v) {
@@ -60,7 +58,6 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   const isFornecedor = cargo === "fornecedor";
   const isGerencial  = cargo === "gerencial" || cargo === "admin";
   const isSupervisor = cargo === "supervisor";
-  const { sortCol, sortDir, handleSort } = useSort("valor_atual", "desc");
 
   const anoHoje = new Date().getFullYear();
   const [fornecedores, setFornecedores] = useState([]);
@@ -70,7 +67,6 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   const [supSel, setSupSel] = useState(isSupervisor ? codUser : null);
   const [vendedores, setVendedores] = useState([]);
   const [vendSel, setVendSel] = useState(null);
-  const [busca, setBusca] = useState("");
 
   const [resp, setResp] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -80,9 +76,9 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   const [detalheCli, setDetalheCli] = useState(null);
   const [loadingCli, setLoadingCli] = useState(false);
 
-  // Modal de lista por status (novo/recorrente/perdido), com busca
-  const [statusModal, setStatusModal] = useState(null); // 'novo' | 'recorrente' | 'perdido' | null
-  const [statusBusca, setStatusBusca] = useState("");
+  // Modal de lista — 'novo' | 'recorrente' | 'perdido' | 'todos' | null
+  const [listaModal, setListaModal] = useState(null);
+  const [listaBusca, setListaBusca] = useState("");
 
   useEffect(() => {
     fetch(`${API_BASE}/api/lista-negra/fornecedores`, { headers })
@@ -131,43 +127,32 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   const resumo   = resp?.resumo ?? {};
   const mensal   = resp?.mensal ?? [];
 
-  const rows = useMemo(() => {
-    let r = [...clientes];
-    if (busca) {
-      const s = busca.toLowerCase();
-      r = r.filter(row =>
-        (row.nome_cliente ?? "").toLowerCase().includes(s) ||
-        (row.nome_cidade ?? "").toLowerCase().includes(s));
-    }
-    r.sort((a, b) => {
-      let av = a[sortCol], bv = b[sortCol];
-      if (av == null) return 1; if (bv == null) return -1;
-      if (typeof av === "number") return sortDir === "asc" ? av - bv : bv - av;
-      return sortDir === "asc"
-        ? String(av).localeCompare(String(bv), "pt-BR")
-        : String(bv).localeCompare(String(av), "pt-BR");
-    });
-    return r;
-  }, [clientes, busca, sortCol, sortDir]);
+  // Lista completa, ordenada por valor do ano atual — base do export e do modal "todos"
+  const rows = useMemo(() => [...clientes].sort((a, b) => (b.valor_atual ?? 0) - (a.valor_atual ?? 0)), [clientes]);
 
   const serieMensal = useMemo(() => ([
     { key: "atual",    label: String(anoAtual),     color: C.primary, values: mensal.map(m => m.valor_atual) },
     { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: mensal.map(m => m.valor_anterior) },
   ]), [mensal, anoAtual]);
 
-  const clientesDoStatus = useMemo(() => {
-    if (!statusModal) return [];
-    let r = clientes.filter(c => c.status === statusModal);
-    if (statusBusca) {
-      const s = statusBusca.toLowerCase();
-      r = r.filter(c =>
-        (c.nome_cliente ?? "").toLowerCase().includes(s) ||
-        (c.nome_cidade ?? "").toLowerCase().includes(s));
+  const clientesDaLista = useMemo(() => {
+    if (!listaModal) return [];
+    let base = listaModal === "todos" ? rows
+      : listaModal === "perdido_no_ano" ? clientes.filter(c => c.perdido_no_ano)
+      : clientes.filter(c => c.status === listaModal);
+    if (listaModal === "perdido") {
+      base = [...base].sort((a, b) => (b.valor_anterior ?? 0) - (a.valor_anterior ?? 0));
     }
-    const campoValor = statusModal === "perdido" ? "valor_anterior" : "valor_atual";
-    r.sort((a, b) => (b[campoValor] ?? 0) - (a[campoValor] ?? 0));
-    return r;
-  }, [clientes, statusModal, statusBusca]);
+    // posição calculada ANTES do filtro de busca — buscar um cliente mostra
+    // a posição real dele no ranking, não a posição dentro do resultado filtrado.
+    const comPosicao = base.map((c, i) => ({ ...c, _posicao: i + 1 }));
+    if (!listaBusca) return comPosicao;
+    const s = listaBusca.toLowerCase().trim();
+    return comPosicao.filter(c =>
+      (c.nome_cliente ?? "").toLowerCase().includes(s) ||
+      (c.nome_cidade ?? "").toLowerCase().includes(s) ||
+      String(c.cod_cliente ?? "").includes(s));
+  }, [rows, clientes, listaModal, listaBusca]);
 
   const abrirCliente = (cliente) => {
     setClienteSel(cliente);
@@ -182,8 +167,8 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
       .finally(() => setLoadingCli(false));
   };
 
-  const abrirClienteDoStatus = (cliente) => {
-    setStatusModal(null); setStatusBusca("");
+  const abrirClienteDaLista = (cliente) => {
+    setListaModal(null); setListaBusca("");
     abrirCliente(cliente);
   };
 
@@ -199,6 +184,7 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   };
 
   const anos = Array.from({ length: 6 }, (_, i) => anoHoje - i);
+  const tituloLista = listaModal === "todos" ? "Todos os Clientes" : listaModal ? `Clientes ${STATUS_CFG[listaModal].plural}` : "";
 
   return (
     <>
@@ -230,16 +216,6 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
           <SelectModal value={vendSel} onChange={setVendSel} options={vendedores}
             placeholder={supSel ? "Todos vendedores..." : "Escolha um supervisor"} labelKey="nome" valueKey="cod" isMobile={isMobile} />
         )}
-
-        <div style={{ display: "flex", alignItems: "center", gap: "6px",
-          border: `1px solid ${C.border}`, borderRadius: "6px",
-          padding: "5px 10px", background: C.bg, marginLeft: isMobile ? 0 : "auto",
-          flex: isMobile ? "1" : "none" }}>
-          <Search size={12} style={{ color: C.textSub }} />
-          <input placeholder="Filtrar cliente..." value={busca} onChange={e => setBusca(e.target.value)}
-            style={{ border: "none", background: "transparent", fontSize: "12px",
-                     width: isMobile ? "auto" : "150px", outline: "none", color: C.text, fontFamily: C.sans }} />
-        </div>
       </div>
 
       {!fornSel && !loading && (
@@ -255,19 +231,23 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
         <div style={{ padding: isMobile ? "12px" : "16px 20px" }}>
           {/* ── Stat tiles ── */}
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
-            <StatTile label="CLIENTES ATIVOS" atual={resumo.qtd_clientes_atual} anterior={resumo.qtd_clientes_anterior}
-              deltaPct={pctDelta(resumo.qtd_clientes_atual, resumo.qtd_clientes_anterior)} formatValue={fmtN} />
+            <StatTile label="CLIENTES ATIVOS (últimos 3 meses)" atual={resumo.ativos_atual} anterior={resumo.ativos_anterior}
+              deltaPct={pctDelta(resumo.ativos_atual, resumo.ativos_anterior)} formatValue={fmtN} />
+            <StatTile label="CLIENTES ATENDIDOS NO PERÍODO" atual={resumo.atendidos_atual} anterior={resumo.atendidos_anterior}
+              deltaPct={pctDelta(resumo.atendidos_atual, resumo.atendidos_anterior)} formatValue={fmtN} />
             <StatTile label="VALOR TOTAL" atual={resumo.valor_total_atual} anterior={resumo.valor_total_anterior}
               deltaPct={pctDelta(resumo.valor_total_atual, resumo.valor_total_anterior)} formatValue={fmtR} />
             <div style={{ flex: 1, minWidth: "220px", background: "#fff", border: `1px solid ${C.border}`,
-              borderRadius: "8px", padding: "12px 16px", display: "flex", gap: "16px" }}>
-              {["novo", "recorrente", "perdido"].map(k => (
-                <button key={k} onClick={() => { setStatusModal(k); setStatusBusca(""); }}
+              borderRadius: "8px", padding: "12px 16px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+              {["novo", "recorrente", "perdido", "perdido_no_ano"].map(k => (
+                <button key={k} onClick={() => { setListaModal(k); setListaBusca(""); }}
                   style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
                   onMouseEnter={e => e.currentTarget.style.opacity = 0.7}
                   onMouseLeave={e => e.currentTarget.style.opacity = 1}>
                   <div style={{ fontSize: "10px", color: C.textSub, fontWeight: 600 }}>{STATUS_CFG[k].plural.toUpperCase()}</div>
-                  <div style={{ fontSize: "18px", fontWeight: 800, color: STATUS_CFG[k].fg }}>{resumo[`${k}s`] ?? 0}</div>
+                  <div style={{ fontSize: "18px", fontWeight: 800, color: STATUS_CFG[k].fg }}>
+                    {resumo[k === "perdido_no_ano" ? "perdidos_no_ano" : `${k}s`] ?? 0}
+                  </div>
                 </button>
               ))}
             </div>
@@ -276,97 +256,84 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
           {/* ── Gráfico mensal ── */}
           <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: "8px",
             padding: "16px", marginBottom: "16px" }}>
-            <div style={{ fontSize: "12px", fontWeight: 700, color: C.text, marginBottom: "8px" }}>
-              Valor faturado por mês
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: C.text }}>Valor faturado por mês</div>
+              <button onClick={() => { setListaModal("todos"); setListaBusca(""); }}
+                style={{ display: "flex", alignItems: "center", gap: "6px", background: C.primary, color: "#fff",
+                  border: "none", borderRadius: "6px", padding: "6px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
+                <List size={13} /> Ver todos os clientes ({rows.length})
+              </button>
             </div>
             <LineChartCompare series={serieMensal} xLabels={MESES} formatValue={fmtR} />
           </div>
-
-          {/* ── Tabela de clientes ── */}
-          <TableCard isMobile={isMobile} maxHeight="60vh">
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: isMobile ? "11px" : "12px" }}>
-              <thead>
-                <tr>
-                  <Th label="CLIENTE" col="nome_cliente" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="CIDADE" col="nome_cidade" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label="VENDEDOR" col="nome_vendedor" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label={`VALOR ${anoAtual}`} col="valor_atual" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
-                  <Th label={`VALOR ${anoAtual - 1}`} col="valor_anterior" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
-                  <Th label="CRESCIMENTO" col="crescimento_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
-                  <Th label="STATUS" col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => {
-                  const st = STATUS_CFG[r.status] ?? { label: r.status, bg: "#eee", fg: "#666" };
-                  return (
-                    <tr key={r.cod_cliente ?? i} onClick={() => abrirCliente(r)}
-                      style={{ background: i % 2 === 0 ? C.rowEven : C.rowOdd, cursor: "pointer" }}
-                      onMouseEnter={e => e.currentTarget.style.background = C.rowHover}
-                      onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? C.rowEven : C.rowOdd}>
-                      <td style={{ padding: "5px 8px", fontWeight: 600 }}>{r.nome_cliente}</td>
-                      <td style={{ padding: "5px 8px", color: C.textSub }}>{r.nome_cidade}</td>
-                      <td style={{ padding: "5px 8px", color: C.textSub }}>{r.nome_vendedor ?? `#${r.cod_vendedor}`}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono }}>{fmtR(r.valor_atual)}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono, color: C.textSub }}>{fmtR(r.valor_anterior)}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtDeltaPct(r.crescimento_pct)}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "center" }}>
-                        <span style={{ background: st.bg, color: st.fg, fontSize: "10px", fontWeight: 700,
-                          padding: "2px 8px", borderRadius: "10px" }}>{st.label}</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {rows.length === 0 && (
-              <div style={{ padding: "32px", textAlign: "center", color: C.textSub }}>Nenhum cliente no período.</div>
-            )}
-          </TableCard>
         </div>
       )}
 
-      {/* ── Modal: lista de clientes por status (novo/recorrente/perdido) ── */}
-      <Modal open={!!statusModal} onClose={() => { setStatusModal(null); setStatusBusca(""); }}
-        icon={GitCompare} title={statusModal ? `Clientes ${STATUS_CFG[statusModal].plural}` : ""}
-        subtitle={`${clientesDoStatus.length} cliente(s)`} width="min(560px, 94vw)" noPadding>
+      {/* ── Modal: lista de clientes (todos, ou por status) ── */}
+      <Modal open={!!listaModal} onClose={() => { setListaModal(null); setListaBusca(""); }}
+        icon={GitCompare} title={tituloLista}
+        subtitle={`${clientesDaLista.length} cliente(s)`} width="min(620px, 94vw)" noPadding>
         <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px",
             border: `1px solid ${C.border}`, borderRadius: "6px", padding: "6px 10px" }}>
             <Search size={13} color={C.textSub} />
-            <input autoFocus placeholder="Buscar cliente ou cidade..." value={statusBusca}
-              onChange={e => setStatusBusca(e.target.value)}
+            <input autoFocus placeholder="Buscar por código, nome ou cidade..." value={listaBusca}
+              onChange={e => setListaBusca(e.target.value)}
               style={{ border: "none", outline: "none", fontSize: "12px", flex: 1, fontFamily: C.sans, color: C.text, background: "transparent" }} />
-            {statusBusca && (
-              <button onClick={() => setStatusBusca("")} style={{ background: "none", border: "none", cursor: "pointer", color: C.textSub, display: "flex" }}>
+            {listaBusca && (
+              <button onClick={() => setListaBusca("")} style={{ background: "none", border: "none", cursor: "pointer", color: C.textSub, display: "flex" }}>
                 <X size={13} />
               </button>
             )}
           </div>
         </div>
-        <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
-          {clientesDoStatus.length === 0 && (
+        <div style={{ maxHeight: "55vh", overflowY: "auto" }}>
+          {clientesDaLista.length === 0 && (
             <div style={{ padding: "32px", textAlign: "center", color: C.textSub, fontSize: "12px" }}>
               Nenhum cliente encontrado.
             </div>
           )}
-          {clientesDoStatus.map((c, i) => (
-            <div key={c.cod_cliente ?? i} onClick={() => abrirClienteDoStatus(c)}
-              style={{ padding: "10px 20px", borderBottom: `1px solid ${C.border}`, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
-                background: i % 2 === 0 ? "#fff" : C.rowEven }}
-              onMouseEnter={e => e.currentTarget.style.background = C.rowHover}
-              onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : C.rowEven}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: C.text, whiteSpace: "nowrap",
-                  overflow: "hidden", textOverflow: "ellipsis" }}>{c.nome_cliente}</div>
-                <div style={{ fontSize: "11px", color: C.textSub }}>{c.nome_cidade} · {c.nome_vendedor ?? `#${c.cod_vendedor}`}</div>
+          {clientesDaLista.map((c, i) => {
+            const st = STATUS_CFG[c.status] ?? { label: c.status, bg: "#eee", fg: "#666" };
+            return (
+              <div key={c.cod_cliente ?? i} onClick={() => abrirClienteDaLista(c)}
+                style={{ padding: "10px 20px", borderBottom: `1px solid ${C.border}`, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
+                  background: i % 2 === 0 ? "#fff" : C.rowEven }}
+                onMouseEnter={e => e.currentTarget.style.background = C.rowHover}
+                onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : C.rowEven}>
+                <div style={{ width: "30px", flexShrink: 0, textAlign: "center", fontSize: "11px",
+                  fontWeight: 700, color: C.textSub, fontFamily: C.mono }}>{c._posicao}º</div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: C.text, whiteSpace: "nowrap",
+                    overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {c.nome_cliente}
+                    <span style={{ fontFamily: C.mono, fontWeight: 400, color: C.textSub, fontSize: "10px", marginLeft: "6px" }}>
+                      #{c.cod_cliente}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: C.textSub }}>
+                    {c.nome_cidade} · {c.nome_vendedor ?? `#${c.cod_vendedor}`}
+                    {listaModal === "perdido_no_ano" && (
+                      <> · última compra: {fmtDt(c.ultima_compra_atual)}</>
+                    )}
+                  </div>
+                </div>
+                {listaModal === "todos" && (
+                  <span style={{ background: st.bg, color: st.fg, fontSize: "10px", fontWeight: 700,
+                    padding: "2px 8px", borderRadius: "10px", flexShrink: 0 }}>{st.label}</span>
+                )}
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontFamily: C.mono, fontSize: "12px", fontWeight: 700 }}>
+                    {fmtR(listaModal === "perdido" ? c.valor_anterior : c.valor_atual)}
+                  </div>
+                  {(listaModal === "todos" || listaModal === "recorrente") && (
+                    <div style={{ fontSize: "10px" }}>{fmtDeltaPct(c.crescimento_pct)}</div>
+                  )}
+                </div>
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0, fontFamily: C.mono, fontSize: "12px", fontWeight: 700 }}>
-                {fmtR(statusModal === "perdido" ? c.valor_anterior : c.valor_atual)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Modal>
 

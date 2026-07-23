@@ -24,7 +24,18 @@ Elegibilidade (mesma lógica de sql/lista_negra_sql.py):
                  começar) -> NÃO entra na lista negra
   CART_ABERTA  = já tem pedido em aberto do fornecedor no mês corrente
                  (antes da campanha começar) -> NÃO entra na lista negra
-  ELEGIVEIS    = BASE_META menos FAT_MES menos CART_ABERTA
+  ELEGIVEIS    = (BASE_META menos FAT_MES menos CART_ABERTA) MAIS NOVOS
+
+  NOVOS        = cliente NÃO ESTÁ NA LISTA (não está em BASE_META — não
+                 comprou do fornecedor nos últimos 3 meses fechados) e não
+                 tem pedido em aberto (CART_ABERTA) nem já faturou esse mês
+                 (FAT_MES). Cobre tanto quem nunca comprou quanto quem
+                 comprou há muito mais tempo que a janela de 3 meses —
+                 "novo" no sentido de novo NA LISTA da campanha, não
+                 necessariamente novo cadastro. Também conta como
+                 positivação: se comprar durante a campanha, aumenta a base
+                 de clientes atendidos (aquisição/reativação), não só
+                 recuperação de quem tinha acabado de sair da lista.
 """
 from typing import List, Optional
 from config import FILIAL
@@ -218,11 +229,23 @@ CART_ABERTA AS (
       AND PCPRODUT.CODFORNEC = {codfornec}
 ),
 
+NOVOS AS (
+    SELECT C.CODCLI
+    FROM PCCLIENT C
+    WHERE C.CODCLI NOT IN (SELECT CODCLI FROM BASE_META)
+      AND C.CODCLI NOT IN (SELECT CODCLI FROM FAT_MES)
+      AND C.CODCLI NOT IN (SELECT CODCLI FROM CART_ABERTA)
+      AND EXISTS (SELECT 1 FROM PCUSUARI U WHERE U.CODUSUR = C.CODUSUR1 AND U.NOME LIKE 'PMU%')
+),
+
 ELEGIVEIS AS (
-    SELECT B.CODCLI
+    SELECT B.CODCLI, 0 AS EH_NOVO
     FROM BASE_META B
     WHERE B.CODCLI NOT IN (SELECT CODCLI FROM FAT_MES)
       AND B.CODCLI NOT IN (SELECT CODCLI FROM CART_ABERTA)
+    UNION
+    SELECT N.CODCLI, 1 AS EH_NOVO
+    FROM NOVOS N
 ),
 {cte_realizado},
 {cte_hoje}
@@ -233,6 +256,7 @@ SELECT
     C.CODUSUR1                                             AS cod_vendedor,
     U1.NOME                                                AS nome_vendedor,
     U1.CODSUPERVISOR                                       AS cod_supervisor,
+    E.EH_NOVO                                              AS eh_novo,
     {select_final_real}                                   AS positivou_realizado,
     {select_final_hoje}                                   AS positivou_hoje
 FROM ELEGIVEIS E
@@ -347,9 +371,16 @@ SELECT
     CASE WHEN C.CODCLI IN (SELECT CODCLI FROM BASE_META)   THEN 1 ELSE 0 END AS eh_base_meta,
     CASE WHEN C.CODCLI IN (SELECT CODCLI FROM FAT_MES)     THEN 1 ELSE 0 END AS eh_fat_mes,
     CASE WHEN C.CODCLI IN (SELECT CODCLI FROM CART_ABERTA) THEN 1 ELSE 0 END AS eh_cart_aberta,
-    CASE WHEN C.CODCLI IN (SELECT CODCLI FROM BASE_META)
+    CASE WHEN C.CODCLI NOT IN (SELECT CODCLI FROM BASE_META)
           AND C.CODCLI NOT IN (SELECT CODCLI FROM FAT_MES)
           AND C.CODCLI NOT IN (SELECT CODCLI FROM CART_ABERTA)
+         THEN 1 ELSE 0 END                                                  AS eh_novo,
+    CASE WHEN (C.CODCLI IN (SELECT CODCLI FROM BASE_META)
+          AND C.CODCLI NOT IN (SELECT CODCLI FROM FAT_MES)
+          AND C.CODCLI NOT IN (SELECT CODCLI FROM CART_ABERTA))
+          OR (C.CODCLI NOT IN (SELECT CODCLI FROM BASE_META)
+          AND C.CODCLI NOT IN (SELECT CODCLI FROM FAT_MES)
+          AND C.CODCLI NOT IN (SELECT CODCLI FROM CART_ABERTA))
          THEN 1 ELSE 0 END                                                  AS eh_elegivel,
     {select_final_real}                                             AS positivou_realizado,
     {select_final_hoje}                                             AS positivou_hoje
@@ -383,28 +414,37 @@ def agregar_positivacao_por_vendedor(rows: list, metas_sup: dict) -> list:
                 "cod_supervisor": r.get("cod_supervisor"),
                 "nome_supervisor": "",
                 "elegiveis_total": 0,
+                "novos_total": 0,
                 "qt_realizado": 0.0,
                 "qt_dia": 0.0,
+                "novos_positivados": 0.0,
                 "clientes": [],
             }
         v = por_vendedor[cv]
         v["elegiveis_total"] += 1
+        eh_novo = bool(r.get("eh_novo"))
+        if eh_novo:
+            v["novos_total"] += 1
         realizado = float(r.get("positivou_realizado") or 0)
         hoje      = float(r.get("positivou_hoje") or 0)
         v["qt_realizado"] += realizado
         v["qt_dia"]       += hoje
+        if eh_novo and (realizado or hoje):
+            v["novos_positivados"] += realizado if realizado else hoje
         if realizado or hoje:
             v["clientes"].append({
                 "cod_cliente": r.get("cod_cliente"),
                 "razao_social": r.get("razao_social"),
                 "positivou_realizado": bool(realizado),
                 "positivou_hoje": bool(hoje),
+                "eh_novo": bool(r.get("eh_novo")),
             })
 
     resultado = []
     for cv, v in por_vendedor.items():
-        v["qt_realizado"] = round(v["qt_realizado"], 2)
-        v["qt_dia"]       = round(v["qt_dia"], 2)
+        v["qt_realizado"]      = round(v["qt_realizado"], 2)
+        v["qt_dia"]            = round(v["qt_dia"], 2)
+        v["novos_positivados"] = round(v["novos_positivados"], 2)
         v["clientes"].sort(key=lambda c: c["razao_social"] or "")
         meta = float(metas_sup.get(cv, 0) or 0)
         v["meta"] = meta
