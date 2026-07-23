@@ -1,89 +1,49 @@
 import { useState, useEffect, useMemo } from "react";
-import { GitCompare, Search, TrendingUp, TrendingDown, X } from "lucide-react";
-import { C, fmtR, fmtN } from "../../theme";
+import { Trophy, Search } from "lucide-react";
+import { C, fmtR, fmtN, fmtDt, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
 import Th from "../../components/Th";
 import SelectModal from "../../components/SelectModal";
 import ModuleHeader from "../../components/ModuleHeader";
 import TableCard from "../../components/TableCard";
+import DatePicker from "../../components/DatePicker";
 import SkeletonRows from "../../components/SkeletonRows";
-import Modal from "../../components/Modal";
-import LineChartCompare from "../../components/LineChartCompare";
+import { medal } from "../../components/ArrowBadge";
 import { exportCSV } from "../../utils/exportCSV";
 import { useSort } from "../../hooks/useSort";
 
-const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const fmtPeso = (v) => v == null ? "—" : `${fmtN(v)} kg`;
 
-const STATUS_CFG = {
-  novo:       { label: "Novo",       plural: "Novos",       bg: "#DBEAFE", fg: "#1D4ED8" },
-  recorrente: { label: "Recorrente", plural: "Recorrentes",  bg: "#DCFCE7", fg: "#15803D" },
-  perdido:    { label: "Perdido",    plural: "Perdidos",     bg: "#FEE2E2", fg: "#B91C1C" },
+const primeiroDiaMes = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 };
 
-function fmtDeltaPct(v) {
-  if (v == null) return <span style={{ color: C.textSub }}>—</span>;
-  const cor = v > 0 ? C.green : v < 0 ? C.red : C.textSub;
-  const Icon = v > 0 ? TrendingUp : v < 0 ? TrendingDown : null;
-  return (
-    <span style={{ color: cor, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: "3px" }}>
-      {Icon && <Icon size={12} />}{v > 0 ? "+" : ""}{v.toFixed(1)}%
-    </span>
-  );
-}
-
-function StatTile({ label, atual, anterior, deltaPct, formatValue }) {
-  return (
-    <div style={{ flex: 1, minWidth: "160px", background: "#fff", border: `1px solid ${C.border}`,
-      borderRadius: "8px", padding: "12px 16px" }}>
-      <div style={{ fontSize: "11px", color: C.textSub, fontWeight: 600, marginBottom: "4px" }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
-        <span style={{ fontSize: "20px", fontWeight: 800, color: C.text }}>{formatValue(atual)}</span>
-        {fmtDeltaPct(deltaPct)}
-      </div>
-      <div style={{ fontSize: "11px", color: C.textSub, marginTop: "2px" }}>
-        Ano anterior: {formatValue(anterior)}
-      </div>
-    </div>
-  );
-}
-
-function pctDelta(atual, anterior) {
-  if (!anterior) return null;
-  return ((atual - anterior) / anterior) * 100;
-}
-
-export default function ModuleComparativoClientes({ isMobile, token, userInfo = {} }) {
+export default function ModuleRankingClientes({ isMobile, token, userInfo = {} }) {
   const headers      = useAuthHeaders(token);
   const cargo        = userInfo.cargo ?? "gerencial";
   const codUser      = userInfo.cod_winthor ?? null;
   const isFornecedor = cargo === "fornecedor";
   const isGerencial  = cargo === "gerencial" || cargo === "admin";
   const isSupervisor = cargo === "supervisor";
-  const { sortCol, sortDir, handleSort } = useSort("valor_atual", "desc");
+  const { sortCol, sortDir, handleSort } = useSort("valor_total", "desc");
 
-  const anoHoje = new Date().getFullYear();
   const [fornecedores, setFornecedores] = useState([]);
   const [fornSel, setFornSel] = useState(null);
-  const [anoAtual, setAnoAtual] = useState(anoHoje);
+  const [dtIni, setDtIni] = useState(primeiroDiaMes());
+  const [dtFim, setDtFim] = useState(getToday());
   const [supervisores, setSupervisores] = useState([]);
   const [supSel, setSupSel] = useState(isSupervisor ? codUser : null);
   const [vendedores, setVendedores] = useState([]);
   const [vendSel, setVendSel] = useState(null);
   const [busca, setBusca] = useState("");
 
-  const [resp, setResp] = useState(null);
+  const [dados, setDados] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const [clienteSel, setClienteSel] = useState(null); // {cod_cliente, nome_cliente}
-  const [detalheCli, setDetalheCli] = useState(null);
-  const [loadingCli, setLoadingCli] = useState(false);
-
-  // Modal de lista por status (novo/recorrente/perdido), com busca
-  const [statusModal, setStatusModal] = useState(null); // 'novo' | 'recorrente' | 'perdido' | null
-  const [statusBusca, setStatusBusca] = useState("");
-
+  // ── Fornecedores ──────────────────────────────────────────────────────────
   useEffect(() => {
     fetch(`${API_BASE}/api/lista-negra/fornecedores`, { headers })
       .then(r => r.json())
@@ -95,6 +55,7 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
       .catch(() => {});
   }, []);
 
+  // ── Supervisores (só gerencial/admin escolhem) ───────────────────────────
   useEffect(() => {
     if (!isGerencial) return;
     fetch(`${API_BASE}/api/faturamento/supervisores`, { headers })
@@ -103,6 +64,7 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
       .catch(() => {});
   }, []);
 
+  // ── Vendedores da equipe do supervisor selecionado ──────────────────────
   useEffect(() => {
     if (!supSel) { setVendedores([]); setVendSel(null); return; }
     fetch(`${API_BASE}/api/ranking-clientes/vendedores/${supSel}`, { headers })
@@ -112,27 +74,24 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
     setVendSel(null);
   }, [supSel]);
 
+  // ── Dados do ranking ──────────────────────────────────────────────────────
   const fetchData = () => {
     if (!fornSel) return;
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ codfornec: fornSel, ano_atual: anoAtual });
+    const params = new URLSearchParams({ codfornec: fornSel, dt_ini: dtIni, dt_fim: dtFim });
     if (isGerencial && supSel) params.set("filtro_supervisor", supSel);
     if ((isGerencial || isSupervisor) && vendSel) params.set("filtro_vendedor", vendSel);
-    fetch(`${API_BASE}/api/comparativo-clientes/geral?${params.toString()}`, { headers })
+    fetch(`${API_BASE}/api/ranking-clientes?${params.toString()}`, { headers })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(j => setResp(j))
+      .then(j => setDados(j.dados ?? []))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchData(); }, [fornSel, anoAtual, supSel, vendSel]);
-
-  const clientes = resp?.clientes ?? [];
-  const resumo   = resp?.resumo ?? {};
-  const mensal   = resp?.mensal ?? [];
+  useEffect(() => { fetchData(); }, [fornSel, dtIni, dtFim, supSel, vendSel]);
 
   const rows = useMemo(() => {
-    let r = [...clientes];
+    let r = [...dados];
     if (busca) {
       const s = busca.toLowerCase();
       r = r.filter(row =>
@@ -148,62 +107,27 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
         : String(bv).localeCompare(String(av), "pt-BR");
     });
     return r;
-  }, [clientes, busca, sortCol, sortDir]);
+  }, [dados, busca, sortCol, sortDir]);
 
-  const serieMensal = useMemo(() => ([
-    { key: "atual",    label: String(anoAtual),     color: C.primary, values: mensal.map(m => m.valor_atual) },
-    { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: mensal.map(m => m.valor_anterior) },
-  ]), [mensal, anoAtual]);
-
-  const clientesDoStatus = useMemo(() => {
-    if (!statusModal) return [];
-    let r = clientes.filter(c => c.status === statusModal);
-    if (statusBusca) {
-      const s = statusBusca.toLowerCase();
-      r = r.filter(c =>
-        (c.nome_cliente ?? "").toLowerCase().includes(s) ||
-        (c.nome_cidade ?? "").toLowerCase().includes(s));
-    }
-    const campoValor = statusModal === "perdido" ? "valor_anterior" : "valor_atual";
-    r.sort((a, b) => (b[campoValor] ?? 0) - (a[campoValor] ?? 0));
-    return r;
-  }, [clientes, statusModal, statusBusca]);
-
-  const abrirCliente = (cliente) => {
-    setClienteSel(cliente);
-    setDetalheCli(null); setLoadingCli(true);
-    const params = new URLSearchParams({ codfornec: fornSel, ano_atual: anoAtual });
-    if (isGerencial && supSel) params.set("filtro_supervisor", supSel);
-    if ((isGerencial || isSupervisor) && vendSel) params.set("filtro_vendedor", vendSel);
-    fetch(`${API_BASE}/api/comparativo-clientes/cliente/${cliente.cod_cliente}?${params.toString()}`, { headers })
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(setDetalheCli)
-      .catch(() => setDetalheCli({ erro: true }))
-      .finally(() => setLoadingCli(false));
-  };
-
-  const abrirClienteDoStatus = (cliente) => {
-    setStatusModal(null); setStatusBusca("");
-    abrirCliente(cliente);
-  };
+  const tot = useMemo(() => ({
+    valor: rows.reduce((s, r) => s + (r.valor_total ?? 0), 0),
+    peso:  rows.reduce((s, r) => s + (r.peso_total ?? 0), 0),
+  }), [rows]);
 
   const handleExportExcel = () => {
-    const header = ["Cliente", "Cidade", "Vendedor", `Valor ${anoAtual}`, `Valor ${anoAtual - 1}`, "Crescimento %", "Status"];
-    const dataRows = rows.map(r => [
-      r.nome_cliente, r.nome_cidade || "", r.nome_vendedor || "",
-      fmtR(r.valor_atual), fmtR(r.valor_anterior),
-      r.crescimento_pct != null ? `${r.crescimento_pct}%` : "",
-      STATUS_CFG[r.status]?.label ?? r.status,
+    const header = ["#", "Cliente", "Cidade", "Vendedor", "Qtd", "Peso (kg)", "Valor", "Notas", "Última Compra"];
+    const dataRows = rows.map((r, i) => [
+      i + 1, r.nome_cliente, r.nome_cidade || "", r.nome_vendedor || "",
+      fmtN(r.quantidade), fmtN(r.peso_total), fmtR(r.valor_total),
+      String(r.qt_notas ?? 0), fmtDt(r.ultima_compra),
     ]);
-    exportCSV(`ComparativoClientes_${anoAtual}`, header, dataRows);
+    exportCSV("RankingClientes", header, dataRows);
   };
-
-  const anos = Array.from({ length: 6 }, (_, i) => anoHoje - i);
 
   return (
     <>
-      <ModuleHeader icon={GitCompare} title="COMPARATIVO DE CLIENTES" isMobile={isMobile}
-        subtitle={`${anoAtual} vs ${anoAtual - 1}`}
+      <ModuleHeader icon={Trophy} title="RANKING DE CLIENTES" isMobile={isMobile}
+        titleExtra={rows.length > 0 && <>Total: <b>{fmtR(tot.valor)}</b> · <b>{fmtPeso(tot.peso)}</b></>}
         onRefresh={fetchData} loading={loading}
         onExportExcel={rows.length > 0 ? handleExportExcel : undefined} />
 
@@ -215,12 +139,6 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
         <SelectModal value={fornSel} onChange={setFornSel} options={fornecedores}
           placeholder="Selecione um fornecedor..." labelKey="nome" valueKey="cod" isMobile={isMobile} />
 
-        <select value={anoAtual} onChange={e => setAnoAtual(Number(e.target.value))}
-          style={{ border: `1px solid ${C.border}`, borderRadius: "6px", padding: "6px 10px",
-            fontSize: "12px", background: "#fff", color: C.text, outline: "none" }}>
-          {anos.map(a => <option key={a} value={a}>{a} vs {a - 1}</option>)}
-        </select>
-
         {isGerencial && (
           <SelectModal value={supSel} onChange={setSupSel} options={supervisores}
             placeholder="Todos supervisores..." labelKey="nome" valueKey="cod" isMobile={isMobile} />
@@ -230,6 +148,10 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
           <SelectModal value={vendSel} onChange={setVendSel} options={vendedores}
             placeholder={supSel ? "Todos vendedores..." : "Escolha um supervisor"} labelKey="nome" valueKey="cod" isMobile={isMobile} />
         )}
+
+        <DatePicker value={dtIni} onChange={setDtIni} max={dtFim} isMobile={isMobile} />
+        <span style={{ color: C.textSub, fontSize: "12px" }}>até</span>
+        <DatePicker value={dtFim} onChange={setDtFim} min={dtIni} max={getToday()} isMobile={isMobile} />
 
         <div style={{ display: "flex", alignItems: "center", gap: "6px",
           border: `1px solid ${C.border}`, borderRadius: "6px",
@@ -242,154 +164,78 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
         </div>
       </div>
 
-      {!fornSel && !loading && (
-        <div style={{ padding: "48px", textAlign: "center", color: C.textSub }}>
-          Selecione um fornecedor para ver o comparativo.
-        </div>
-      )}
-
-      {loading && <div style={{ padding: "16px 20px" }}><SkeletonRows count={3} height={60} /></div>}
-      {error && <div style={{ padding: "40px", textAlign: "center", color: C.red }}>Erro: {error}</div>}
-
-      {fornSel && !loading && !error && resp && (
-        <div style={{ padding: isMobile ? "12px" : "16px 20px" }}>
-          {/* ── Stat tiles ── */}
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
-            <StatTile label="CLIENTES ATIVOS" atual={resumo.qtd_clientes_atual} anterior={resumo.qtd_clientes_anterior}
-              deltaPct={pctDelta(resumo.qtd_clientes_atual, resumo.qtd_clientes_anterior)} formatValue={fmtN} />
-            <StatTile label="VALOR TOTAL" atual={resumo.valor_total_atual} anterior={resumo.valor_total_anterior}
-              deltaPct={pctDelta(resumo.valor_total_atual, resumo.valor_total_anterior)} formatValue={fmtR} />
-            <div style={{ flex: 1, minWidth: "220px", background: "#fff", border: `1px solid ${C.border}`,
-              borderRadius: "8px", padding: "12px 16px", display: "flex", gap: "16px" }}>
-              {["novo", "recorrente", "perdido"].map(k => (
-                <button key={k} onClick={() => { setStatusModal(k); setStatusBusca(""); }}
-                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = 0.7}
-                  onMouseLeave={e => e.currentTarget.style.opacity = 1}>
-                  <div style={{ fontSize: "10px", color: C.textSub, fontWeight: 600 }}>{STATUS_CFG[k].plural.toUpperCase()}</div>
-                  <div style={{ fontSize: "18px", fontWeight: 800, color: STATUS_CFG[k].fg }}>{resumo[`${k}s`] ?? 0}</div>
-                </button>
-              ))}
-            </div>
+      <TableCard isMobile={isMobile} maxHeight="70vh">
+        {loading && <SkeletonRows count={8} height={36} />}
+        {error && <div style={{ padding: "40px", textAlign: "center", color: C.red }}>Erro: {error}</div>}
+        {!fornSel && !loading && (
+          <div style={{ padding: "48px", textAlign: "center", color: C.textSub }}>
+            Selecione um fornecedor para ver o ranking.
           </div>
-
-          {/* ── Gráfico mensal ── */}
-          <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: "8px",
-            padding: "16px", marginBottom: "16px" }}>
-            <div style={{ fontSize: "12px", fontWeight: 700, color: C.text, marginBottom: "8px" }}>
-              Valor faturado por mês
-            </div>
-            <LineChartCompare series={serieMensal} xLabels={MESES} formatValue={fmtR} />
-          </div>
-
-          {/* ── Tabela de clientes ── */}
-          <TableCard isMobile={isMobile} maxHeight="60vh">
+        )}
+        {fornSel && !loading && !error && (
+          <>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: isMobile ? "11px" : "12px" }}>
               <thead>
                 <tr>
+                  <th style={{ padding: "6px 8px", background: C.subHeader, color: "#fff", fontSize: "10px", fontWeight: 700,
+                    textAlign: "center", border: `1px solid ${C.primaryDk}`, width: "40px" }}>#</th>
                   <Th label="CLIENTE" col="nome_cliente" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="CIDADE" col="nome_cidade" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
                   <Th label="VENDEDOR" col="nome_vendedor" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} />
-                  <Th label={`VALOR ${anoAtual}`} col="valor_atual" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
-                  <Th label={`VALOR ${anoAtual - 1}`} col="valor_anterior" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
-                  <Th label="CRESCIMENTO" col="crescimento_pct" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
-                  <Th label="STATUS" col="status" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center" />
+                  <Th label="QTD" col="quantidade" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <Th label="PESO (KG)" col="peso_total" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <Th label="VALOR" col="valor_total" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <Th label="NOTAS" col="qt_notas" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center" />
+                  <Th label="ÚLT. COMPRA" col="ultima_compra" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center" />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => {
-                  const st = STATUS_CFG[r.status] ?? { label: r.status, bg: "#eee", fg: "#666" };
+                  const m = medal(i + 1);
                   return (
-                    <tr key={r.cod_cliente ?? i} onClick={() => abrirCliente(r)}
-                      style={{ background: i % 2 === 0 ? C.rowEven : C.rowOdd, cursor: "pointer" }}
+                    <tr key={r.cod_cliente ?? i}
+                      style={{ background: i % 2 === 0 ? C.rowEven : C.rowOdd }}
                       onMouseEnter={e => e.currentTarget.style.background = C.rowHover}
                       onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? C.rowEven : C.rowOdd}>
+                      <td style={{ padding: "5px 8px", textAlign: "center", fontWeight: 700 }}>
+                        {m ? <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+                          width: "24px", height: "24px", borderRadius: "50%", background: m.bg, color: m.color,
+                          fontSize: "11px", fontWeight: 800 }}>{m.label}</span> : i + 1}
+                      </td>
                       <td style={{ padding: "5px 8px", fontWeight: 600 }}>{r.nome_cliente}</td>
                       <td style={{ padding: "5px 8px", color: C.textSub }}>{r.nome_cidade}</td>
                       <td style={{ padding: "5px 8px", color: C.textSub }}>{r.nome_vendedor ?? `#${r.cod_vendedor}`}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono }}>{fmtR(r.valor_atual)}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono, color: C.textSub }}>{fmtR(r.valor_anterior)}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "right" }}>{fmtDeltaPct(r.crescimento_pct)}</td>
-                      <td style={{ padding: "5px 8px", textAlign: "center" }}>
-                        <span style={{ background: st.bg, color: st.fg, fontSize: "10px", fontWeight: 700,
-                          padding: "2px 8px", borderRadius: "10px" }}>{st.label}</span>
-                      </td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono }}>{fmtN(r.quantidade)}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono,
+                        fontWeight: sortCol === "peso_total" ? 700 : 400 }}>{fmtPeso(r.peso_total)}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "right", fontFamily: C.mono,
+                        fontWeight: sortCol === "valor_total" ? 700 : 400 }}>{fmtR(r.valor_total)}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "center", fontFamily: C.mono }}>{r.qt_notas}</td>
+                      <td style={{ padding: "5px 8px", textAlign: "center", fontFamily: C.mono, fontSize: "11px" }}>{fmtDt(r.ultima_compra)}</td>
                     </tr>
                   );
                 })}
               </tbody>
+              {rows.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: C.total, color: C.totalTxt, fontWeight: 700 }}>
+                    <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}` }} colSpan={4}>
+                      {rows.length} cliente(s)
+                    </td>
+                    <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}` }} />
+                    <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}`, textAlign: "right", fontFamily: C.mono }}>{fmtPeso(tot.peso)}</td>
+                    <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}`, textAlign: "right", fontFamily: C.mono }}>{fmtR(tot.valor)}</td>
+                    <td style={{ padding: "6px 8px", border: `1px solid ${C.primaryDk}` }} colSpan={2} />
+                  </tr>
+                </tfoot>
+              )}
             </table>
             {rows.length === 0 && (
-              <div style={{ padding: "32px", textAlign: "center", color: C.textSub }}>Nenhum cliente no período.</div>
+              <div style={{ padding: "48px", textAlign: "center", color: C.textSub }}>Nenhum dado disponível.</div>
             )}
-          </TableCard>
-        </div>
-      )}
-
-      {/* ── Modal: lista de clientes por status (novo/recorrente/perdido) ── */}
-      <Modal open={!!statusModal} onClose={() => { setStatusModal(null); setStatusBusca(""); }}
-        icon={GitCompare} title={statusModal ? `Clientes ${STATUS_CFG[statusModal].plural}` : ""}
-        subtitle={`${clientesDoStatus.length} cliente(s)`} width="min(560px, 94vw)" noPadding>
-        <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px",
-            border: `1px solid ${C.border}`, borderRadius: "6px", padding: "6px 10px" }}>
-            <Search size={13} color={C.textSub} />
-            <input autoFocus placeholder="Buscar cliente ou cidade..." value={statusBusca}
-              onChange={e => setStatusBusca(e.target.value)}
-              style={{ border: "none", outline: "none", fontSize: "12px", flex: 1, fontFamily: C.sans, color: C.text, background: "transparent" }} />
-            {statusBusca && (
-              <button onClick={() => setStatusBusca("")} style={{ background: "none", border: "none", cursor: "pointer", color: C.textSub, display: "flex" }}>
-                <X size={13} />
-              </button>
-            )}
-          </div>
-        </div>
-        <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
-          {clientesDoStatus.length === 0 && (
-            <div style={{ padding: "32px", textAlign: "center", color: C.textSub, fontSize: "12px" }}>
-              Nenhum cliente encontrado.
-            </div>
-          )}
-          {clientesDoStatus.map((c, i) => (
-            <div key={c.cod_cliente ?? i} onClick={() => abrirClienteDoStatus(c)}
-              style={{ padding: "10px 20px", borderBottom: `1px solid ${C.border}`, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px",
-                background: i % 2 === 0 ? "#fff" : C.rowEven }}
-              onMouseEnter={e => e.currentTarget.style.background = C.rowHover}
-              onMouseLeave={e => e.currentTarget.style.background = i % 2 === 0 ? "#fff" : C.rowEven}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: "12px", fontWeight: 600, color: C.text, whiteSpace: "nowrap",
-                  overflow: "hidden", textOverflow: "ellipsis" }}>{c.nome_cliente}</div>
-                <div style={{ fontSize: "11px", color: C.textSub }}>{c.nome_cidade} · {c.nome_vendedor ?? `#${c.cod_vendedor}`}</div>
-              </div>
-              <div style={{ textAlign: "right", flexShrink: 0, fontFamily: C.mono, fontSize: "12px", fontWeight: 700 }}>
-                {fmtR(statusModal === "perdido" ? c.valor_anterior : c.valor_atual)}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Modal>
-
-      {/* ── Drill-down de 1 cliente ── */}
-      <Modal open={!!clienteSel} onClose={() => setClienteSel(null)} icon={GitCompare}
-        title={clienteSel?.nome_cliente} subtitle={`${anoAtual} vs ${anoAtual - 1}`} width="min(640px, 94vw)">
-        {loadingCli && <SkeletonRows count={3} height={40} />}
-        {detalheCli?.erro && <div style={{ color: C.red, padding: "16px 0" }}>Erro ao carregar dados do cliente.</div>}
-        {detalheCli && !detalheCli.erro && (
-          <>
-            <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
-              <StatTile label="VALOR NO ANO" atual={detalheCli.resumo.valor_atual} anterior={detalheCli.resumo.valor_anterior}
-                deltaPct={detalheCli.resumo.crescimento_pct} formatValue={fmtR} />
-            </div>
-            <LineChartCompare
-              series={[
-                { key: "atual",    label: String(anoAtual),     color: C.primary, values: detalheCli.mensal.map(m => m.valor_atual) },
-                { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: detalheCli.mensal.map(m => m.valor_anterior) },
-              ]}
-              xLabels={MESES} formatValue={fmtR} height={200} />
           </>
         )}
-      </Modal>
+      </TableCard>
     </>
   );
 }

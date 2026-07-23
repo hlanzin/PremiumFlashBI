@@ -29,16 +29,37 @@ from config import FILIAL
 
 
 def _filtro_carteira(params: dict, filtro_vendedor, filtro_supervisor) -> str:
-    """Mesmo padrão do Ranking Clientes: as duas condições podem valer ao
-    mesmo tempo, cada uma só estreita mais o resultado."""
+    """
+    Filtra pela carteira de QUEM VENDEU (mesma atribuição usada no
+    Faturamento oficial e na Distribuição Numérica — dist_numerica_sql.py:
+    NVL(N.CODSUPERVISOR, UV.CODSUPERVISOR), via UV = PCUSUARI joined em
+    N.CODUSUR, o vendedor NO MOMENTO DA VENDA), e não pelo vendedor
+    atualmente cadastrado no cliente (PCCLIENT.CODUSUR1). Um cliente que
+    mudou de vendedor/supervisor depois da venda batia diferente entre
+    este módulo e a DN antes dessa correção. Precisa de N (PCNFSAID) e UV
+    (PCUSUARI ON UV.CODUSUR = N.CODUSUR) já no FROM de quem usar.
+    """
     filtro = ""
     if filtro_supervisor is not None:
         params["cod_supervisor"] = filtro_supervisor
-        filtro += " AND U.CODSUPERVISOR = :cod_supervisor"
+        filtro += " AND NVL(N.CODSUPERVISOR, UV.CODSUPERVISOR) = :cod_supervisor"
     if filtro_vendedor is not None:
         params["cod_vendedor"] = filtro_vendedor
-        filtro += " AND C.CODUSUR1 = :cod_vendedor"
+        filtro += " AND N.CODUSUR = :cod_vendedor"
     return filtro
+
+
+def _excl_usur_especiais(filtro_vendedor, filtro_supervisor) -> str:
+    """
+    Mesma exclusão do Faturamento/DN (contas especiais 2/10/160/180): só
+    exclui quando o filtro é de um supervisor/vendedor específico — no
+    modo geral (sem filtro, ex.: fornecedor vendo todo mundo), essas contas
+    continuam somadas ao todo, igual ao Faturamento em modo "gerencial".
+    Precisa de UV (PCUSUARI ON UV.CODUSUR = N.CODUSUR) já no FROM.
+    """
+    if filtro_supervisor is not None or filtro_vendedor is not None:
+        return " AND UV.CODUSUR NOT IN (2,10,160,180)"
+    return ""
 
 
 def _valor_venda_expr() -> str:
@@ -139,6 +160,7 @@ def build_comparativo_geral_sql(
         "dt_fim_ano_b": f"{dt_ini_anterior[:4]}-12-31",
     })
     filtro_carteira = _filtro_carteira(params, filtro_vendedor, filtro_supervisor)
+    excl_usur       = _excl_usur_especiais(filtro_vendedor, filtro_supervisor)
     vl_devol  = _devolucao_valor_expr()
     vl_venda  = _valor_venda_expr()
 
@@ -156,6 +178,7 @@ BASE AS (
         INNER JOIN PCNFSAID N  ON N.NUMTRANSVENDA = M.NUMTRANSVENDA AND N.CODFILIAL = M.CODFILIAL
         LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = M.NUMTRANSITEM
         INNER JOIN PCPRODUT PR ON PR.CODPROD = M.CODPROD
+        INNER JOIN PCUSUARI UV ON UV.CODUSUR = N.CODUSUR
         CROSS JOIN PARAMS P
     WHERE PR.CODFORNEC IN ({placeholders})
       AND N.DTSAIDA BETWEEN LEAST(P.DT_INI_A, P.DT_INI_B) AND GREATEST(P.DT_FIM_A, P.DT_FIM_B)
@@ -166,6 +189,8 @@ BASE AS (
       AND N.CODFISCAL NOT IN (522,622,722,532,632,732)
       AND N.CONDVENDA NOT IN (4,8,10,13,20,98,99)
       AND N.DTCANCEL IS NULL
+      {filtro_carteira}
+      {excl_usur}
 ),
 AGG_ATUAL AS (
     SELECT B.CODCLI, SUM(B.VL) AS VALOR, SUM(B.QT) AS QTD, MAX(B.DTSAIDA) AS ULTIMA_COMPRA
@@ -217,7 +242,6 @@ FROM (SELECT CODCLI FROM AGG_ATUAL UNION SELECT CODCLI FROM AGG_ANTERIOR) T
     LEFT  JOIN AGG_ANTERIOR_ANO H ON H.CODCLI = T.CODCLI
     LEFT  JOIN DEVOL_ATUAL    DA ON DA.CODCLI = T.CODCLI
     LEFT  JOIN DEVOL_ANTERIOR DB ON DB.CODCLI = T.CODCLI
-WHERE 1=1 {filtro_carteira}
 ORDER BY valor_atual DESC
 """
     return sql, params
@@ -247,6 +271,7 @@ def build_clientes_ativos_sql(
     params["dt_ini"] = dt_ini
     params["dt_fim"] = dt_fim
     filtro_carteira = _filtro_carteira(params, filtro_vendedor, filtro_supervisor)
+    excl_usur       = _excl_usur_especiais(filtro_vendedor, filtro_supervisor)
 
     sql = f"""
 WITH PARAMS AS (
@@ -258,8 +283,7 @@ SELECT COUNT(DISTINCT M.CODCLI) AS qtd
 FROM PCMOV M
     INNER JOIN PCNFSAID N  ON N.NUMTRANSVENDA = M.NUMTRANSVENDA AND N.CODFILIAL = M.CODFILIAL
     INNER JOIN PCPRODUT PR ON PR.CODPROD = M.CODPROD
-    INNER JOIN PCCLIENT C  ON C.CODCLI = M.CODCLI
-    LEFT  JOIN PCUSUARI U  ON U.CODUSUR = C.CODUSUR1
+    INNER JOIN PCUSUARI UV ON UV.CODUSUR = N.CODUSUR
     CROSS JOIN PARAMS P
 WHERE PR.CODFORNEC IN ({placeholders})
   AND N.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
@@ -271,6 +295,7 @@ WHERE PR.CODFORNEC IN ({placeholders})
   AND N.CONDVENDA NOT IN (4,8,10,13,20,98,99)
   AND N.DTCANCEL IS NULL
   {filtro_carteira}
+  {excl_usur}
 """
     return sql, params
 
@@ -296,6 +321,7 @@ def build_comparativo_mensal_sql(
     params["dt_ini"] = dt_ini
     params["dt_fim"] = dt_fim
     filtro_carteira = _filtro_carteira(params, filtro_vendedor, filtro_supervisor)
+    excl_usur       = _excl_usur_especiais(filtro_vendedor, filtro_supervisor)
 
     filtro_cliente = ""
     if cod_cliente is not None:
@@ -318,8 +344,7 @@ FROM PCMOV M
     INNER JOIN PCNFSAID N  ON N.NUMTRANSVENDA = M.NUMTRANSVENDA AND N.CODFILIAL = M.CODFILIAL
     LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = M.NUMTRANSITEM
     INNER JOIN PCPRODUT PR ON PR.CODPROD = M.CODPROD
-    INNER JOIN PCCLIENT C  ON C.CODCLI = M.CODCLI
-    LEFT  JOIN PCUSUARI U  ON U.CODUSUR = C.CODUSUR1
+    INNER JOIN PCUSUARI UV ON UV.CODUSUR = N.CODUSUR
     CROSS JOIN PARAMS P
 WHERE PR.CODFORNEC IN ({placeholders})
   AND N.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
@@ -331,6 +356,7 @@ WHERE PR.CODFORNEC IN ({placeholders})
   AND N.CONDVENDA NOT IN (4,8,10,13,20,98,99)
   AND N.DTCANCEL IS NULL
   {filtro_carteira}
+  {excl_usur}
   {filtro_cliente}
 GROUP BY EXTRACT(YEAR FROM N.DTSAIDA), EXTRACT(MONTH FROM N.DTSAIDA)
 ORDER BY ano, mes
