@@ -30,14 +30,34 @@ from config import FILIAL
 
 def _filtro_carteira(params: dict, filtro_vendedor, filtro_supervisor) -> str:
     """
+    Filtra pela carteira do CADASTRO ATUAL do cliente (PCCLIENT.CODUSUR1,
+    via U = PCUSUARI joined em C.CODUSUR1) — é o cliente de quem é
+    responsável por ele HOJE, não de quem fez a venda no passado. Se a
+    área do cliente mudou de supervisor depois da venda, ele deve aparecer
+    (inclusive como "perdido") pro responsável ATUAL, não pra quem vendeu.
+    Precisa de C (PCCLIENT) e U (PCUSUARI ON U.CODUSUR = C.CODUSUR1) já no
+    FROM/JOIN de quem usar.
+    """
+    filtro = ""
+    if filtro_supervisor is not None:
+        params["cod_supervisor"] = filtro_supervisor
+        filtro += " AND U.CODSUPERVISOR = :cod_supervisor"
+    if filtro_vendedor is not None:
+        params["cod_vendedor"] = filtro_vendedor
+        filtro += " AND C.CODUSUR1 = :cod_vendedor"
+    return filtro
+
+
+def _filtro_carteira_venda(params: dict, filtro_vendedor, filtro_supervisor) -> str:
+    """
     Filtra pela carteira de QUEM VENDEU (mesma atribuição usada no
     Faturamento oficial e na Distribuição Numérica — dist_numerica_sql.py:
     NVL(N.CODSUPERVISOR, UV.CODSUPERVISOR), via UV = PCUSUARI joined em
-    N.CODUSUR, o vendedor NO MOMENTO DA VENDA), e não pelo vendedor
-    atualmente cadastrado no cliente (PCCLIENT.CODUSUR1). Um cliente que
-    mudou de vendedor/supervisor depois da venda batia diferente entre
-    este módulo e a DN antes dessa correção. Precisa de N (PCNFSAID) e UV
-    (PCUSUARI ON UV.CODUSUR = N.CODUSUR) já no FROM de quem usar.
+    N.CODUSUR, o vendedor NO MOMENTO DA VENDA). Usado SÓ em
+    build_clientes_ativos_sql, pra bater exatamente com o número da tela
+    de Distribuição Numérica (que é calculado assim) — o resto do módulo
+    usa o cadastro atual (_filtro_carteira), não este. Precisa de N
+    (PCNFSAID) e UV (PCUSUARI ON UV.CODUSUR = N.CODUSUR) já no FROM.
     """
     filtro = ""
     if filtro_supervisor is not None:
@@ -55,6 +75,7 @@ def _excl_usur_especiais(filtro_vendedor, filtro_supervisor) -> str:
     exclui quando o filtro é de um supervisor/vendedor específico — no
     modo geral (sem filtro, ex.: fornecedor vendo todo mundo), essas contas
     continuam somadas ao todo, igual ao Faturamento em modo "gerencial".
+    Usado só junto com _filtro_carteira_venda (build_clientes_ativos_sql).
     Precisa de UV (PCUSUARI ON UV.CODUSUR = N.CODUSUR) já no FROM.
     """
     if filtro_supervisor is not None or filtro_vendedor is not None:
@@ -143,6 +164,13 @@ def build_comparativo_geral_sql(
     com valor/quantidade dos dois anos lado a lado (valor líquido de
     devolução).
 
+    cod_vendedor/nome_vendedor/cod_supervisor vêm do CADASTRO ATUAL do
+    cliente (PCCLIENT.CODUSUR1) — quem é responsável por ele HOJE, não
+    quem fez a venda no passado. Um cliente que mudou de área continua
+    aparecendo (inclusive como "perdido") pro supervisor/vendedor atual,
+    não pra quem vendeu antes da mudança — é assim que o time enxerga "os
+    meus clientes perdidos" na prática.
+
     teve_compra_ano_anterior olha o ANO INTEIRO anterior (não só o mesmo
     período-a-data usado em valor_anterior/qtd_anterior) — evita classificar
     como "novo" um cliente que já comprava no ano anterior mas só passou a
@@ -160,7 +188,6 @@ def build_comparativo_geral_sql(
         "dt_fim_ano_b": f"{dt_ini_anterior[:4]}-12-31",
     })
     filtro_carteira = _filtro_carteira(params, filtro_vendedor, filtro_supervisor)
-    excl_usur       = _excl_usur_especiais(filtro_vendedor, filtro_supervisor)
     vl_devol  = _devolucao_valor_expr()
     vl_venda  = _valor_venda_expr()
 
@@ -178,7 +205,6 @@ BASE AS (
         INNER JOIN PCNFSAID N  ON N.NUMTRANSVENDA = M.NUMTRANSVENDA AND N.CODFILIAL = M.CODFILIAL
         LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = M.NUMTRANSITEM
         INNER JOIN PCPRODUT PR ON PR.CODPROD = M.CODPROD
-        INNER JOIN PCUSUARI UV ON UV.CODUSUR = N.CODUSUR
         CROSS JOIN PARAMS P
     WHERE PR.CODFORNEC IN ({placeholders})
       AND N.DTSAIDA BETWEEN LEAST(P.DT_INI_A, P.DT_INI_B) AND GREATEST(P.DT_FIM_A, P.DT_FIM_B)
@@ -189,8 +215,6 @@ BASE AS (
       AND N.CODFISCAL NOT IN (522,622,722,532,632,732)
       AND N.CONDVENDA NOT IN (4,8,10,13,20,98,99)
       AND N.DTCANCEL IS NULL
-      {filtro_carteira}
-      {excl_usur}
 ),
 AGG_ATUAL AS (
     SELECT B.CODCLI, SUM(B.VL) AS VALOR, SUM(B.QT) AS QTD, MAX(B.DTSAIDA) AS ULTIMA_COMPRA
@@ -242,6 +266,7 @@ FROM (SELECT CODCLI FROM AGG_ATUAL UNION SELECT CODCLI FROM AGG_ANTERIOR) T
     LEFT  JOIN AGG_ANTERIOR_ANO H ON H.CODCLI = T.CODCLI
     LEFT  JOIN DEVOL_ATUAL    DA ON DA.CODCLI = T.CODCLI
     LEFT  JOIN DEVOL_ANTERIOR DB ON DB.CODCLI = T.CODCLI
+WHERE 1=1 {filtro_carteira}
 ORDER BY valor_atual DESC
 """
     return sql, params
@@ -262,6 +287,11 @@ def build_clientes_ativos_sql(
     "atendidos no período", que é só a contagem de quem apareceu em
     build_comparativo_geral_sql (pode incluir cliente que comprou uma vez
     em janeiro e nunca mais, e ainda assim contar como "atendido no ano").
+
+    Único ponto do módulo que filtra pela carteira de QUEM VENDEU
+    (_filtro_carteira_venda), não pelo cadastro atual — de propósito, pra
+    esse número bater exatamente com a "meta de 3 meses" da tela de
+    Distribuição Numérica, que é calculada assim.
     """
     if not codfornecs:
         return "SELECT 0 AS qtd FROM DUAL", {}
@@ -270,7 +300,7 @@ def build_clientes_ativos_sql(
     params = {f"f{i}": cod for i, cod in enumerate(codfornecs)}
     params["dt_ini"] = dt_ini
     params["dt_fim"] = dt_fim
-    filtro_carteira = _filtro_carteira(params, filtro_vendedor, filtro_supervisor)
+    filtro_carteira = _filtro_carteira_venda(params, filtro_vendedor, filtro_supervisor)
     excl_usur       = _excl_usur_especiais(filtro_vendedor, filtro_supervisor)
 
     sql = f"""
@@ -321,7 +351,6 @@ def build_comparativo_mensal_sql(
     params["dt_ini"] = dt_ini
     params["dt_fim"] = dt_fim
     filtro_carteira = _filtro_carteira(params, filtro_vendedor, filtro_supervisor)
-    excl_usur       = _excl_usur_especiais(filtro_vendedor, filtro_supervisor)
 
     filtro_cliente = ""
     if cod_cliente is not None:
@@ -344,7 +373,8 @@ FROM PCMOV M
     INNER JOIN PCNFSAID N  ON N.NUMTRANSVENDA = M.NUMTRANSVENDA AND N.CODFILIAL = M.CODFILIAL
     LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = M.NUMTRANSITEM
     INNER JOIN PCPRODUT PR ON PR.CODPROD = M.CODPROD
-    INNER JOIN PCUSUARI UV ON UV.CODUSUR = N.CODUSUR
+    INNER JOIN PCCLIENT C  ON C.CODCLI = M.CODCLI
+    LEFT  JOIN PCUSUARI U  ON U.CODUSUR = C.CODUSUR1
     CROSS JOIN PARAMS P
 WHERE PR.CODFORNEC IN ({placeholders})
   AND N.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
@@ -356,7 +386,6 @@ WHERE PR.CODFORNEC IN ({placeholders})
   AND N.CONDVENDA NOT IN (4,8,10,13,20,98,99)
   AND N.DTCANCEL IS NULL
   {filtro_carteira}
-  {excl_usur}
   {filtro_cliente}
 GROUP BY EXTRACT(YEAR FROM N.DTSAIDA), EXTRACT(MONTH FROM N.DTSAIDA)
 ORDER BY ano, mes

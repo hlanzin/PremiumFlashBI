@@ -90,14 +90,12 @@ def build_ranking_clientes_sql(codfornecs: List[int], dt_ini: str, dt_fim: str,
     """
     codfornecs : lista de CODFORNECs
     dt_ini/dt_fim : 'YYYY-MM-DD' — período de venda faturada (PCNFSAID.DTSAIDA)
-    filtro_vendedor/filtro_supervisor : restringe pela carteira de QUEM
-        VENDEU (mesma atribuição do Faturamento oficial e da Distribuição
-        Numérica — N.CODUSUR / NVL(N.CODSUPERVISOR, UV.CODSUPERVISOR), via
-        UV = PCUSUARI joined em N.CODUSUR), não pelo vendedor atualmente
-        cadastrado no cliente (C.CODUSUR1) — evita cliente contado num
-        supervisor aqui e noutro na DN quando o titular do cliente mudou
-        depois da venda. C.CODUSUR1/U.* continuam só pra EXIBIÇÃO (quem é o
-        vendedor titular do cliente hoje).
+    filtro_vendedor/filtro_supervisor : restringe pela carteira do CADASTRO
+        ATUAL do cliente (PCCLIENT.CODUSUR1, via U = PCUSUARI joined em
+        C.CODUSUR1) — quem é responsável pelo cliente HOJE, não quem fez a
+        venda no passado. Um cliente cuja área mudou de supervisor aparece
+        (e conta) pro responsável atual, não pra quem vendeu antes da
+        mudança.
     """
     if not codfornecs:
         return "SELECT 1 FROM DUAL WHERE 1=0", {}
@@ -113,15 +111,10 @@ def build_ranking_clientes_sql(codfornecs: List[int], dt_ini: str, dt_fim: str,
     filtro_carteira = ""
     if filtro_supervisor is not None:
         params["cod_supervisor"] = filtro_supervisor
-        filtro_carteira += " AND NVL(N.CODSUPERVISOR, UV.CODSUPERVISOR) = :cod_supervisor"
+        filtro_carteira += " AND U.CODSUPERVISOR = :cod_supervisor"
     if filtro_vendedor is not None:
         params["cod_vendedor"] = filtro_vendedor
-        filtro_carteira += " AND N.CODUSUR = :cod_vendedor"
-    # Mesma exclusão de contas especiais do Faturamento/DN — só quando o
-    # filtro é de um supervisor/vendedor específico (modo geral inclui).
-    excl_usur = ""
-    if filtro_supervisor is not None or filtro_vendedor is not None:
-        excl_usur = " AND UV.CODUSUR NOT IN (2,10,160,180)"
+        filtro_carteira += " AND C.CODUSUR1 = :cod_vendedor"
 
     valor_venda = _valor_venda_expr()
     sql = f"""
@@ -151,7 +144,6 @@ FROM PCMOV M
     INNER JOIN PCPRODUT PR  ON PR.CODPROD        = M.CODPROD
     INNER JOIN PCCLIENT C   ON C.CODCLI          = M.CODCLI
     LEFT  JOIN PCUSUARI U   ON U.CODUSUR         = C.CODUSUR1
-    INNER JOIN PCUSUARI UV  ON UV.CODUSUR        = N.CODUSUR
     LEFT  JOIN PCCIDADE CD  ON CD.CODCIDADE      = C.CODCIDADE
     LEFT  JOIN DEVOL DV     ON DV.CODCLI         = C.CODCLI
     CROSS JOIN PARAMS P
@@ -165,7 +157,6 @@ WHERE PR.CODFORNEC          IN ({placeholders})
   AND N.CONDVENDA           NOT IN (4,8,10,13,20,98,99)
   AND N.DTCANCEL             IS NULL
   {filtro_carteira}
-  {excl_usur}
 GROUP BY
     C.CODCLI, C.FANTASIA, C.CLIENTE, CD.NOMECIDADE,
     C.CODUSUR1, U.NOME, U.CODSUPERVISOR, DV.VLDEVOLUCAO
