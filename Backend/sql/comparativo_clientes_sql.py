@@ -129,15 +129,27 @@ def _devolucao_valor_expr() -> str:
 
 
 def _devolucao_from_where(placeholders: str, dt_ini_expr: str, dt_fim_expr: str,
-                           filtro_cliente: str = "") -> str:
-    """FROM/WHERE compartilhado das CTEs de devolução — só muda o intervalo
-    de data e um filtro opcional de cliente."""
+                           filtro_cliente: str = "", filtro_carteira: str = "") -> str:
+    """
+    FROM/WHERE compartilhado das CTEs de devolução — só muda o intervalo de
+    data e os filtros opcionais de cliente/carteira.
+
+    DC/DU (PCCLIENT/PCUSUARI em cima de PCNFENT.CODFORNEC, o CLIENTE que
+    devolveu) só entram pra permitir o filtro_carteira opcional — usado por
+    build_devolucao_mensal_sql quando chamado SEM cod_cliente (visão geral
+    do mês, não drill-down de 1 cliente): sem esse filtro, a devolução da
+    EMPRESA INTEIRA pro fornecedor era subtraída do valor de um vendedor/
+    supervisor só, podendo virar um mês bem negativo mesmo a venda dele
+    tendo sido positiva.
+    """
     return f"""FROM PCNFENT
         INNER JOIN PCESTCOM    ON PCESTCOM.NUMTRANSENT   = PCNFENT.NUMTRANSENT
         INNER JOIN PCMOV       ON PCMOV.NUMTRANSENT      = PCESTCOM.NUMTRANSENT AND PCMOV.CODFILIAL = PCNFENT.CODFILIAL
         LEFT  JOIN PCNFSAID    ON PCNFSAID.NUMTRANSVENDA = PCESTCOM.NUMTRANSVENDA
         LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = PCMOV.NUMTRANSITEM
         INNER JOIN PCPRODUT    ON PCPRODUT.CODPROD       = PCMOV.CODPROD
+        LEFT  JOIN PCCLIENT  DC ON DC.CODCLI  = PCNFENT.CODFORNEC
+        LEFT  JOIN PCUSUARI  DU ON DU.CODUSUR = DC.CODUSUR1
         CROSS JOIN PARAMS P
     WHERE PCNFENT.DTENT BETWEEN {dt_ini_expr} AND {dt_fim_expr}
       AND PCMOV.DTMOV   BETWEEN {dt_ini_expr} AND {dt_fim_expr}
@@ -150,7 +162,8 @@ def _devolucao_from_where(placeholders: str, dt_ini_expr: str, dt_fim_expr: str,
       AND NVL(PCNFENT.OBS,'X')<>'NF CANCELADA'
       AND PCMOV.DTCANCEL IS NULL
       AND NVL(PCNFSAID.CONDVENDA,0) NOT IN (4,8,10,13,20,98,99)
-      {filtro_cliente}"""
+      {filtro_cliente}
+      {filtro_carteira}"""
 
 
 def build_comparativo_geral_sql(
@@ -397,16 +410,25 @@ def build_devolucao_mensal_sql(
     codfornecs: List[int],
     dt_ini: str, dt_fim: str,
     cod_cliente: Optional[int] = None,
+    filtro_vendedor: Optional[int] = None,
+    filtro_supervisor: Optional[int] = None,
 ) -> tuple:
     """
     Devolução por (ano, mês) dentro de [dt_ini, dt_fim] (mês em que a NF de
     entrada foi lançada — PCNFENT.DTENT — mesma convenção do faturamento
     oficial). Somado à parte porque a data de referência é de uma tabela
     diferente da venda (PCNFENT, não PCNFSAID); o desconto é feito em
-    Python no _pivot_mensal do router. Sem filtro de carteira (vendedor/
-    supervisor): a devolução não tem um vendedor "dono" claro por cliente
-    e o efeito prático no total mensal geral é pequeno — só por cod_fornec
-    e, no drill-down, por cliente.
+    Python no _pivot_mensal do router.
+
+    filtro_vendedor/filtro_supervisor: mesma carteira do CADASTRO ATUAL do
+    cliente que devolveu (igual _filtro_carteira das outras funções deste
+    módulo) — ESSENCIAL na visão geral (sem cod_cliente): sem isso, a
+    devolução da EMPRESA INTEIRA pro fornecedor era subtraída do valor de
+    UM vendedor/supervisor só, fazendo o mês dele aparecer bem negativo
+    mesmo com venda positiva (o valor batia errado com o Faturamento
+    oficial, que já soma a devolução só da carteira de quem está sendo
+    visto). No drill-down de 1 cliente (cod_cliente informado) isso não
+    fazia diferença, pois a devolução já é só daquele cliente.
     """
     if not codfornecs:
         return "SELECT 1 FROM DUAL WHERE 1=0", {}
@@ -422,6 +444,14 @@ def build_devolucao_mensal_sql(
         params["cod_cliente"] = cod_cliente
         filtro_cliente = " AND PCNFENT.CODFORNEC = :cod_cliente"
 
+    filtro_carteira = ""
+    if filtro_supervisor is not None:
+        params["cod_supervisor"] = filtro_supervisor
+        filtro_carteira += " AND DU.CODSUPERVISOR = :cod_supervisor"
+    if filtro_vendedor is not None:
+        params["cod_vendedor"] = filtro_vendedor
+        filtro_carteira += " AND DC.CODUSUR1 = :cod_vendedor"
+
     sql = f"""
 WITH PARAMS AS (
     SELECT TO_DATE(:dt_ini,'YYYY-MM-DD') AS DT_INI, TO_DATE(:dt_fim,'YYYY-MM-DD') AS DT_FIM
@@ -431,7 +461,7 @@ SELECT
     EXTRACT(YEAR  FROM PCNFENT.DTENT) AS ano,
     EXTRACT(MONTH FROM PCNFENT.DTENT) AS mes,
     SUM({vl_devol}) AS valor_devolucao
-{_devolucao_from_where(placeholders, "P.DT_INI", "P.DT_FIM", filtro_cliente)}
+{_devolucao_from_where(placeholders, "P.DT_INI", "P.DT_FIM", filtro_cliente, filtro_carteira)}
 GROUP BY EXTRACT(YEAR FROM PCNFENT.DTENT), EXTRACT(MONTH FROM PCNFENT.DTENT)
 """
     return sql, params

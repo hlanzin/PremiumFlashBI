@@ -33,6 +33,17 @@ import {
 } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 
+// ── Categorias da sidebar (agrupam os módulos em dropdowns) ──────────────────
+const CATEGORIAS = [
+  { id:"vendas",      label:"Vendas & Análise", icon:BarChart3, ids:["faturamento","ranking","dist_numerica","ranking_clientes","comparativo_clientes","clientes_forn","lista_negra"] },
+  { id:"campanhas",   label:"Campanhas",        icon:Tag,       ids:["bateu_levou","campanha_fini","vendas_produto"] },
+  { id:"operacional", label:"Operacional",      icon:Package,   ids:["estoque","pedidos","troca","chamados","sugestao_pedido"] },
+  { id:"admin",       label:"Administração",    icon:Settings,  ids:["admin","exclusoes"] },
+];
+
+// ── Módulos fora de categoria (ficam soltos na sidebar, sem dropdown) ───────
+const STANDALONE_IDS = ["conta_corrente", "alertas"];
+
 // ── Registro de módulos ───────────────────────────────────────────────────────
 const BI_MODULES = [
   { id:"faturamento",   label:"Faturamento",     icon:BarChart3,   component:ModuleFaturamento,  cargos:null },
@@ -118,6 +129,12 @@ export default function App() {
   // ── App autenticado ───────────────────────────────────────────────────────
   const cargo = auth.userInfo?.cargo ?? "vendedor";
   const modulosVisiveis = BI_MODULES.filter(m => !m.cargos || m.cargos.includes(cargo));
+  const categoriasVisiveis = CATEGORIAS
+    .map(cat => ({ ...cat, modulos: cat.ids.map(id => modulosVisiveis.find(m => m.id === id)).filter(Boolean) }))
+    .filter(cat => cat.modulos.length > 0);
+  const standaloneVisiveis = STANDALONE_IDS
+    .map(id => modulosVisiveis.find(m => m.id === id))
+    .filter(Boolean);
   const isIncentivoAtivo = activeModule === "incentivos" && activeIncentivo;
   const ActiveModule = isIncentivoAtivo
     ? ModuleIncentivo
@@ -146,7 +163,8 @@ export default function App() {
         isMobile={isMobile}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        modulos={modulosVisiveis}
+        categorias={categoriasVisiveis}
+        standalone={standaloneVisiveis}
         activeModule={activeModule}
         onNav={handleNav}
         incentivosOpen={incentivosOpen}

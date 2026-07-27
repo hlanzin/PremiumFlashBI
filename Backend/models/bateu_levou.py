@@ -22,6 +22,7 @@ def create_bl_tables():
                 codfornec   INTEGER,                             -- usado quando tipo='positivacao'
                 positivacao_modo TEXT DEFAULT 'cliente',          -- 'cliente' | 'produto' (só tipo='positivacao')
                 unidade     TEXT    NOT NULL DEFAULT 'UN',
+                exigir_caixa_fechada INTEGER NOT NULL DEFAULT 0,  -- só tipo='produto': só conta pedido com caixa fechada (QT >= QTUNITCX), por pedido individual
                 semana_ini  TEXT    NOT NULL,
                 semana_fim  TEXT    NOT NULL,
                 ativa       INTEGER NOT NULL DEFAULT 1,
@@ -53,7 +54,8 @@ def create_bl_tables():
 # ── Campanhas ─────────────────────────────────────────────────────────────────
 def criar_campanha(usuario_id, nome, semana_ini, semana_fim,
                     tipo="produto", codsec=None, codfornec=None,
-                    positivacao_modo="cliente", unidade="UN") -> int:
+                    positivacao_modo="cliente", unidade="UN",
+                    exigir_caixa_fechada=False) -> int:
     """
     tipo='produto'     -> codsec obrigatório (seção dos produtos elegíveis)
     tipo='positivacao' -> codfornec obrigatório (fornecedor cujo critério de
@@ -77,10 +79,11 @@ def criar_campanha(usuario_id, nome, semana_ini, semana_fim,
 
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO bl_campanhas(usuario_id,nome,tipo,codsec,codfornec,positivacao_modo,unidade,semana_ini,semana_fim) "
-            "VALUES(?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO bl_campanhas(usuario_id,nome,tipo,codsec,codfornec,positivacao_modo,unidade,exigir_caixa_fechada,semana_ini,semana_fim) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?)",
             (usuario_id, nome, tipo, codsec if codsec is not None else 0,
-             codfornec, positivacao_modo, unidade, semana_ini, semana_fim))
+             codfornec, positivacao_modo, unidade, 1 if exigir_caixa_fechada else 0,
+             semana_ini, semana_fim))
         return cur.lastrowid
 
 
@@ -88,7 +91,7 @@ def listar_campanhas(usuario_id=None, semana_ini=None) -> list:
     with get_db() as conn:
         q = """
             SELECT c.id, c.nome, c.tipo, c.codsec, c.codfornec, c.positivacao_modo,
-                   c.unidade, c.semana_ini, c.semana_fim,
+                   c.unidade, c.exigir_caixa_fechada, c.semana_ini, c.semana_fim,
                    c.ativa, c.usuario_id, u.username, u.nome AS nome_fornecedor
             FROM bl_campanhas c JOIN usuarios u ON u.id = c.usuario_id
             WHERE 1=1

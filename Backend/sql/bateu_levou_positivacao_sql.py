@@ -36,6 +36,11 @@ Elegibilidade (mesma lógica de sql/lista_negra_sql.py):
                  positivação: se comprar durante a campanha, aumenta a base
                  de clientes atendidos (aquisição/reativação), não só
                  recuperação de quem tinha acabado de sair da lista.
+
+Mesmo filtro de contas especiais do tipo 'produto' normal (rotina 322 —
+ver sql_322_supervisor em bateu_levou_sql.py): exclui supervisor 9999 e
+vendedores 2/10/160/180 (contas internas/casa) da listagem final — sem
+isso apareciam vendedores que não são da equipe de vendas de verdade.
 """
 from typing import List, Optional
 from config import FILIAL
@@ -265,6 +270,8 @@ FROM ELEGIVEIS E
     LEFT  JOIN POSITIVOU_REALIZADO PR ON PR.CODCLI = E.CODCLI
     LEFT  JOIN POSITIVOU_HOJE      PH ON PH.CODCLI = E.CODCLI
 WHERE 1=1 {filtro_sup}
+  AND U1.CODSUPERVISOR NOT IN ('9999')
+  AND U1.CODUSUR NOT IN (2,10,160,180)
 ORDER BY U1.CODSUPERVISOR, C.CODUSUR1, C.CLIENTE
 """
     return sql, []

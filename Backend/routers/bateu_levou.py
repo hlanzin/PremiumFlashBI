@@ -51,6 +51,7 @@ class CampanhaCreate(BaseModel):
     codfornec: Optional[int] = None  # obrigatório se tipo='positivacao'
     positivacao_modo: str = "cliente"  # 'cliente' | 'produto' (só tipo='positivacao')
     unidade: str = "UN"
+    exigir_caixa_fechada: bool = False  # só tipo='produto': só conta pedido com caixa fechada
     semana_ini: str; semana_fim: str
 
 class CampanhaUpdate(BaseModel):
@@ -83,7 +84,8 @@ def post_campanha(body: CampanhaCreate, u: CurrentUser = Depends(get_current_use
     try:
         cid = criar_campanha(_uid(u), body.nome, body.semana_ini, body.semana_fim,
                              tipo=body.tipo, codsec=body.codsec, codfornec=body.codfornec,
-                             positivacao_modo=body.positivacao_modo, unidade=body.unidade)
+                             positivacao_modo=body.positivacao_modo, unidade=body.unidade,
+                             exigir_caixa_fechada=body.exigir_caixa_fechada)
     except ValueError as e:
         raise HTTPException(400, str(e))
     return {"id": cid, "ok": True}
@@ -440,7 +442,8 @@ def get_dados(cid: int, data: Optional[str] = None,
                 rows = [r for r in rows if r.get("cod_vendedor") == u.cod_winthor]
             vendedores = agregar_positivacao_por_vendedor(rows, metas_sup)
         else:
-            sql = sql_322_supervisor(codprods, unidade, semana_ini, dr, sup, fechamento=fechamento)
+            sql = sql_322_supervisor(codprods, unidade, semana_ini, dr, sup, fechamento=fechamento,
+                                      exigir_caixa_fechada=bool(camp.get("exigir_caixa_fechada")))
             try:
                 rows = execute_query(sql, [])
             except Exception as e:

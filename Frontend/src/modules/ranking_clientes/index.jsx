@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { Trophy, Search } from "lucide-react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { Trophy, Search, X } from "lucide-react";
 import { C, fmtR, fmtN, fmtDt, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
@@ -14,6 +14,7 @@ import { exportCSV } from "../../utils/exportCSV";
 import { useSort } from "../../hooks/useSort";
 
 const fmtPeso = (v) => v == null ? "—" : `${fmtN(v)} kg`;
+const TODOS_FORNECEDORES = "__todos__";
 
 const primeiroDiaMes = () => {
   const d = new Date();
@@ -40,6 +41,7 @@ export default function ModuleRankingClientes({ isMobile, token, userInfo = {} }
   const [busca, setBusca] = useState("");
 
   const [dados, setDados] = useState([]);
+  const [carregouUmaVez, setCarregouUmaVez] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -54,6 +56,18 @@ export default function ModuleRankingClientes({ isMobile, token, userInfo = {} }
       })
       .catch(() => {});
   }, []);
+
+  // "Todos os Fornecedores" — opção extra no topo da lista, que soma todos
+  // os fornecedores que o usuário tem acesso num ranking só.
+  const fornecedoresComTodos = useMemo(() => (
+    fornecedores.length > 0
+      ? [{ cod: TODOS_FORNECEDORES, nome: "Todos os Fornecedores" }, ...fornecedores]
+      : fornecedores
+  ), [fornecedores]);
+
+  const codfornecParam = fornSel === TODOS_FORNECEDORES
+    ? fornecedores.map(f => f.cod).join(",")
+    : fornSel;
 
   // ── Supervisores (só gerencial/admin escolhem) ───────────────────────────
   useEffect(() => {
@@ -74,18 +88,34 @@ export default function ModuleRankingClientes({ isMobile, token, userInfo = {} }
     setVendSel(null);
   }, [supSel]);
 
+  // Vendedor tem a própria carteira fixa; supervisor tem seu próprio filtro
+  // fixo (supSel = ele mesmo) — só gerencial/admin têm supervisor pra
+  // limpar. Vendedor selecionado dá pra limpar em qualquer um dos dois.
+  const temFiltroCarteira = (isGerencial && !!supSel) || !!vendSel;
+  const limparFiltroCarteira = () => {
+    if (isGerencial) setSupSel(null);
+    setVendSel(null);
+  };
+
   // ── Dados do ranking ──────────────────────────────────────────────────────
+  // Guarda a requisição mais recente — se o usuário trocar o filtro rápido
+  // (ex.: selecionar o supervisor antes da 1ª busca "geral" terminar), a
+  // resposta de uma busca antiga que volta depois não pode sobrescrever o
+  // resultado da busca mais nova já filtrada.
+  const reqIdRef = useRef(0);
+
   const fetchData = () => {
     if (!fornSel) return;
+    const reqId = ++reqIdRef.current;
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ codfornec: fornSel, dt_ini: dtIni, dt_fim: dtFim });
+    const params = new URLSearchParams({ codfornec: codfornecParam, dt_ini: dtIni, dt_fim: dtFim });
     if (isGerencial && supSel) params.set("filtro_supervisor", supSel);
     if ((isGerencial || isSupervisor) && vendSel) params.set("filtro_vendedor", vendSel);
     fetch(`${API_BASE}/api/ranking-clientes?${params.toString()}`, { headers })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(j => setDados(j.dados ?? []))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .then(j => { if (reqId === reqIdRef.current) { setDados(j.dados ?? []); setCarregouUmaVez(true); } })
+      .catch(e => { if (reqId === reqIdRef.current) setError(e.message); })
+      .finally(() => { if (reqId === reqIdRef.current) setLoading(false); });
   };
 
   useEffect(() => { fetchData(); }, [fornSel, dtIni, dtFim, supSel, vendSel]);
@@ -136,7 +166,7 @@ export default function ModuleRankingClientes({ isMobile, token, userInfo = {} }
         padding: isMobile ? "6px 12px" : "8px 20px",
         display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
       }}>
-        <SelectModal value={fornSel} onChange={setFornSel} options={fornecedores}
+        <SelectModal value={fornSel} onChange={setFornSel} options={fornecedoresComTodos}
           placeholder="Selecione um fornecedor..." labelKey="nome" valueKey="cod" isMobile={isMobile} />
 
         {isGerencial && (
@@ -147,6 +177,17 @@ export default function ModuleRankingClientes({ isMobile, token, userInfo = {} }
         {(isGerencial || isSupervisor) && (
           <SelectModal value={vendSel} onChange={setVendSel} options={vendedores}
             placeholder={supSel ? "Todos vendedores..." : "Escolha um supervisor"} labelKey="nome" valueKey="cod" isMobile={isMobile} />
+        )}
+
+        {temFiltroCarteira && (
+          <button onClick={limparFiltroCarteira}
+            style={{ display: "flex", alignItems: "center", gap: "4px", background: "none",
+              border: `1px solid ${C.border}`, borderRadius: "6px", padding: "6px 10px",
+              fontSize: "12px", color: C.textSub, cursor: "pointer", fontFamily: C.sans }}
+            onMouseEnter={e => e.currentTarget.style.background = C.bg}
+            onMouseLeave={e => e.currentTarget.style.background = "none"}>
+            <X size={12} /> Limpar filtro
+          </button>
         )}
 
         <DatePicker value={dtIni} onChange={setDtIni} max={dtFim} isMobile={isMobile} />
@@ -165,15 +206,15 @@ export default function ModuleRankingClientes({ isMobile, token, userInfo = {} }
       </div>
 
       <TableCard isMobile={isMobile} maxHeight="70vh">
-        {loading && <SkeletonRows count={8} height={36} />}
+        {loading && !carregouUmaVez && <SkeletonRows count={8} height={36} />}
         {error && <div style={{ padding: "40px", textAlign: "center", color: C.red }}>Erro: {error}</div>}
         {!fornSel && !loading && (
           <div style={{ padding: "48px", textAlign: "center", color: C.textSub }}>
             Selecione um fornecedor para ver o ranking.
           </div>
         )}
-        {fornSel && !loading && !error && (
-          <>
+        {fornSel && !error && (carregouUmaVez || !loading) && (
+          <div style={{ opacity: loading ? 0.55 : 1, transition: "opacity 200ms ease" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: isMobile ? "11px" : "12px" }}>
               <thead>
                 <tr>
@@ -233,7 +274,7 @@ export default function ModuleRankingClientes({ isMobile, token, userInfo = {} }
             {rows.length === 0 && (
               <div style={{ padding: "48px", textAlign: "center", color: C.textSub }}>Nenhum dado disponível.</div>
             )}
-          </>
+          </div>
         )}
       </TableCard>
     </>

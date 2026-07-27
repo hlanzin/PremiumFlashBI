@@ -7,6 +7,11 @@ Colunas por vendedor:
   TROCA     — pedidos CONDVENDA 5 ou 11 no mês (R$)  [rotina 322]
   PCT_TROCA — TROCA / PLF_FAT * 100
   FLEX      — verba abaixo da tabela dos fornecedores PMU no mês (R$)
+            + lançamentos negativos na Conta Corrente do RCA (PCLOGRCA)
+              no mês, lançados manualmente pela rotina 356 do Winthor
+              (ROTINA=356 + HISTORICO2 preenchido — confirmado com dados
+              reais: movimentos automáticos de pedido usam ROTINA=316,
+              histórico fixo "CTRLCCRCA:..." e HISTORICO2 vazio)
 """
 from typing import Optional
 from config import FILIAL
@@ -217,6 +222,27 @@ FLEX_CART AS (
       AND PCUSUARI.CODSUPERVISOR NOT IN ('9999')
       AND PCUSUARI.CODUSUR       NOT IN (2,160,180)
     GROUP BY PCUSUARI.CODUSUR
+),
+
+-- Lançamentos negativos na Conta Corrente do RCA no mês (PCLOGRCA), feitos
+-- manualmente pela rotina 356 do Winthor — contam como FLEX (verba/desconto
+-- dado ao vendedor por fora da venda). Confirmado com dados reais que
+-- movimentos automáticos de pedido (ex: baixa de item) usam ROTINA=316,
+-- histórico fixo "CTRLCCRCA:LANCAMENTO SALDO ITEM PEDIDO" e HISTORICO2
+-- vazio — já os lançamentos manuais usam ROTINA=356 com HISTORICO2
+-- preenchido (o "OBS" que aparece no extrato). Os dois juntos isolam só
+-- os lançamentos manuais, sem duplicar o que já entra no FLEX via PCMOV.
+CC_NEGATIVOS AS (
+    SELECT
+        L.CODUSUR,
+        SUM(NVL(L.VLCORRENTE,0) - NVL(L.VLCORRENTEANT,0)) AS VL_CC_NEG
+    FROM PCLOGRCA L
+        CROSS JOIN PARAMS P
+    WHERE L.DATA BETWEEN P.DT_MES_INI AND P.DT_HOJE
+      AND L.ROTINA = 356
+      AND L.HISTORICO2 IS NOT NULL
+      AND (NVL(L.VLCORRENTE,0) - NVL(L.VLCORRENTEANT,0)) < 0
+    GROUP BY L.CODUSUR
 )
 
 SELECT
@@ -232,18 +258,19 @@ SELECT
     CASE WHEN (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) > 0
          THEN ROUND(NVL(T.VL_TROCA,0) / (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) * 100, 2)
          ELSE NULL END                                            AS pct_troca,
-    NVL(X.VL_FLEX,     0) * -1                                   AS flex,
+    (NVL(X.VL_FLEX,0) + NVL(CC.VL_CC_NEG,0)) * -1               AS flex,
     NVL(FC.VL_FLEX_CART, 0)                                      AS flex_cart,
-    (NVL(X.VL_FLEX, 0) * -1) + NVL(FC.VL_FLEX_CART, 0)         AS flex_total,
+    ((NVL(X.VL_FLEX,0) + NVL(CC.VL_CC_NEG,0)) * -1) + NVL(FC.VL_FLEX_CART, 0) AS flex_total,
     CASE WHEN (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) > 0
-         THEN ROUND(GREATEST((NVL(T.VL_TROCA,0) - ((NVL(X.VL_FLEX,0) * -1) + NVL(FC.VL_FLEX_CART,0))), 0) / (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) * 100, 2)
+         THEN ROUND(GREATEST((NVL(T.VL_TROCA,0) - (((NVL(X.VL_FLEX,0) + NVL(CC.VL_CC_NEG,0)) * -1) + NVL(FC.VL_FLEX_CART,0))), 0) / (ROUND(NVL(F.VL_PLF_FAT,0) - NVL(D.VL_PLF_DEVOL,0), 2) + NVL(C.VL_PLF_CART,0)) * 100, 2)
          ELSE NULL END                                            AS pct_flex_troca,
     -- Colunas de debug (visíveis para admin)
     NVL(F.VL_PLF_FAT,  0)                                        AS dbg_plf_fat_bruto,
     NVL(D.VL_PLF_DEVOL,0)                                        AS dbg_plf_devol,
     NVL(C.VL_PLF_CART, 0)                                        AS dbg_plf_cart,
     NVL(T.VL_TROCA,    0)                                        AS dbg_troca_bruta,
-    NVL(X.VL_FLEX,     0)                                        AS dbg_flex_bruta
+    NVL(X.VL_FLEX,     0)                                        AS dbg_flex_bruta,
+    NVL(CC.VL_CC_NEG,  0)                                        AS dbg_cc_negativo
 FROM PCUSUARI U
     LEFT JOIN PCSUPERV  S  ON S.CODSUPERVISOR = U.CODSUPERVISOR
     LEFT JOIN PLF_FAT   F  ON F.CODUSUR = U.CODUSUR
@@ -252,12 +279,14 @@ FROM PCUSUARI U
     LEFT JOIN TROCA     T  ON T.CODUSUR = U.CODUSUR
     LEFT JOIN FLEX      X  ON X.CODUSUR = U.CODUSUR
     LEFT JOIN FLEX_CART FC ON FC.CODUSUR = U.CODUSUR
+    LEFT JOIN CC_NEGATIVOS CC ON CC.CODUSUR = U.CODUSUR
 WHERE U.NOME LIKE 'PMU%'
   AND U.CODSUPERVISOR NOT IN ('9999','999999')
   AND U.CODUSUR NOT IN (2, 160, 180)
   AND (F.VL_PLF_FAT IS NOT NULL
        OR T.VL_TROCA IS NOT NULL
-       OR X.VL_FLEX  IS NOT NULL)
+       OR X.VL_FLEX  IS NOT NULL
+       OR CC.VL_CC_NEG IS NOT NULL)
   {filtro_acesso}
 ORDER BY U.CODSUPERVISOR, U.NOME
 """

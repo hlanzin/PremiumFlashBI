@@ -11,6 +11,11 @@ fechamento=False (semana em curso):
 fechamento=True (campanha encerrada):
   QT_REALIZADO = semana_ini → data_ref (semana toda)
   QT_DIA       = 0
+
+exigir_caixa_fechada=True:
+  Cada linha de PCPEDI só conta se, sozinha, atingir ao menos uma caixa
+  fechada do produto (QT >= QTUNITCX). Checagem por pedido individual,
+  não acumulada no período.
 """
 from config import FILIAL
 from typing import List
@@ -29,9 +34,14 @@ def _in_produtos(codprods: List[int]) -> str:
 def sql_322_supervisor(codprods: List[int], unidade: str,
                        semana_ini: str, data_ref: str,
                        cod_supervisor: int,
-                       fechamento: bool = False) -> str:
+                       fechamento: bool = False,
+                       exigir_caixa_fechada: bool = False) -> str:
     qt    = _qt_expr(unidade)
     prods = _in_produtos(codprods)
+    filtro_caixa = (
+        "\n  AND NVL(PCPEDI.QT,0) >= NVL(PCPRODUT.QTUNITCX,1)"
+        if exigir_caixa_fechada else ""
+    )
 
     if fechamento:
         # Campanha encerrada: semana toda vai pro realizado, dia = 0
@@ -76,7 +86,7 @@ WHERE PCPEDI.NUMPED             = PCPEDC.NUMPED
   AND PCUSUARI.CODSUPERVISOR    NOT IN ('9999')
   AND PCUSUARI.CODUSUR          NOT IN (2,10,160,180)
   AND PCUSUARI.CODSUPERVISOR    = {cod_supervisor}
-  AND PCPEDI.CODPROD            IN {prods}
+  AND PCPEDI.CODPROD            IN {prods}{filtro_caixa}
 GROUP BY
     PCUSUARI.CODUSUR, PCUSUARI.NOME,
     PCUSUARI.CODSUPERVISOR, PCSUPERV.NOME,

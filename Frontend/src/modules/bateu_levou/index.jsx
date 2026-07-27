@@ -639,6 +639,7 @@ function FornecedorView({token, userInfo, isMobile}) {
   const [novaCodsec,   setNovaCodsec]   = useState("");
   const [novaCodfornec,setNovaCodfornec]= useState("");
   const [novaUnidade,  setNovaUnidade]  = useState("UN");
+  const [novaCaixaFechada, setNovaCaixaFechada] = useState(false); // só tipo='produto'
   const [novaIni,      setNovaIni]      = useState("");
   const [novaFim,      setNovaFim]      = useState("");
 
@@ -730,14 +731,15 @@ function FornecedorView({token, userInfo, isMobile}) {
     try {
       const body = novaTipo==="produto"
         ? {nome:novaNome, tipo:"produto", codsec:Number(novaCodsec),
-           unidade:novaUnidade, semana_ini:novaIni, semana_fim:novaFim}
+           unidade:novaUnidade, exigir_caixa_fechada:novaCaixaFechada,
+           semana_ini:novaIni, semana_fim:novaFim}
         : {nome:novaNome, tipo:"positivacao", codfornec:Number(novaCodfornec),
            positivacao_modo:novaModo,
            unidade:"UN", semana_ini:novaIni, semana_fim:novaFim};
       await fetch(`${API_BASE}/api/bl/campanhas`,{method:"POST",headers,
         body:JSON.stringify(body)});
       setShowNova(false);setNovaNome("");setNovaTipo("produto");setNovaModo("cliente");
-      setNovaCodsec("");setNovaCodfornec("");setNovaIni("");setNovaFim("");
+      setNovaCodsec("");setNovaCodfornec("");setNovaCaixaFechada(false);setNovaIni("");setNovaFim("");
       loadCampanhas();
     } finally {setCriando(false);}
   };
@@ -810,7 +812,15 @@ function FornecedorView({token, userInfo, isMobile}) {
                         <option value="UN">UN</option><option value="CX">CX</option>
                       </select>
                     </div>
-                  ) : (
+                  ) : null}
+                  {novaTipo==="produto" && (
+                    <label style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",color:C.textSub,cursor:"pointer"}}>
+                      <input type="checkbox" checked={novaCaixaFechada}
+                        onChange={e=>setNovaCaixaFechada(e.target.checked)}/>
+                      Só contar pedido com caixa fechada
+                    </label>
+                  )}
+                  {novaTipo!=="produto" && (
                     <>
                       <select value={novaCodfornec} onChange={e=>setNovaCodfornec(e.target.value)}
                         style={{padding:"9px 12px",border:`1px solid ${C.border}`,borderRadius:"8px",fontSize:"13px",outline:"none"}}>
@@ -984,7 +994,15 @@ function FornecedorView({token, userInfo, isMobile}) {
                     <option value="UN">UN</option><option value="CX">CX</option>
                   </select>
                 </div>
-              ) : (
+              ) : null}
+              {novaTipo==="produto" && (
+                <label style={{display:"flex",alignItems:"center",gap:"5px",fontSize:"10px",color:C.textSub,cursor:"pointer"}}>
+                  <input type="checkbox" checked={novaCaixaFechada}
+                    onChange={e=>setNovaCaixaFechada(e.target.checked)}/>
+                  Só contar pedido com caixa fechada
+                </label>
+              )}
+              {novaTipo!=="produto" && (
                 <>
                   <select value={novaCodfornec} onChange={e=>setNovaCodfornec(e.target.value)}
                     style={{padding:"5px 8px",border:`1px solid ${C.border}`,borderRadius:"4px",fontSize:"11px",outline:"none"}}>

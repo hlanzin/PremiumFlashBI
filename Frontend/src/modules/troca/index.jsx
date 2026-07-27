@@ -335,7 +335,7 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
             <thead>
               <tr>
-                {["VENDEDOR","PLF FAT BRUTO","PLF DEVOL","PLF FAT LÍQ","PLF CART","PLF TOTAL","TROCA","FLEX FAT","FLEX SEMANA","FLEX TOTAL","% TROCA","% TROCA-FLEX"].map(h => (
+                {["VENDEDOR","PLF FAT BRUTO","PLF DEVOL","PLF FAT LÍQ","PLF CART","PLF TOTAL","TROCA","FLEX FAT","FLEX SEMANA","CC NEGATIVO","FLEX TOTAL","% TROCA","% TROCA-FLEX"].map(h => (
                   <th key={h} style={{ padding: "5px 8px", background: "#EDE9FE", color: "#4C1D95", fontSize: "10px", fontWeight: 700, whiteSpace: "nowrap", border: "1px solid #C4B5FD", textAlign: h === "VENDEDOR" ? "left" : "right" }}>{h}</th>
                 ))}
               </tr>
@@ -355,6 +355,7 @@ export default function ModuleTroca({ isMobile, token, userInfo = {} }) {
                     <td style={{ padding: "4px 8px", border: "1px solid #E9D5FF", textAlign: "right", fontFamily: C.mono, color: C.red }}>{fmtR(r.dbg_troca_bruta)}</td>
                     <td style={{ padding: "4px 8px", border: "1px solid #E9D5FF", textAlign: "right", fontFamily: C.mono, color: C.amber }}>{fmtR(r.flex)}</td>
                     <td style={{ padding: "4px 8px", border: "1px solid #E9D5FF", textAlign: "right", fontFamily: C.mono, color: C.amber }}>{fmtR(r.flex_cart)}</td>
+                    <td style={{ padding: "4px 8px", border: "1px solid #E9D5FF", textAlign: "right", fontFamily: C.mono, color: "#DC2626" }}>{fmtR(r.dbg_cc_negativo)}</td>
                     <td style={{ padding: "4px 8px", border: "1px solid #E9D5FF", textAlign: "right", fontFamily: C.mono, fontWeight: 700, color: C.amber }}>{fmtR(r.flex_total)}</td>
                     <td style={{ padding: "4px 8px", border: "1px solid #E9D5FF", textAlign: "center" }}><span style={pt2.style}>{pt2.label}</span></td>
                     <td style={{ padding: "4px 8px", border: "1px solid #E9D5FF", textAlign: "center" }}><span style={pft2.style}>{pft2.label}</span></td>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { GitCompare, Search, TrendingUp, TrendingDown, X, List } from "lucide-react";
 import { C, fmtR, fmtN, fmtDt } from "../../theme";
 import { API_BASE } from "../../config";
@@ -11,6 +11,7 @@ import LineChartCompare from "../../components/LineChartCompare";
 import { exportCSV } from "../../utils/exportCSV";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const TODOS_FORNECEDORES = "__todos__";
 
 const STATUS_CFG = {
   novo:           { label: "Novo",           plural: "Novos",           bg: "#DBEAFE", fg: "#1D4ED8" },
@@ -91,6 +92,19 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
       .catch(() => {});
   }, []);
 
+  // "Todos os Fornecedores" — opção extra no topo da lista, que soma todos
+  // os fornecedores que o usuário tem acesso num comparativo só (útil pra
+  // ver a atividade do cliente com a distribuidora inteira, não só 1 marca).
+  const fornecedoresComTodos = useMemo(() => (
+    fornecedores.length > 0
+      ? [{ cod: TODOS_FORNECEDORES, nome: "Todos os Fornecedores" }, ...fornecedores]
+      : fornecedores
+  ), [fornecedores]);
+
+  const codfornecParam = fornSel === TODOS_FORNECEDORES
+    ? fornecedores.map(f => f.cod).join(",")
+    : fornSel;
+
   useEffect(() => {
     if (!isGerencial) return;
     fetch(`${API_BASE}/api/faturamento/supervisores`, { headers })
@@ -108,17 +122,33 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
     setVendSel(null);
   }, [supSel]);
 
+  // Vendedor tem a própria carteira fixa; supervisor tem seu próprio filtro
+  // fixo (supSel = ele mesmo) — só gerencial/admin têm supervisor pra
+  // limpar. Vendedor selecionado dá pra limpar em qualquer um dos dois.
+  const temFiltroCarteira = (isGerencial && !!supSel) || !!vendSel;
+  const limparFiltroCarteira = () => {
+    if (isGerencial) setSupSel(null);
+    setVendSel(null);
+  };
+
+  // Guarda a requisição mais recente — se o usuário trocar o filtro rápido
+  // (ex.: selecionar o supervisor antes da 1ª busca "geral" terminar), a
+  // resposta de uma busca antiga que volta depois não pode sobrescrever o
+  // resultado da busca mais nova já filtrada.
+  const reqIdRef = useRef(0);
+
   const fetchData = () => {
     if (!fornSel) return;
+    const reqId = ++reqIdRef.current;
     setLoading(true); setError(null);
-    const params = new URLSearchParams({ codfornec: fornSel, ano_atual: anoAtual });
+    const params = new URLSearchParams({ codfornec: codfornecParam, ano_atual: anoAtual });
     if (isGerencial && supSel) params.set("filtro_supervisor", supSel);
     if ((isGerencial || isSupervisor) && vendSel) params.set("filtro_vendedor", vendSel);
     fetch(`${API_BASE}/api/comparativo-clientes/geral?${params.toString()}`, { headers })
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(j => setResp(j))
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+      .then(j => { if (reqId === reqIdRef.current) setResp(j); })
+      .catch(e => { if (reqId === reqIdRef.current) setError(e.message); })
+      .finally(() => { if (reqId === reqIdRef.current) setLoading(false); });
   };
 
   useEffect(() => { fetchData(); }, [fornSel, anoAtual, supSel, vendSel]);
@@ -134,6 +164,14 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
     { key: "atual",    label: String(anoAtual),     color: C.primary, values: mensal.map(m => m.valor_atual) },
     { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: mensal.map(m => m.valor_anterior) },
   ]), [mensal, anoAtual]);
+
+  const serieMensalCliente = useMemo(() => {
+    if (!detalheCli || detalheCli.erro) return null;
+    return [
+      { key: "atual",    label: String(anoAtual),     color: C.primary, values: detalheCli.mensal.map(m => m.valor_atual) },
+      { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: detalheCli.mensal.map(m => m.valor_anterior) },
+    ];
+  }, [detalheCli, anoAtual]);
 
   const clientesDaLista = useMemo(() => {
     if (!listaModal) return [];
@@ -157,7 +195,7 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   const abrirCliente = (cliente) => {
     setClienteSel(cliente);
     setDetalheCli(null); setLoadingCli(true);
-    const params = new URLSearchParams({ codfornec: fornSel, ano_atual: anoAtual });
+    const params = new URLSearchParams({ codfornec: codfornecParam, ano_atual: anoAtual });
     if (isGerencial && supSel) params.set("filtro_supervisor", supSel);
     if ((isGerencial || isSupervisor) && vendSel) params.set("filtro_vendedor", vendSel);
     fetch(`${API_BASE}/api/comparativo-clientes/cliente/${cliente.cod_cliente}?${params.toString()}`, { headers })
@@ -198,7 +236,7 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
         padding: isMobile ? "6px 12px" : "8px 20px",
         display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap",
       }}>
-        <SelectModal value={fornSel} onChange={setFornSel} options={fornecedores}
+        <SelectModal value={fornSel} onChange={setFornSel} options={fornecedoresComTodos}
           placeholder="Selecione um fornecedor..." labelKey="nome" valueKey="cod" isMobile={isMobile} />
 
         <select value={anoAtual} onChange={e => setAnoAtual(Number(e.target.value))}
@@ -216,6 +254,17 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
           <SelectModal value={vendSel} onChange={setVendSel} options={vendedores}
             placeholder={supSel ? "Todos vendedores..." : "Escolha um supervisor"} labelKey="nome" valueKey="cod" isMobile={isMobile} />
         )}
+
+        {temFiltroCarteira && (
+          <button onClick={limparFiltroCarteira}
+            style={{ display: "flex", alignItems: "center", gap: "4px", background: "none",
+              border: `1px solid ${C.border}`, borderRadius: "6px", padding: "6px 10px",
+              fontSize: "12px", color: C.textSub, cursor: "pointer", fontFamily: C.sans }}
+            onMouseEnter={e => e.currentTarget.style.background = C.bg}
+            onMouseLeave={e => e.currentTarget.style.background = "none"}>
+            <X size={12} /> Limpar filtro
+          </button>
+        )}
       </div>
 
       {!fornSel && !loading && (
@@ -224,11 +273,12 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
         </div>
       )}
 
-      {loading && <div style={{ padding: "16px 20px" }}><SkeletonRows count={3} height={60} /></div>}
+      {loading && !resp && <div style={{ padding: "16px 20px" }}><SkeletonRows count={3} height={60} /></div>}
       {error && <div style={{ padding: "40px", textAlign: "center", color: C.red }}>Erro: {error}</div>}
 
-      {fornSel && !loading && !error && resp && (
-        <div style={{ padding: isMobile ? "12px" : "16px 20px" }}>
+      {fornSel && !error && resp && (
+        <div style={{ padding: isMobile ? "12px" : "16px 20px",
+          opacity: loading ? 0.55 : 1, transition: "opacity 200ms ease" }}>
           {/* ── Stat tiles ── */}
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
             <StatTile label="CLIENTES ATIVOS (últimos 3 meses)" atual={resumo.ativos_atual} anterior={resumo.ativos_anterior}
@@ -349,10 +399,7 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
                 deltaPct={detalheCli.resumo.crescimento_pct} formatValue={fmtR} />
             </div>
             <LineChartCompare
-              series={[
-                { key: "atual",    label: String(anoAtual),     color: C.primary, values: detalheCli.mensal.map(m => m.valor_atual) },
-                { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: detalheCli.mensal.map(m => m.valor_anterior) },
-              ]}
+              series={serieMensalCliente}
               xLabels={MESES} formatValue={fmtR} height={200} />
           </>
         )}

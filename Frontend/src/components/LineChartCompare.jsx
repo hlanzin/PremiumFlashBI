@@ -1,8 +1,9 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { C } from "../theme";
 
 const W = 760, H_DEFAULT = 220;
 const PAD = { top: 16, right: 16, bottom: 26, left: 54 };
+const ANIM_MS = 450;
 
 function niceMax(value) {
   if (!value || value <= 0) return 10;
@@ -13,28 +14,86 @@ function niceMax(value) {
   return niceNorm * base;
 }
 
+function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+// Anima os VALORES de cada série (não só a cor/posição) quando a prop
+// `series` muda — ex.: trocar o filtro de supervisor faz os pontos e a
+// linha subirem/descerem suavemente até a nova altura, em vez de saltar
+// direto pro valor novo. Passo a passo via requestAnimationFrame porque
+// SVG puro não anima "points" de <polyline> por CSS.
+function useAnimatedSeries(series, duration = ANIM_MS) {
+  const [animated, setAnimated] = useState(series);
+  const fromRef = useRef(series);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    const to = series;
+    const start = performance.now();
+    cancelAnimationFrame(rafRef.current);
+
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = easeOutCubic(t);
+      setAnimated(to.map((s, si) => ({
+        ...s,
+        values: s.values.map((v, i) => {
+          const fromVal = from[si]?.values[i] ?? v;
+          return fromVal + (v - fromVal) * eased;
+        }),
+      })));
+      if (t < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      } else {
+        fromRef.current = to;
+      }
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [series]);
+
+  return animated;
+}
+
 /**
  * Gráfico de linha pra comparar 2+ séries num eixo X compartilhado (ex.:
  * mês 1..12). Sem biblioteca externa — SVG simples com crosshair + tooltip
- * no hover e legenda (linha-chave, nunca só a cor).
+ * no hover e legenda (linha-chave, nunca só a cor). Pontos/linha animam
+ * (ease-out) quando os valores mudam (troca de filtro, novo período etc.).
  */
 export default function LineChartCompare({ series, xLabels, formatValue, height = H_DEFAULT }) {
   const svgRef = useRef(null);
   const [hover, setHover] = useState(null); // índice do mês em hover
+  const animatedSeries = useAnimatedSeries(series);
 
   const n = xLabels.length;
   const plotW = W - PAD.left - PAD.right;
   const plotH = height - PAD.top - PAD.bottom;
 
-  const maxVal = useMemo(() => {
+  // Escala do eixo Y fixa no valor final (não anima) — só os pontos/linha
+  // se movem dentro dela, senão o eixo ficaria "pulando" durante a transição.
+  // Valor líquido de devolução pode ficar negativo num mês — quando isso
+  // acontece, o eixo passa a ser simétrico (0 no meio do gráfico) pra
+  // caber os dois lados; sem valor negativo, continua 0 embaixo como antes.
+  const { minAxis, maxVal, hasNegative } = useMemo(() => {
     const all = series.flatMap(s => s.values);
-    return niceMax(Math.max(1, ...all));
+    const rawMin = Math.min(0, ...all);
+    const rawMax = Math.max(0, ...all);
+    const negative = rawMin < 0;
+    if (negative) {
+      const maxAbs = niceMax(Math.max(1, Math.abs(rawMin), rawMax));
+      return { minAxis: -maxAbs, maxVal: maxAbs, hasNegative: true };
+    }
+    return { minAxis: 0, maxVal: niceMax(Math.max(1, rawMax)), hasNegative: false };
   }, [series]);
 
   const xAt = (i) => PAD.left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
-  const yAt = (v) => PAD.top + plotH - (v / maxVal) * plotH;
+  const yAt = (v) => PAD.top + plotH - ((v - minAxis) / (maxVal - minAxis)) * plotH;
 
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(maxVal * f));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(minAxis + (maxVal - minAxis) * f));
 
   const handleMove = (e) => {
     const rect = svgRef.current.getBoundingClientRect();
@@ -50,14 +109,20 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
     <div style={{ position: "relative" }}>
       <svg ref={svgRef} viewBox={`0 0 ${W} ${height}`} style={{ width: "100%", height: "auto", display: "block" }}
         onMouseMove={handleMove} onMouseLeave={() => setHover(null)}>
-        {/* Gridlines — hairline, recessivas */}
-        {ticks.map((t, i) => (
-          <g key={i}>
-            <line x1={PAD.left} x2={W - PAD.right} y1={yAt(t)} y2={yAt(t)} stroke="#E8D8D8" strokeWidth="1" />
-            <text x={PAD.left - 8} y={yAt(t)} textAnchor="end" dominantBaseline="middle"
-              fontSize="10" fill={C.textSub} fontFamily={C.sans}>{formatValue(t)}</text>
-          </g>
-        ))}
+        {/* Gridlines — hairline, recessivas. Linha do zero fica mais forte
+            quando o gráfico tem lado negativo, pra marcar a base real. */}
+        {ticks.map((t, i) => {
+          const isZero = hasNegative && t === 0;
+          return (
+            <g key={i}>
+              <line x1={PAD.left} x2={W - PAD.right} y1={yAt(t)} y2={yAt(t)}
+                stroke={isZero ? "#B8A8A8" : "#E8D8D8"} strokeWidth={isZero ? 1.5 : 1} />
+              <text x={PAD.left - 8} y={yAt(t)} textAnchor="end" dominantBaseline="middle"
+                fontSize="10" fontWeight={isZero ? 700 : 400}
+                fill={isZero ? C.text : C.textSub} fontFamily={C.sans}>{formatValue(t)}</text>
+            </g>
+          );
+        })}
 
         {/* Eixo X */}
         {xLabels.map((lbl, i) => (
@@ -73,8 +138,8 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
             stroke="#C9B8B8" strokeWidth="1" />
         )}
 
-        {/* Linhas + marcadores */}
-        {series.map(s => {
+        {/* Linhas + marcadores — usam os valores ANIMADOS (interpolados) */}
+        {animatedSeries.map(s => {
           const points = s.values.map((v, i) => `${xAt(i)},${yAt(v)}`).join(" ");
           return (
             <g key={s.key}>
