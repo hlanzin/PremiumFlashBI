@@ -18,6 +18,19 @@ function easeOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);
 }
 
+// Mede a largura real do texto renderizado (canvas 2D é o jeito padrão de
+// medir texto fora do DOM) — evita estimar por nº de caracteres, que fica
+// curto dependendo dos dígitos/formatação e deixa o valor vazar pra fora
+// do SVG.
+let _measureCanvas = null;
+function measureTextWidth(text, fontSizePx, fontFamily) {
+  if (typeof document === "undefined") return text.length * fontSizePx * 0.6;
+  if (!_measureCanvas) _measureCanvas = document.createElement("canvas");
+  const ctx = _measureCanvas.getContext("2d");
+  ctx.font = `${fontSizePx}px ${fontFamily}`;
+  return ctx.measureText(text).width;
+}
+
 // Anima os VALORES de cada série (não só a cor/posição) quando a prop
 // `series` muda — ex.: trocar o filtro de supervisor faz os pontos e a
 // linha subirem/descerem suavemente até a nova altura, em vez de saltar
@@ -94,9 +107,10 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
   // não cabem nos 54px fixos de padding e passavam da borda esquerda do
   // gráfico. Estima a largura pelo nº de caracteres do maior label e abre
   // espaço suficiente (nunca menos que o padrão).
+  const AXIS_FONT_PX = 9;
   const tickLabels = ticks.map(t => String(formatValue(t)));
-  const maxLabelLen = Math.max(0, ...tickLabels.map(l => l.length));
-  const pad = { ...BASE_PAD, left: Math.max(BASE_PAD.left, maxLabelLen * 6 + 16) };
+  const maxLabelWidth = Math.max(0, ...tickLabels.map(l => measureTextWidth(l, AXIS_FONT_PX, C.sans)));
+  const pad = { ...BASE_PAD, left: Math.max(BASE_PAD.left, maxLabelWidth + 16) };
 
   const plotW = W - pad.left - pad.right;
   const plotH = height - pad.top - pad.bottom;
@@ -138,17 +152,19 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
               <line x1={pad.left} x2={W - pad.right} y1={yAt(t)} y2={yAt(t)}
                 stroke={isZero ? "#B8A8A8" : "#E8D8D8"} strokeWidth={isZero ? 1.5 : 1} />
               <text x={pad.left - 8} y={yAt(t)} textAnchor="end" dominantBaseline="middle"
-                fontSize="10" fontWeight={isZero ? 700 : 400}
+                fontSize={AXIS_FONT_PX} fontWeight={isZero ? 700 : 400}
                 fill={isZero ? C.text : C.textSub} fontFamily={C.sans}>{tickLabels[i]}</text>
             </g>
           );
         })}
 
-        {/* Eixo X */}
+        {/* Eixo X — 1º/último label ancorado pra dentro (start/end em vez de
+            middle) pra não vazar pela lateral do gráfico. */}
         {xLabels.map((lbl, i) => (
           (i % Math.ceil(n / 12) === 0) && (
-            <text key={i} x={xAt(i)} y={height - 6} textAnchor="middle"
-              fontSize="10" fill={C.textSub} fontFamily={C.sans}>{lbl}</text>
+            <text key={i} x={xAt(i)} y={height - 6}
+              textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}
+              fontSize="9" fill={C.textSub} fontFamily={C.sans}>{lbl}</text>
           )
         ))}
 
