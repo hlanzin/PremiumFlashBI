@@ -12,6 +12,9 @@ import { exportCSV } from "../../utils/exportCSV";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const TODOS_FORNECEDORES = "__todos__";
+// Fornecedores com janela de "cliente ativo" reduzida pra 2 meses (regra
+// comercial própria) — mesma lista de config.FORNEC_ATIVOS_2M no backend.
+const FORNEC_ATIVOS_2M = [1841];
 
 const STATUS_CFG = {
   novo:           { label: "Novo",           plural: "Novos",           bg: "#DBEAFE", fg: "#1D4ED8" },
@@ -104,6 +107,11 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   const codfornecParam = fornSel === TODOS_FORNECEDORES
     ? fornecedores.map(f => f.cod).join(",")
     : fornSel;
+
+  // Fornecedores com janela de "cliente ativo" reduzida pra 2 meses (regra
+  // comercial própria) — mesma lista de config.FORNEC_ATIVOS_2M no backend.
+  const mesesAtivos = String(codfornecParam ?? "").split(",")
+    .some(c => FORNEC_ATIVOS_2M.includes(Number(c))) ? 2 : 3;
 
   useEffect(() => {
     if (!isGerencial) return;
@@ -281,7 +289,7 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
           opacity: loading ? 0.55 : 1, transition: "opacity 200ms ease" }}>
           {/* ── Stat tiles ── */}
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "16px" }}>
-            <StatTile label="CLIENTES ATIVOS (últimos 3 meses)" atual={resumo.ativos_atual} anterior={resumo.ativos_anterior}
+            <StatTile label={`CLIENTES ATIVOS (últimos ${mesesAtivos} meses)`} atual={resumo.ativos_atual} anterior={resumo.ativos_anterior}
               deltaPct={pctDelta(resumo.ativos_atual, resumo.ativos_anterior)} formatValue={fmtN} />
             <StatTile label="CLIENTES ATENDIDOS NO PERÍODO" atual={resumo.atendidos_atual} anterior={resumo.atendidos_anterior}
               deltaPct={pctDelta(resumo.atendidos_atual, resumo.atendidos_anterior)} formatValue={fmtN} />

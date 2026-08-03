@@ -6,8 +6,19 @@ Filtro de vendedor/supervisor aplicado DENTRO do BASE_META
 que aquele vendedor atendeu no período, independente de mudança de base.
 """
 from typing import Optional
-from config import FILIAL
+from config import FILIAL, FORNEC_ATIVOS_2M, SECAO_ATIVOS_2M
 from models.exclusoes import sql_not_in_fornec, sql_not_in_secao
+
+
+def _meses_ativos(agrupamento: str, dim_id: Optional[int]) -> int:
+    """Janela de 'cliente ativo' é de 3 meses fechados, exceto pra
+    fornecedor/seções com regra comercial própria (config.FORNEC_ATIVOS_2M /
+    SECAO_ATIVOS_2M), que usam 2 meses."""
+    if agrupamento == "fornecedor" and dim_id in FORNEC_ATIVOS_2M:
+        return 2
+    if agrupamento == "secao" and dim_id in SECAO_ATIVOS_2M:
+        return 2
+    return 3
 
 
 def build_lista_negra_sql(
@@ -19,6 +30,7 @@ def build_lista_negra_sql(
 ) -> tuple:
     from database import parse_data
     dr = date_ref or parse_data(None)
+    meses_ativos = _meses_ativos(agrupamento, dim_id)
 
     # Filtro de dimensão
     if agrupamento == "fornecedor":
@@ -41,7 +53,7 @@ def build_lista_negra_sql(
     sql = f"""
 WITH PARAMS AS (
     SELECT
-        ADD_MONTHS(TRUNC(TO_DATE('{dr}','YYYY-MM-DD'),'MM'),-3)  AS DT_INI,
+        ADD_MONTHS(TRUNC(TO_DATE('{dr}','YYYY-MM-DD'),'MM'),-{meses_ativos})  AS DT_INI,
         LAST_DAY(ADD_MONTHS(TO_DATE('{dr}','YYYY-MM-DD'),-1))    AS DT_FIM,
         TRUNC(TO_DATE('{dr}','YYYY-MM-DD'),'MM')                 AS DT_MES_INI,
         TRUNC(TO_DATE('{dr}','YYYY-MM-DD'))                      AS DT_HOJE,
@@ -234,6 +246,7 @@ def build_lista_negra_vendedor_sql(
     """
     from database import parse_data
     dr = date_ref or parse_data(None)
+    meses_ativos = _meses_ativos(agrupamento, dim_id)
 
     if agrupamento == "fornecedor":
         filtro_dim = f"AND PCPRODUT.CODFORNEC = {dim_id}"
@@ -246,7 +259,7 @@ def build_lista_negra_vendedor_sql(
     sql = f"""
 WITH PARAMS AS (
     SELECT
-        ADD_MONTHS(TRUNC(TO_DATE('{dr}','YYYY-MM-DD'),'MM'),-3)  AS DT_INI,
+        ADD_MONTHS(TRUNC(TO_DATE('{dr}','YYYY-MM-DD'),'MM'),-{meses_ativos})  AS DT_INI,
         LAST_DAY(ADD_MONTHS(TO_DATE('{dr}','YYYY-MM-DD'),-1))    AS DT_FIM,
         TRUNC(TO_DATE('{dr}','YYYY-MM-DD'),'MM')                 AS DT_MES_INI,
         TRUNC(TO_DATE('{dr}','YYYY-MM-DD'))                      AS DT_HOJE,

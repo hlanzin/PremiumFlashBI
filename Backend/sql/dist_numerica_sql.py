@@ -13,8 +13,20 @@ build_dn_query(modo, filtro_id, date_ref, agrupamento)
   agrupamento: 'fornecedor' (padrão) | 'secao'
 """
 from typing import Optional
-from config import FILIAL
+from config import FILIAL, FORNEC_ATIVOS_2M, SECAO_ATIVOS_2M
 from models.exclusoes import sql_not_in_fornec, sql_not_in_secao, sql_prod_excluido
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Janela de "cliente ativo"/meta: 3 meses fechados, exceto pra fornecedor/
+# seções com regra comercial própria (config.FORNEC_ATIVOS_2M / SECAO_ATIVOS_2M),
+# que usam 2 meses — decidido por produto (PCPRODUT), então funciona igual
+# nos agrupamentos por fornecedor e por seção.
+# ─────────────────────────────────────────────────────────────────────────────
+_COND_ATIVOS_2M = (
+    f"PCPRODUT.CODFORNEC IN ({','.join(str(x) for x in FORNEC_ATIVOS_2M) or 'NULL'}) "
+    f"OR PCPRODUT.CODSEC IN ({','.join(str(x) for x in SECAO_ATIVOS_2M) or 'NULL'})"
+)
+_DT_INI_ATIVOS = f"CASE WHEN {_COND_ATIVOS_2M} THEN P.DT_INI_2M ELSE P.DT_INI END"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Bloco PARAMS (igual nos dois templates)
@@ -23,6 +35,7 @@ _PARAMS = """
 WITH PARAMS AS (
     SELECT
         ADD_MONTHS(TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'MM'),-3)  AS DT_INI,
+        ADD_MONTHS(TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'MM'),-2)  AS DT_INI_2M,
         LAST_DAY(ADD_MONTHS(TO_DATE('{DATE_REF}','YYYY-MM-DD'),-1))    AS DT_FIM,
         TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'),'MM')                 AS DT_MES_INI,
         TRUNC(TO_DATE('{DATE_REF}','YYYY-MM-DD'))                      AS DT_HOJE,
@@ -85,8 +98,8 @@ QT_CLI_META AS (
                                       NVL(PCNFSAID.CODSUPERVISOR, PCUSUARI.CODSUPERVISOR)
         INNER JOIN PCCLIENT    ON PCCLIENT.CODCLI      = PCMOV.CODCLI
         CROSS JOIN PARAMS P
-    WHERE PCMOV.DTMOV      BETWEEN P.DT_INI AND P.DT_FIM
-      AND PCNFSAID.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
+    WHERE PCMOV.DTMOV      BETWEEN {_DT_INI_ATIVOS} AND P.DT_FIM
+      AND PCNFSAID.DTSAIDA BETWEEN {_DT_INI_ATIVOS} AND P.DT_FIM
       AND PCMOV.CODFILIAL    IN ('{FILIAL}')
       AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
       AND PCMOV.CODOPER NOT IN ('SR','SO')
@@ -256,8 +269,8 @@ QT_CLI_META AS (
         INNER JOIN PCUSUARI    ON PCUSUARI.CODUSUR     = PCNFSAID.CODUSUR
         INNER JOIN PCCLIENT    ON PCCLIENT.CODCLI      = PCMOV.CODCLI
         CROSS JOIN PARAMS P
-    WHERE PCMOV.DTMOV      BETWEEN P.DT_INI AND P.DT_FIM
-      AND PCNFSAID.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
+    WHERE PCMOV.DTMOV      BETWEEN {_DT_INI_ATIVOS} AND P.DT_FIM
+      AND PCNFSAID.DTSAIDA BETWEEN {_DT_INI_ATIVOS} AND P.DT_FIM
       AND PCMOV.CODFILIAL    IN ('{FILIAL}')
       AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
       AND PCMOV.CODOPER NOT IN ('SR','SO')
@@ -503,6 +516,7 @@ _TOTAL_SQL = f"""
 WITH PARAMS AS (
     SELECT
         ADD_MONTHS(TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD'),'MM'),-3)  AS DT_INI,
+        ADD_MONTHS(TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD'),'MM'),-2)  AS DT_INI_2M,
         LAST_DAY(ADD_MONTHS(TO_DATE('{{dr}}','YYYY-MM-DD'),-1))    AS DT_FIM,
         TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD'),'MM')                 AS DT_MES_INI,
         TRUNC(TO_DATE('{{dr}}','YYYY-MM-DD'))                      AS DT_HOJE,
@@ -518,8 +532,8 @@ SELECT
        INNER JOIN PCPRODUT ON PCPRODUT.CODPROD    = PCMOV.CODPROD
        INNER JOIN PCUSUARI ON PCUSUARI.CODUSUR    = PCNFSAID.CODUSUR
        CROSS JOIN PARAMS P
-      WHERE PCMOV.DTMOV      BETWEEN P.DT_INI AND P.DT_FIM
-        AND PCNFSAID.DTSAIDA BETWEEN P.DT_INI AND P.DT_FIM
+      WHERE PCMOV.DTMOV      BETWEEN {_DT_INI_ATIVOS} AND P.DT_FIM
+        AND PCNFSAID.DTSAIDA BETWEEN {_DT_INI_ATIVOS} AND P.DT_FIM
         AND PCMOV.CODFILIAL    IN ('{FILIAL}')
         AND PCNFSAID.CODFILIAL IN ('{FILIAL}')
         AND PCMOV.CODOPER NOT IN ('SR','SO')

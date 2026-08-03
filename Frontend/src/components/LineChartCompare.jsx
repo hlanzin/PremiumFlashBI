@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from "react";
 import { C } from "../theme";
 
 const W = 760, H_DEFAULT = 220;
-const PAD = { top: 16, right: 16, bottom: 26, left: 54 };
+const BASE_PAD = { top: 16, right: 16, bottom: 26, left: 54 };
 const ANIM_MS = 450;
 
 function niceMax(value) {
@@ -70,8 +70,6 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
   const animatedSeries = useAnimatedSeries(series);
 
   const n = xLabels.length;
-  const plotW = W - PAD.left - PAD.right;
-  const plotH = height - PAD.top - PAD.bottom;
 
   // Escala do eixo Y fixa no valor final (não anima) — só os pontos/linha
   // se movem dentro dela, senão o eixo ficaria "pulando" durante a transição.
@@ -90,20 +88,42 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
     return { minAxis: 0, maxVal: niceMax(Math.max(1, rawMax)), hasNegative: false };
   }, [series]);
 
-  const xAt = (i) => PAD.left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
-  const yAt = (v) => PAD.top + plotH - ((v - minAxis) / (maxVal - minAxis)) * plotH;
-
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(minAxis + (maxVal - minAxis) * f));
+
+  // Largura do eixo Y dinâmica: valores grandes formatados (ex.: "R$ 123.456,78")
+  // não cabem nos 54px fixos de padding e passavam da borda esquerda do
+  // gráfico. Estima a largura pelo nº de caracteres do maior label e abre
+  // espaço suficiente (nunca menos que o padrão).
+  const tickLabels = ticks.map(t => String(formatValue(t)));
+  const maxLabelLen = Math.max(0, ...tickLabels.map(l => l.length));
+  const pad = { ...BASE_PAD, left: Math.max(BASE_PAD.left, maxLabelLen * 6 + 16) };
+
+  const plotW = W - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+
+  const xAt = (i) => pad.left + (n === 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+  const yAt = (v) => pad.top + plotH - ((v - minAxis) / (maxVal - minAxis)) * plotH;
 
   const handleMove = (e) => {
     const rect = svgRef.current.getBoundingClientRect();
     const relX = ((e.clientX - rect.left) / rect.width) * W;
-    const i = Math.round(((relX - PAD.left) / plotW) * (n - 1));
+    const i = Math.round(((relX - pad.left) / plotW) * (n - 1));
     setHover(Math.max(0, Math.min(n - 1, i)));
   };
 
   const tooltipLeft = hover != null ? (xAt(hover) / W) * 100 : 0;
   const tooltipSide = tooltipLeft > 60 ? "right" : "left";
+
+  // Posição vertical do tooltip: por padrão fica perto do topo, mas se o
+  // ponto em hover (o mais alto entre as séries naquele mês) estiver na
+  // metade de cima do gráfico, o tooltip fixo ali em cima acabava caindo
+  // por cima do próprio ponto e escondendo o valor — nesse caso desce o
+  // tooltip pra logo abaixo do ponto em vez de ficar sempre no topo.
+  const peakY = hover != null
+    ? Math.min(...animatedSeries.map(s => yAt(s.values[hover])))
+    : pad.top;
+  const tooltipTopPx = peakY < height / 2 ? peakY + 16 : pad.top;
+  const tooltipTop = (tooltipTopPx / height) * 100;
 
   return (
     <div style={{ position: "relative" }}>
@@ -115,11 +135,11 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
           const isZero = hasNegative && t === 0;
           return (
             <g key={i}>
-              <line x1={PAD.left} x2={W - PAD.right} y1={yAt(t)} y2={yAt(t)}
+              <line x1={pad.left} x2={W - pad.right} y1={yAt(t)} y2={yAt(t)}
                 stroke={isZero ? "#B8A8A8" : "#E8D8D8"} strokeWidth={isZero ? 1.5 : 1} />
-              <text x={PAD.left - 8} y={yAt(t)} textAnchor="end" dominantBaseline="middle"
+              <text x={pad.left - 8} y={yAt(t)} textAnchor="end" dominantBaseline="middle"
                 fontSize="10" fontWeight={isZero ? 700 : 400}
-                fill={isZero ? C.text : C.textSub} fontFamily={C.sans}>{formatValue(t)}</text>
+                fill={isZero ? C.text : C.textSub} fontFamily={C.sans}>{tickLabels[i]}</text>
             </g>
           );
         })}
@@ -134,7 +154,7 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
 
         {/* Crosshair */}
         {hover != null && (
-          <line x1={xAt(hover)} x2={xAt(hover)} y1={PAD.top} y2={PAD.top + plotH}
+          <line x1={xAt(hover)} x2={xAt(hover)} y1={pad.top} y2={pad.top + plotH}
             stroke="#C9B8B8" strokeWidth="1" />
         )}
 
@@ -156,7 +176,7 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
 
       {hover != null && (
         <div style={{
-          position: "absolute", top: `${(PAD.top / height) * 100}%`,
+          position: "absolute", top: `${tooltipTop}%`,
           [tooltipSide]: `calc(${tooltipSide === "right" ? 100 - tooltipLeft : tooltipLeft}% + 10px)`,
           background: "#fff", border: `1px solid ${C.border}`, borderRadius: "8px",
           boxShadow: "0 4px 16px rgba(0,0,0,.15)", padding: "8px 12px", pointerEvents: "none",

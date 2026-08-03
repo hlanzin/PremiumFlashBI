@@ -2,6 +2,7 @@ import calendar
 from datetime import date
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
+from config import FORNEC_ATIVOS_2M
 from database import execute_query
 from routers.auth import get_current_user, CurrentUser
 from sql.comparativo_clientes_sql import (
@@ -44,19 +45,25 @@ def _add_months(d: date, months: int) -> date:
     return date(y, m, dia)
 
 
-def _janela_ativos(dt_ref: date):
+def _janela_ativos(dt_ref: date, meses: int = 3):
     """
-    Últimos 3 meses FECHADOS terminando no mês anterior ao de dt_ref — mesma
+    Últimos N meses FECHADOS terminando no mês anterior ao de dt_ref — mesma
     convenção de "elegibilidade"/lista negra usada em lista_negra_sql.py e
     bateu_levou_positivacao_sql.py (BASE_META):
-    ADD_MONTHS(TRUNC(dt_ref,'MM'),-3) até LAST_DAY(ADD_MONTHS(dt_ref,-1)).
-    Ex.: dt_ref em qualquer dia de julho -> 01/abr a 30/jun.
+    ADD_MONTHS(TRUNC(dt_ref,'MM'),-N) até LAST_DAY(ADD_MONTHS(dt_ref,-1)).
+    Ex.: dt_ref em qualquer dia de julho, N=3 -> 01/abr a 30/jun.
+    N é 3 por padrão, exceto pra fornecedores com regra comercial própria
+    (config.FORNEC_ATIVOS_2M), que usam 2 — ver _meses_ativos().
     """
     mes_ini_ref = dt_ref.replace(day=1)
-    dt_ini = _add_months(mes_ini_ref, -3)
+    dt_ini = _add_months(mes_ini_ref, -meses)
     mes_anterior = _add_months(dt_ref, -1)
     dt_fim = mes_anterior.replace(day=calendar.monthrange(mes_anterior.year, mes_anterior.month)[1])
     return dt_ini, dt_fim
+
+
+def _meses_ativos(codfornecs: list) -> int:
+    return 2 if any(c in FORNEC_ATIVOS_2M for c in codfornecs) else 3
 
 
 def _codfornecs(codfornec: Optional[str], u: CurrentUser) -> list:
@@ -146,11 +153,13 @@ def get_comparativo_geral(
             filtro_vendedor=vend_filtro, filtro_supervisor=sup_filtro)
         devol_rows = execute_query(sql_devol, params_devol)
 
-        # "Ativos" de verdade: últimos 3 meses FECHADOS terminando no mês
+        # "Ativos" de verdade: últimos N meses FECHADOS terminando no mês
         # anterior à data de corte de cada ano (não uma janela rolante de
         # 90 dias) — diferente de "atendidos" (só apareceu 1x no período).
-        dt_ini_ativ_a, dt_fim_ativ_a = _janela_ativos(date.fromisoformat(dt_fim_a))
-        dt_ini_ativ_b, dt_fim_ativ_b = _janela_ativos(date.fromisoformat(dt_fim_b))
+        # N é 3, exceto pros fornecedores de config.FORNEC_ATIVOS_2M (2).
+        meses_ativos = _meses_ativos(codfornecs)
+        dt_ini_ativ_a, dt_fim_ativ_a = _janela_ativos(date.fromisoformat(dt_fim_a), meses_ativos)
+        dt_ini_ativ_b, dt_fim_ativ_b = _janela_ativos(date.fromisoformat(dt_fim_b), meses_ativos)
 
         sql_ativ_a, params_ativ_a = build_clientes_ativos_sql(
             codfornecs, dt_ini_ativ_a.isoformat(), dt_fim_ativ_a.isoformat(),
