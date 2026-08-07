@@ -11,11 +11,8 @@ import LineChartCompare from "../../components/LineChartCompare";
 import { exportCSV } from "../../utils/exportCSV";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-// Mesma convenção do ranking_clientes/index.jsx.
 const fmtPeso = (v) => v == null ? "—" : `${fmtN(v)} kg`;
 const TODOS_FORNECEDORES = "__todos__";
-// Fornecedores com janela de "cliente ativo" reduzida pra 2 meses (regra
-// comercial própria) — mesma lista de config.FORNEC_ATIVOS_2M no backend.
 const FORNEC_ATIVOS_2M = [1841];
 
 const STATUS_CFG = {
@@ -333,28 +330,27 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
             </div>
           </div>
 
-          {/* ── Gráficos mensais: valor e peso lado a lado ── */}
-          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "16px" }}>
-            <div style={{ flex: "1 1 420px", minWidth: 0, background: "#fff", border: `1px solid ${C.border}`,
-              borderRadius: "8px", padding: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
-                <div style={{ fontSize: "12px", fontWeight: 700, color: C.text }}>Valor faturado por mês</div>
-                <button onClick={() => { setListaModal("todos"); setListaBusca(""); }}
-                  style={{ display: "flex", alignItems: "center", gap: "6px", background: C.primary, color: "#fff",
-                    border: "none", borderRadius: "6px", padding: "6px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
-                  <List size={13} /> Ver todos os clientes ({rows.length})
-                </button>
-              </div>
-              <LineChartCompare series={serieMensalValor} xLabels={MESES} formatValue={fmtR} />
+          {/* ── Gráfico de valor ── */}
+          <div style={{ background: "#fff", border: `1px solid ${C.border}`,
+            borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: C.text }}>Valor faturado por mês</div>
+              <button onClick={() => { setListaModal("todos"); setListaBusca(""); }}
+                style={{ display: "flex", alignItems: "center", gap: "6px", background: C.primary, color: "#fff",
+                  border: "none", borderRadius: "6px", padding: "6px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
+                <List size={13} /> Ver todos os clientes ({rows.length})
+              </button>
             </div>
+            <LineChartCompare series={serieMensalValor} xLabels={MESES} formatValue={fmtR} />
+          </div>
 
-            <div style={{ flex: "1 1 420px", minWidth: 0, background: "#fff", border: `1px solid ${C.border}`,
-              borderRadius: "8px", padding: "16px" }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: C.text, marginBottom: "8px" }}>
-                Peso faturado por mês
-              </div>
-              <LineChartCompare series={serieMensalPeso} xLabels={MESES} formatValue={fmtPeso} />
+          {/* ── Gráfico de peso (embaixo, não lado a lado) ── */}
+          <div style={{ background: "#fff", border: `1px solid ${C.border}`,
+            borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
+            <div style={{ fontSize: "12px", fontWeight: 700, color: C.text, marginBottom: "8px" }}>
+              Peso faturado por mês
             </div>
+            <LineChartCompare series={serieMensalPeso} xLabels={MESES} formatValue={fmtPeso} />
           </div>
         </div>
       )}
