@@ -647,3 +647,34 @@ def build_dn_total_query(modo: str, filtro_id: Optional[int] = None,
         f_meta=fm, f_mes=fms, f_semana=fnfs, f_hoje=fnfh
     )
     return sql, params
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Clientes CADASTRADOS por vendedor — contagem de CADASTRO (PCCLIENT.CODUSUR1),
+# não de atividade/compra como o resto da DN. Sem filtro de data (é o cadastro
+# atual, não algo apurado num período) e sem depender de venda nenhuma — por
+# isso é uma query única e simples, bem diferente das outras deste módulo.
+# Exclui contas especiais (2,10,160,180 — bonificação/casa), que não são
+# vendedor de carteira de verdade. Traz TODO MUNDO de uma vez só (não tem
+# modo/filtro_id como build_dn_query) — o filtro por supervisor/vendedor é
+# feito depois, em Python (no router) ou no frontend, igual já é feito com
+# a lista de vendedores/supervisores de build_dn_query("todos").
+# ─────────────────────────────────────────────────────────────────────────────
+def build_clientes_cadastrados_sql() -> tuple:
+    """1 linha por vendedor: cod_vendedor, nome_vendedor, cod_supervisor,
+    nome_supervisor, qt_clientes_cadastrados."""
+    sql = """
+SELECT
+    C.CODUSUR1        AS COD_VENDEDOR,
+    U.NOME            AS NOME_VENDEDOR,
+    U.CODSUPERVISOR   AS COD_SUPERVISOR,
+    S.NOME            AS NOME_SUPERVISOR,
+    COUNT(*)          AS QT_CLIENTES_CADASTRADOS
+FROM PCCLIENT C
+    INNER JOIN PCUSUARI U ON U.CODUSUR       = C.CODUSUR1
+    LEFT  JOIN PCSUPERV S ON S.CODSUPERVISOR = U.CODSUPERVISOR
+WHERE C.CODUSUR1 NOT IN (2,10,160,180)
+GROUP BY C.CODUSUR1, U.NOME, U.CODSUPERVISOR, S.NOME
+ORDER BY S.NOME, U.NOME
+"""
+    return sql, {}
