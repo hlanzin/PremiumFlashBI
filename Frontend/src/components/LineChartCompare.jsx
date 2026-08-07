@@ -31,6 +31,28 @@ function measureTextWidth(text, fontSizePx, fontFamily) {
   return ctx.measureText(text).width;
 }
 
+// Abrevia o valor do eixo (ex.: "R$ 50.000.000,00" -> "R$ 50 MI") em vez de
+// abrir espaço pro número inteiro — garante que o label do eixo Y é sempre
+// curto, não importa o quão grande for o valor, sem depender de medir nada
+// nem estimar padding. O valor exato continua aparecendo no tooltip (usa
+// formatValue original ali, não essa versão abreviada).
+function abbreviateTick(value, sampleFormatted) {
+  const prefixMatch = String(sampleFormatted).match(/^[^\d-]*/);
+  const prefix = prefixMatch ? prefixMatch[0] : "";
+  const abs = Math.abs(value);
+  let numStr;
+  if (abs >= 1_000_000_000) {
+    numStr = (value / 1_000_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " BI";
+  } else if (abs >= 1_000_000) {
+    numStr = (value / 1_000_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " MI";
+  } else if (abs >= 1_000) {
+    numStr = (value / 1_000).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + " mil";
+  } else {
+    numStr = value.toLocaleString("pt-BR");
+  }
+  return value === 0 ? "0" : prefix + numStr;
+}
+
 // Anima os VALORES de cada série (não só a cor/posição) quando a prop
 // `series` muda — ex.: trocar o filtro de supervisor faz os pontos e a
 // linha subirem/descerem suavemente até a nova altura, em vez de saltar
@@ -103,12 +125,13 @@ export default function LineChartCompare({ series, xLabels, formatValue, height 
 
   const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(minAxis + (maxVal - minAxis) * f));
 
-  // Largura do eixo Y dinâmica: valores grandes formatados (ex.: "R$ 123.456,78")
-  // não cabem nos 54px fixos de padding e passavam da borda esquerda do
-  // gráfico. Estima a largura pelo nº de caracteres do maior label e abre
-  // espaço suficiente (nunca menos que o padrão).
+  // Label do eixo Y sempre curto (abreviado: "R$ 50 mi" em vez de
+  // "R$ 50.000.000,00") — não depende de medir/estimar nada, então não tem
+  // como vazar pra fora do gráfico independente do tamanho do valor. Mesmo
+  // assim mede a largura real (canvas) do resultado, como segurança extra.
   const AXIS_FONT_PX = 9;
-  const tickLabels = ticks.map(t => String(formatValue(t)));
+  const sampleFormatted = formatValue(1);
+  const tickLabels = ticks.map(t => abbreviateTick(t, sampleFormatted));
   const maxLabelWidth = Math.max(0, ...tickLabels.map(l => measureTextWidth(l, AXIS_FONT_PX, C.sans)));
   const pad = { ...BASE_PAD, left: Math.max(BASE_PAD.left, maxLabelWidth + 16) };
 

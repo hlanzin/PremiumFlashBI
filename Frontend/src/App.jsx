@@ -1,5 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from "react";
-import { patchFetch } from "./api";
+import { patchFetch, useAuthHeaders } from "./api";
+import { API_BASE } from "./config";
 
 // ponytail: global fetch wrapper dispatches "unauthorized" on 401
 patchFetch();
@@ -23,13 +24,14 @@ import ModuleCampanhaFini from "./modules/campanha_fini"
 import ModuleExclusoes from "./modules/exclusoes";
 import ModuleSugestaoPedido from "./modules/sugestao_pedido";
 import ModuleIncentivo from "./modules/incentivos";
+import ModuleIncentivosAdmin from "./modules/incentivos_admin";
 import ModuleAlertas from "./modules/alertas";
 const ModulePedidos = lazy(() => import("./modules/pedidos"));
 import { C, GLOBAL_CSS } from "./theme";
 import { useIsMobile }   from "./hooks";
 import {
   BarChart3, TrendingUp, TrendingDown, Package, Tag, Star, Settings, Snowflake, ShoppingCart, ShoppingBag, Banknote, Wallet, Users,
-  Candy, Ban, ClipboardList, Menu, AlertTriangle, Trophy, GitCompare,
+  Candy, Ban, ClipboardList, Menu, AlertTriangle, Trophy, GitCompare, Gift,
 } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 
@@ -38,7 +40,7 @@ const CATEGORIAS = [
   { id:"vendas",      label:"Vendas & Análise", icon:BarChart3, ids:["faturamento","ranking","dist_numerica","ranking_clientes","comparativo_clientes","clientes_forn","lista_negra"] },
   { id:"campanhas",   label:"Campanhas",        icon:Tag,       ids:["bateu_levou","campanha_fini","vendas_produto"] },
   { id:"operacional", label:"Operacional",      icon:Package,   ids:["estoque","pedidos","troca","chamados","sugestao_pedido"] },
-  { id:"admin",       label:"Administração",    icon:Settings,  ids:["admin","exclusoes"] },
+  { id:"admin",       label:"Administração",    icon:Settings,  ids:["admin","exclusoes","incentivos_admin"] },
 ];
 
 // ── Módulos fora de categoria (ficam soltos na sidebar, sem dropdown) ───────
@@ -62,20 +64,17 @@ const BI_MODULES = [
   { id:"chamados",      label:"Chamados Freezer",  icon:Snowflake,   component:ModuleChamados,     cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"admin",         label:"Admin",             icon:Settings,    component:ModuleAdmin,        cargos:["admin"] },
   { id:"exclusoes", label:"Exclusões", icon:Ban, component:ModuleExclusoes, cargos:["admin"] },
+  { id:"incentivos_admin", label:"Incentivos (config)", icon:Gift, component:ModuleIncentivosAdmin, cargos:["admin"] },
   { id:"campanha_fini", label:"Campanha Fini", icon:Candy, component:ModuleCampanhaFini, cargos:["admin","gerencial","supervisor","vendedor"] },
   { id:"sugestao_pedido", label:"Sugestão de Pedido", icon:ClipboardList, component:ModuleSugestaoPedido, cargos:["admin","gerencial"] },
   { id:"alertas", label:"Alertas RCA", icon:AlertTriangle, component:ModuleAlertas, cargos:null },
 ];
 
 // ── Incentivos (dropdown na sidebar) ──────────────────────────────────────────
-// Todos os cargos veem. Para adicionar novos: inclua aqui E no backend
-// (routers/incentivos.py -> dicionário INCENTIVOS).
-const INCENTIVOS = [
-  { id:"ranking-geral", label:"🏆 Ranking Geral" },
-  { id:"yopro", label:"YoPro" },
-  { id:"caixas", label:"Batata Hyts" },
-  { id:"gulozitos", label:"Gulozitos" },
-];
+// Lista buscada do backend (models/incentivos.py) — admin cadastra pela tela
+// de Administração, aparece aqui sozinho. "Ranking Geral" é sempre fixo,
+// soma todos os incentivos ativos do momento.
+const RANKING_GERAL_ITEM = { id: "ranking-geral", label: "🏆 Ranking Geral" };
 
 export default function App() {
   const isMobile = useIsMobile();
@@ -94,6 +93,22 @@ export default function App() {
   const [incentivosOpen, setIncentivosOpen] = useState(false);     // dropdown aberto
   const [sidebarOpen,    setSidebarOpen]    = useState(false);   // mobile: gaveta aberta
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true); // desktop: colapsado
+  const [incentivosDb,   setIncentivosDb]   = useState([]);      // vindos do backend
+
+  const authHeaders = useAuthHeaders(auth.token);
+
+  // Busca a lista de incentivos ativos assim que loga — atualiza sozinho se
+  // o admin criar/desativar um incentivo (basta recarregar a página).
+  useEffect(() => {
+    if (!auth.token) return;
+    fetch(`${API_BASE}/api/incentivos`, { headers: authHeaders })
+      .then(r => r.ok ? r.json() : { incentivos: [] })
+      .then(j => setIncentivosDb(j.incentivos ?? []))
+      .catch(() => setIncentivosDb([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.token]);
+
+  const INCENTIVOS = [RANKING_GERAL_ITEM, ...incentivosDb.map(i => ({ id: i.id, label: i.nome }))];
 
   // ── Auth ──────────────────────────────────────────────────────────────────
   const handleLogin = (tok, info) => {

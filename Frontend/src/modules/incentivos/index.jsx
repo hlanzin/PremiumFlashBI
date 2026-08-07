@@ -83,8 +83,8 @@ export default function ModuleIncentivo({ isMobile, token, incentivoId = "yopro"
               <span>
                 <b style={{ color: C.text }}>Faixas:</b>{" "}
                 {info.faixas.map((f, i) => {
-                  const ini = i === 0 ? 1 : info.faixas[i - 1].ate + 1;
-                  const lbl = f.ate == null ? `${ini}+` : `${ini}–${f.ate}`;
+                  const ini = i === 0 ? 1 : info.faixas[i - 1].limite + 1;
+                  const lbl = f.limite == null ? `${ini}+` : `${ini}–${f.limite}`;
                   return (
                     <span key={i} style={{ marginRight: "8px" }}>
                       {lbl} cx: <b style={{ color: C.text }}>R$ {fmtN(f.valor)}</b>

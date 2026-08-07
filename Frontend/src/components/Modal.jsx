@@ -28,7 +28,9 @@ export default function Modal({ open, onClose, title, icon: Icon, subtitle, chil
         background: "rgba(0,0,0,.5)",
         animation: "fadeIn .15s ease",
       }}
-      onClick={onClose}
+      // Sem onClick aqui de propósito — fechar clicando no fundo fechava
+      // sem querer quando o mouse começava um arrasto/seleção dentro do
+      // modal e soltava fora. Fecha só pelo X (ou Esc).
     >
       <div
         ref={ref}

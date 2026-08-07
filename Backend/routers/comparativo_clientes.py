@@ -93,17 +93,31 @@ def _filtros_carteira(u: CurrentUser, filtro_supervisor: Optional[int], filtro_v
 
 def _pivot_mensal(rows: list, devol_rows: list, ano_atual: int, ano_anterior: int) -> list:
     """Vira [{mes, valor_atual, valor_anterior, qtd_atual, qtd_anterior,
-    clientes_atual, clientes_anterior}] pros 12 meses, mesmo os sem venda.
-    valor_* já sai líquido de devolução (venda do mês - devolução lançada
-    naquele mês, mesma convenção do faturamento oficial)."""
+    clientes_atual, clientes_anterior, peso_atual, peso_anterior}] pros 12
+    meses, mesmo os sem venda. valor_*/peso_* já saem líquidos de devolução
+    (venda do mês - devolução lançada naquele mês, mesma convenção do
+    faturamento oficial).
+
+    peso_atual/peso_anterior são campos NOVOS, aditivos — o frontend antigo
+    (que só lê valor_*/qtd_*/clientes_*) continua funcionando sem mudança
+    nenhuma; o dado pra um futuro toggle "comparar por peso" já vem pronto
+    na mesma resposta, sem query extra."""
     idx       = {(int(r["ano"]), int(r["mes"])): r for r in rows}
-    devol_idx = {(int(r["ano"]), int(r["mes"])): float(r["valor_devolucao"] or 0) for r in devol_rows}
+    devol_idx = {(int(r["ano"]), int(r["mes"])): r for r in devol_rows}
     meses = []
     for m in range(1, 13):
         ra = idx.get((ano_atual, m))
         rb = idx.get((ano_anterior, m))
-        valor_a = (float(ra["valor"]) if ra else 0.0) - devol_idx.get((ano_atual, m), 0.0)
-        valor_b = (float(rb["valor"]) if rb else 0.0) - devol_idx.get((ano_anterior, m), 0.0)
+        da = devol_idx.get((ano_atual, m))
+        db = devol_idx.get((ano_anterior, m))
+        devol_valor_a = float(da["valor_devolucao"] or 0) if da else 0.0
+        devol_valor_b = float(db["valor_devolucao"] or 0) if db else 0.0
+        devol_peso_a  = float(da["peso_devolucao"]  or 0) if da else 0.0
+        devol_peso_b  = float(db["peso_devolucao"]  or 0) if db else 0.0
+        valor_a = (float(ra["valor"]) if ra else 0.0) - devol_valor_a
+        valor_b = (float(rb["valor"]) if rb else 0.0) - devol_valor_b
+        peso_a  = (float(ra["peso"])  if ra else 0.0) - devol_peso_a
+        peso_b  = (float(rb["peso"])  if rb else 0.0) - devol_peso_b
         meses.append({
             "mes": m,
             "valor_atual":       round(valor_a, 2),
@@ -112,6 +126,8 @@ def _pivot_mensal(rows: list, devol_rows: list, ano_atual: int, ano_anterior: in
             "qtd_anterior":      float(rb["quantidade"])   if rb else 0.0,
             "clientes_atual":    int(ra["qtd_clientes"])   if ra else 0,
             "clientes_anterior": int(rb["qtd_clientes"])   if rb else 0,
+            "peso_atual":        round(peso_a, 3),
+            "peso_anterior":     round(peso_b, 3),
         })
     return meses
 
@@ -203,6 +219,10 @@ def get_comparativo_geral(
         "ativos_anterior": ativos_anterior,
         "valor_total_atual":     round(sum(c["valor_atual"] for c in clientes), 2),
         "valor_total_anterior":  round(sum(c["valor_anterior"] for c in clientes), 2),
+        # Peso: campo NOVO, aditivo — não quebra quem já consome "resumo"
+        # sem olhar pra ele.
+        "peso_total_atual":      round(sum(c["peso_atual"]    for c in clientes), 3),
+        "peso_total_anterior":   round(sum(c["peso_anterior"] for c in clientes), 3),
         "novos":       sum(1 for c in clientes if c["status"] == "novo"),
         "recorrentes": sum(1 for c in clientes if c["status"] == "recorrente"),
         "perdidos":    sum(1 for c in clientes if c["status"] == "perdido"),
@@ -263,6 +283,8 @@ def get_comparativo_cliente(
     mensal = _pivot_mensal(mensal_rows, devol_rows, ano_atual, ano_anterior)
     valor_atual    = round(sum(m["valor_atual"]    for m in mensal), 2)
     valor_anterior = round(sum(m["valor_anterior"] for m in mensal), 2)
+    peso_atual     = round(sum(m["peso_atual"]     for m in mensal), 3)
+    peso_anterior  = round(sum(m["peso_anterior"]  for m in mensal), 3)
 
     return {
         "cod_cliente": cod_cliente,
@@ -272,6 +294,9 @@ def get_comparativo_cliente(
             "valor_anterior": valor_anterior,
             "crescimento_pct": round((valor_atual - valor_anterior) / valor_anterior * 100, 1)
                                if valor_anterior > 0 else None,
+            # Peso: campo NOVO, aditivo.
+            "peso_atual": peso_atual,
+            "peso_anterior": peso_anterior,
         },
         "mensal": mensal,
     }

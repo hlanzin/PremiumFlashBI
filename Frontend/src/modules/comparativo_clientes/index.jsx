@@ -11,6 +11,8 @@ import LineChartCompare from "../../components/LineChartCompare";
 import { exportCSV } from "../../utils/exportCSV";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+// Mesma convenção do ranking_clientes/index.jsx.
+const fmtPeso = (v) => v == null ? "—" : `${fmtN(v)} kg`;
 const TODOS_FORNECEDORES = "__todos__";
 // Fornecedores com janela de "cliente ativo" reduzida pra 2 meses (regra
 // comercial própria) — mesma lista de config.FORNEC_ATIVOS_2M no backend.
@@ -168,16 +170,32 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   // Lista completa, ordenada por valor do ano atual — base do export e do modal "todos"
   const rows = useMemo(() => [...clientes].sort((a, b) => (b.valor_atual ?? 0) - (a.valor_atual ?? 0)), [clientes]);
 
-  const serieMensal = useMemo(() => ([
+  // Duas séries independentes — valor (R$) e peso (kg) — os dois gráficos
+  // ficam visíveis ao mesmo tempo (não é mais um toggle que troca um pelo
+  // outro). Os dados já vêm juntos na mesma resposta, sem query extra.
+  const serieMensalValor = useMemo(() => ([
     { key: "atual",    label: String(anoAtual),     color: C.primary, values: mensal.map(m => m.valor_atual) },
     { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: mensal.map(m => m.valor_anterior) },
   ]), [mensal, anoAtual]);
 
-  const serieMensalCliente = useMemo(() => {
+  const serieMensalPeso = useMemo(() => ([
+    { key: "atual",    label: String(anoAtual),     color: C.primary, values: mensal.map(m => m.peso_atual) },
+    { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: mensal.map(m => m.peso_anterior) },
+  ]), [mensal, anoAtual]);
+
+  const serieMensalClienteValor = useMemo(() => {
     if (!detalheCli || detalheCli.erro) return null;
     return [
       { key: "atual",    label: String(anoAtual),     color: C.primary, values: detalheCli.mensal.map(m => m.valor_atual) },
       { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: detalheCli.mensal.map(m => m.valor_anterior) },
+    ];
+  }, [detalheCli, anoAtual]);
+
+  const serieMensalClientePeso = useMemo(() => {
+    if (!detalheCli || detalheCli.erro) return null;
+    return [
+      { key: "atual",    label: String(anoAtual),     color: C.primary, values: detalheCli.mensal.map(m => m.peso_atual) },
+      { key: "anterior", label: String(anoAtual - 1), color: C.gold,    values: detalheCli.mensal.map(m => m.peso_anterior) },
     ];
   }, [detalheCli, anoAtual]);
 
@@ -219,10 +237,12 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
   };
 
   const handleExportExcel = () => {
-    const header = ["Cliente", "Cidade", "Vendedor", `Valor ${anoAtual}`, `Valor ${anoAtual - 1}`, "Crescimento %", "Status"];
+    const header = ["Cliente", "Cidade", "Vendedor", `Valor ${anoAtual}`, `Valor ${anoAtual - 1}`,
+      `Peso (kg) ${anoAtual}`, `Peso (kg) ${anoAtual - 1}`, "Crescimento %", "Status"];
     const dataRows = rows.map(r => [
       r.nome_cliente, r.nome_cidade || "", r.nome_vendedor || "",
       fmtR(r.valor_atual), fmtR(r.valor_anterior),
+      fmtN(r.peso_atual), fmtN(r.peso_anterior),
       r.crescimento_pct != null ? `${r.crescimento_pct}%` : "",
       STATUS_CFG[r.status]?.label ?? r.status,
     ]);
@@ -295,6 +315,8 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
               deltaPct={pctDelta(resumo.atendidos_atual, resumo.atendidos_anterior)} formatValue={fmtN} />
             <StatTile label="VALOR TOTAL" atual={resumo.valor_total_atual} anterior={resumo.valor_total_anterior}
               deltaPct={pctDelta(resumo.valor_total_atual, resumo.valor_total_anterior)} formatValue={fmtR} />
+            <StatTile label="PESO TOTAL" atual={resumo.peso_total_atual} anterior={resumo.peso_total_anterior}
+              deltaPct={pctDelta(resumo.peso_total_atual, resumo.peso_total_anterior)} formatValue={fmtPeso} />
             <div style={{ flex: 1, minWidth: "220px", background: "#fff", border: `1px solid ${C.border}`,
               borderRadius: "8px", padding: "12px 16px", display: "flex", gap: "16px", flexWrap: "wrap" }}>
               {["novo", "recorrente", "perdido", "perdido_no_ano"].map(k => (
@@ -311,18 +333,28 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
             </div>
           </div>
 
-          {/* ── Gráfico mensal ── */}
-          <div style={{ background: "#fff", border: `1px solid ${C.border}`, borderRadius: "8px",
-            padding: "16px", marginBottom: "16px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: C.text }}>Valor faturado por mês</div>
-              <button onClick={() => { setListaModal("todos"); setListaBusca(""); }}
-                style={{ display: "flex", alignItems: "center", gap: "6px", background: C.primary, color: "#fff",
-                  border: "none", borderRadius: "6px", padding: "6px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
-                <List size={13} /> Ver todos os clientes ({rows.length})
-              </button>
+          {/* ── Gráficos mensais: valor e peso lado a lado ── */}
+          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", marginBottom: "16px" }}>
+            <div style={{ flex: "1 1 420px", minWidth: 0, background: "#fff", border: `1px solid ${C.border}`,
+              borderRadius: "8px", padding: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: C.text }}>Valor faturado por mês</div>
+                <button onClick={() => { setListaModal("todos"); setListaBusca(""); }}
+                  style={{ display: "flex", alignItems: "center", gap: "6px", background: C.primary, color: "#fff",
+                    border: "none", borderRadius: "6px", padding: "6px 12px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>
+                  <List size={13} /> Ver todos os clientes ({rows.length})
+                </button>
+              </div>
+              <LineChartCompare series={serieMensalValor} xLabels={MESES} formatValue={fmtR} />
             </div>
-            <LineChartCompare series={serieMensal} xLabels={MESES} formatValue={fmtR} />
+
+            <div style={{ flex: "1 1 420px", minWidth: 0, background: "#fff", border: `1px solid ${C.border}`,
+              borderRadius: "8px", padding: "16px" }}>
+              <div style={{ fontSize: "12px", fontWeight: 700, color: C.text, marginBottom: "8px" }}>
+                Peso faturado por mês
+              </div>
+              <LineChartCompare series={serieMensalPeso} xLabels={MESES} formatValue={fmtPeso} />
+            </div>
           </div>
         </div>
       )}
@@ -405,10 +437,17 @@ export default function ModuleComparativoClientes({ isMobile, token, userInfo = 
             <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>
               <StatTile label="VALOR NO ANO" atual={detalheCli.resumo.valor_atual} anterior={detalheCli.resumo.valor_anterior}
                 deltaPct={detalheCli.resumo.crescimento_pct} formatValue={fmtR} />
+              <StatTile label="PESO NO ANO" atual={detalheCli.resumo.peso_atual} anterior={detalheCli.resumo.peso_anterior}
+                deltaPct={pctDelta(detalheCli.resumo.peso_atual, detalheCli.resumo.peso_anterior)} formatValue={fmtPeso} />
             </div>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: C.textSub, marginBottom: "4px" }}>VALOR</div>
             <LineChartCompare
-              series={serieMensalCliente}
+              series={serieMensalClienteValor}
               xLabels={MESES} formatValue={fmtR} height={200} />
+            <div style={{ fontSize: "11px", fontWeight: 700, color: C.textSub, margin: "16px 0 4px" }}>PESO</div>
+            <LineChartCompare
+              series={serieMensalClientePeso}
+              xLabels={MESES} formatValue={fmtPeso} height={200} />
           </>
         )}
       </Modal>

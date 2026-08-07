@@ -23,6 +23,27 @@ build_devolucao_mensal_sql    -> devolução por mês/ano — subtraída em Pyth
                                   do valor de build_comparativo_mensal_sql
                                   (datas de venda e devolução vêm de tabelas
                                   diferentes, mais simples somar à parte).
+
+Otimização (build_comparativo_geral_sql): tanto a venda quanto a devolução
+precisam do total em DOIS períodos (atual x anterior) da MESMA fonte —
+em vez de rodar o join pesado (PCMOV/PCNFSAID/... ou PCNFENT/PCESTCOM/...)
+uma vez por período, ele roda UMA VEZ só cobrindo o intervalo cheio
+(LEAST/GREATEST dos dois períodos) numa CTE materializada (BASE /
+DEVOL_BASE, com hint /*+ MATERIALIZE */ pra garantir que o Oracle não
+decida reexecutar o join a cada referência), e as agregações por período
+(AGG_ATUAL/AGG_ANTERIOR/AGG_ANTERIOR_ANO, DEVOL_ATUAL/DEVOL_ANTERIOR) só
+filtram e somam em cima do resultado já pronto — metade do trabalho de
+join pra devolução, um terço pra venda (que também alimenta o "comprou no
+ano anterior inteiro").
+
+Peso (peso_atual/peso_anterior, e "peso" nas séries mensais): PCPRODUT já
+estava no JOIN de todas as consultas (pra CODFORNEC e, na devolução, pra
+achar o produto devolvido) — então o peso (QT * PESOBRUTO, líquido de
+devolução do mesmo jeito que o valor) saiu de graça, sem nenhum SELECT
+novo nem round-trip extra ao banco. Os campos são ADITIVOS: quem consome
+a resposta e não olha pra eles (frontend antigo) continua funcionando
+igual; quem quiser comparar por peso (frontend novo) já encontra o dado
+pronto na mesma resposta.
 """
 from typing import List, Optional
 from config import FILIAL
@@ -212,8 +233,10 @@ WITH PARAMS AS (
     FROM DUAL
 ),
 BASE AS (
-    SELECT M.CODCLI, N.DTSAIDA, NVL(M.QT,0) AS QT,
-           {vl_venda} AS VL
+    SELECT /*+ MATERIALIZE */
+           M.CODCLI, N.DTSAIDA, NVL(M.QT,0) AS QT,
+           {vl_venda} AS VL,
+           NVL(M.QT,0) * NVL(PR.PESOBRUTO,0) AS PESO
     FROM PCMOV M
         INNER JOIN PCNFSAID N  ON N.NUMTRANSVENDA = M.NUMTRANSVENDA AND N.CODFILIAL = M.CODFILIAL
         LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = M.NUMTRANSITEM
@@ -230,13 +253,14 @@ BASE AS (
       AND N.DTCANCEL IS NULL
 ),
 AGG_ATUAL AS (
-    SELECT B.CODCLI, SUM(B.VL) AS VALOR, SUM(B.QT) AS QTD, MAX(B.DTSAIDA) AS ULTIMA_COMPRA
+    SELECT B.CODCLI, SUM(B.VL) AS VALOR, SUM(B.QT) AS QTD, SUM(B.PESO) AS PESO,
+           MAX(B.DTSAIDA) AS ULTIMA_COMPRA
     FROM BASE B CROSS JOIN PARAMS P
     WHERE B.DTSAIDA BETWEEN P.DT_INI_A AND P.DT_FIM_A
     GROUP BY B.CODCLI
 ),
 AGG_ANTERIOR AS (
-    SELECT B.CODCLI, SUM(B.VL) AS VALOR, SUM(B.QT) AS QTD
+    SELECT B.CODCLI, SUM(B.VL) AS VALOR, SUM(B.QT) AS QTD, SUM(B.PESO) AS PESO
     FROM BASE B CROSS JOIN PARAMS P
     WHERE B.DTSAIDA BETWEEN P.DT_INI_B AND P.DT_FIM_B
     GROUP BY B.CODCLI
@@ -247,15 +271,29 @@ AGG_ANTERIOR_ANO AS (
     WHERE B.DTSAIDA BETWEEN P.DT_INI_B AND TO_DATE(:dt_fim_ano_b,'YYYY-MM-DD')
     GROUP BY B.CODCLI
 ),
+DEVOL_BASE AS (
+    -- Mesmo join de devolução usado por DEVOL_ATUAL/DEVOL_ANTERIOR, mas
+    -- escaneado UMA VEZ só (LEAST/GREATEST cobre os dois períodos de uma
+    -- vez, igual à BASE de venda acima) em vez de duas vezes com o mesmo
+    -- FROM/JOIN e só a data mudando — a agregação por período abaixo é
+    -- feita em cima do resultado já materializado, não refaz o join.
+    SELECT /*+ MATERIALIZE */
+           PCNFENT.CODFORNEC AS CODCLI, PCNFENT.DTENT AS DTENT,
+           {vl_devol} AS VLDEVOLUCAO,
+           NVL(PCMOV.QT,0) * NVL(PCPRODUT.PESOBRUTO,0) AS PESO_DEVOLUCAO
+    {_devolucao_from_where(placeholders, "LEAST(P.DT_INI_A, P.DT_INI_B)", "GREATEST(P.DT_FIM_A, P.DT_FIM_B)")}
+),
 DEVOL_ATUAL AS (
-    SELECT PCNFENT.CODFORNEC AS CODCLI, SUM({vl_devol}) AS VLDEVOLUCAO
-    {_devolucao_from_where(placeholders, "P.DT_INI_A", "P.DT_FIM_A")}
-    GROUP BY PCNFENT.CODFORNEC
+    SELECT D.CODCLI, SUM(D.VLDEVOLUCAO) AS VLDEVOLUCAO, SUM(D.PESO_DEVOLUCAO) AS PESO_DEVOLUCAO
+    FROM DEVOL_BASE D CROSS JOIN PARAMS P
+    WHERE D.DTENT BETWEEN P.DT_INI_A AND P.DT_FIM_A
+    GROUP BY D.CODCLI
 ),
 DEVOL_ANTERIOR AS (
-    SELECT PCNFENT.CODFORNEC AS CODCLI, SUM({vl_devol}) AS VLDEVOLUCAO
-    {_devolucao_from_where(placeholders, "P.DT_INI_B", "P.DT_FIM_B")}
-    GROUP BY PCNFENT.CODFORNEC
+    SELECT D.CODCLI, SUM(D.VLDEVOLUCAO) AS VLDEVOLUCAO, SUM(D.PESO_DEVOLUCAO) AS PESO_DEVOLUCAO
+    FROM DEVOL_BASE D CROSS JOIN PARAMS P
+    WHERE D.DTENT BETWEEN P.DT_INI_B AND P.DT_FIM_B
+    GROUP BY D.CODCLI
 )
 SELECT
     C.CODCLI                                                 AS cod_cliente,
@@ -266,9 +304,11 @@ SELECT
     U.CODSUPERVISOR                                            AS cod_supervisor,
     ROUND(NVL(A.VALOR, 0) - NVL(DA.VLDEVOLUCAO, 0), 2)        AS valor_atual,
     NVL(A.QTD, 0)                                              AS qtd_atual,
+    ROUND(NVL(A.PESO, 0) - NVL(DA.PESO_DEVOLUCAO, 0), 3)      AS peso_atual,
     A.ULTIMA_COMPRA                                            AS ultima_compra_atual,
     ROUND(NVL(B.VALOR, 0) - NVL(DB.VLDEVOLUCAO, 0), 2)        AS valor_anterior,
     NVL(B.QTD, 0)                                              AS qtd_anterior,
+    ROUND(NVL(B.PESO, 0) - NVL(DB.PESO_DEVOLUCAO, 0), 3)      AS peso_anterior,
     CASE WHEN NVL(H.QTD_ANO, 0) > 0 THEN 1 ELSE 0 END          AS teve_compra_ano_anterior
 FROM (SELECT CODCLI FROM AGG_ATUAL UNION SELECT CODCLI FROM AGG_ANTERIOR) T
     INNER JOIN PCCLIENT C   ON C.CODCLI  = T.CODCLI
@@ -381,7 +421,8 @@ SELECT
     EXTRACT(MONTH FROM N.DTSAIDA) AS mes,
     COUNT(DISTINCT M.CODCLI)      AS qtd_clientes,
     ROUND(SUM({vl_venda}),2)      AS valor,
-    SUM(NVL(M.QT,0))              AS quantidade
+    SUM(NVL(M.QT,0))              AS quantidade,
+    ROUND(SUM(NVL(M.QT,0) * NVL(PR.PESOBRUTO,0)),3) AS peso
 FROM PCMOV M
     INNER JOIN PCNFSAID N  ON N.NUMTRANSVENDA = M.NUMTRANSVENDA AND N.CODFILIAL = M.CODFILIAL
     LEFT  JOIN PCMOVCOMPLE ON PCMOVCOMPLE.NUMTRANSITEM = M.NUMTRANSITEM
@@ -460,7 +501,8 @@ WITH PARAMS AS (
 SELECT
     EXTRACT(YEAR  FROM PCNFENT.DTENT) AS ano,
     EXTRACT(MONTH FROM PCNFENT.DTENT) AS mes,
-    SUM({vl_devol}) AS valor_devolucao
+    SUM({vl_devol}) AS valor_devolucao,
+    ROUND(SUM(NVL(PCMOV.QT,0) * NVL(PCPRODUT.PESOBRUTO,0)),3) AS peso_devolucao
 {_devolucao_from_where(placeholders, "P.DT_INI", "P.DT_FIM", filtro_cliente, filtro_carteira)}
 GROUP BY EXTRACT(YEAR FROM PCNFENT.DTENT), EXTRACT(MONTH FROM PCNFENT.DTENT)
 """
