@@ -1,7 +1,7 @@
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends
 from database import execute_query, parse_data
-from sql.dist_numerica_sql import build_dn_query, build_dn_total_query
+from sql.dist_numerica_sql import build_dn_query, build_dn_total_query, build_clientes_cadastrados_sql
 from routers.auth import get_current_user, CurrentUser
 
 router = APIRouter(prefix="/api/dn", tags=["Dist. Numerica"])
@@ -32,6 +32,28 @@ def get_todos(data: Optional[str] = None, agrupamento: str = "fornecedor", u: Cu
         tot = execute_query(sql_t, p_t)
         totais = tot[0] if tot else {}
         return {"data_ref": dr, "total_registros": len(rows), "dados": rows, "totais_distintos": totais}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.get("/cadastrados")
+def get_clientes_cadastrados(u: CurrentUser = Depends(get_current_user)):
+    """
+    Clientes CADASTRADOS por vendedor (PCCLIENT.CODUSUR1), + quantos desses
+    foram ATENDIDOS nos últimos 3 meses fechados (mesma janela de "ativo"/
+    meta do resto do app, somada em todos os fornecedores). Sem modo/
+    filtro_id: traz todo mundo de uma vez, usando a data de hoje como
+    referência da janela de 3 meses — o recorte por supervisor/vendedor é
+    feito aqui mesmo pelo cargo de quem pediu, igual o resto deste router.
+    """
+    try:
+        sql, params = build_clientes_cadastrados_sql()
+        rows = execute_query(sql, params)
+        if u.is_vendedor and u.cod_winthor:
+            rows = [r for r in rows if r.get("cod_vendedor") == u.cod_winthor]
+        elif u.is_supervisor and u.cod_winthor:
+            rows = [r for r in rows if r.get("cod_supervisor") == u.cod_winthor]
+        return {"dados": rows}
     except Exception as e:
         raise HTTPException(500, str(e))
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BarChart3, TrendingUp, Users, User, Building2, Shield,
-         ChevronDown, TrendingDown, Minus, ClipboardList } from "lucide-react";
+         ChevronDown, TrendingDown, Minus } from "lucide-react";
 import { C, fmtPct, pctStyle, fmtN, getToday } from "../../theme";
 import { API_BASE } from "../../config";
 import { useAuthHeaders } from "../../api";
@@ -16,7 +16,7 @@ import { exportCSV } from "../../utils/exportCSV";
 
 const EQUIPE_CODES = [2, 8, 9];
 
-function buildDNBySupervisor(rows, colDimNome) {
+function buildDNBySupervisor(rows, colDimNome, mapaBase) {
   const grupos = [];
   const map = new Map();
   rows.forEach(row => {
@@ -41,16 +41,21 @@ function buildDNBySupervisor(rows, colDimNome) {
     const hoj  = g.rows.reduce((s,r)=>s+(r.qt_cli_nao_fat_hoje??0),0);
     const tot2 = mes + sem;
     const pct  = meta>0 ? (tot2/meta)*100 : null;
+    // BASE é por vendedor, não por (vendedor × dimensão) — soma só 1x por
+    // vendedor distinto do grupo, senão duplicaria pra cada fornecedor/seção.
+    const vendedoresUnicos = new Set(g.rows.map(r => r.cod_vendedor));
+    const base = Array.from(vendedoresUnicos).reduce((s,cod)=>s+(mapaBase?.get(cod)??0),0);
     return (
       <React.Fragment key={g.cod}>
         {g.rows.map((row,i) => (
           <DataRow key={`${row.cod_vendedor}-${row.dim_id}-${i}`}
-            row={row} i={i} showVendedor={true} colDimNome={colDimNome}/>
+            row={row} i={i} showVendedor={true} colDimNome={colDimNome} mapaBase={mapaBase}/>
         ))}
         <tr>
           <td style={{...totStyle, textAlign:"center"}}>{g.cod}</td>
           <td style={{...totStyle, textAlign:"left"}}>{g.nome}</td>
           <td style={{...totStyle, textAlign:"left", fontSize:"10px", opacity:.8}}>SUBTOTAL</td>
+          <td style={{...totStyle}}>{fmtN(base)}</td>
           <td style={{...totStyle}}>{fmtN(meta)}</td>
           <td style={{...totStyle}}>{fmtN(mes)}</td>
           <td style={{...totStyle}}>{fmtN(sem)}</td>
@@ -68,12 +73,16 @@ function buildDNBySupervisor(rows, colDimNome) {
   });
 }
 
-function DataRow({ row, i, showVendedor, colDimNome }) {
+function DataRow({ row, i, showVendedor, colDimNome, mapaBase, baseFixo }) {
   const [hov, setHov] = useState(false);
   const total = (row.qt_cli_mes??0) + (row.qt_cli_nao_fat_semana??0);
   const pct = row.qt_cli_meta > 0 ? (total / row.qt_cli_meta) * 100 : null;
   const bg  = hov ? C.rowHover : i % 2 === 0 ? C.rowEven : C.rowOdd;
   const td  = { padding:"5px 8px", borderBottom:`1px solid ${C.border}`, verticalAlign:"middle", background:bg };
+  // baseFixo: usado em modos sem quebra por vendedor (gerencial = todo mundo;
+  // supervisor agregado = só o time dele) — mesmo valor em toda linha, já
+  // vem somado de fora. Sem baseFixo, cai no lookup normal por vendedor.
+  const baseValor = baseFixo != null ? baseFixo : mapaBase?.get(row.cod_vendedor);
   return (
     <tr onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}>
       {showVendedor && <>
@@ -81,6 +90,7 @@ function DataRow({ row, i, showVendedor, colDimNome }) {
         <td style={{ ...td, maxWidth:"140px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", fontSize:"11px" }}>{row.nome_vendedor}</td>
       </>}
       <td style={{ ...td, fontWeight:600 }}>{row[colDimNome] ?? "—"}</td>
+      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{fmtN(baseValor)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_meta)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(row.qt_cli_mes)}</td>
       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_nao_fat_semana)}</td>
@@ -94,7 +104,7 @@ function DataRow({ row, i, showVendedor, colDimNome }) {
 
 // ── Card de equipe para DN ────────────────────────────────────────────────────
 function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isMobile, consolidado,
-                        filtroRcas = new Set(), filtroDims = new Set() }) {
+                        filtroRcas = new Set(), filtroDims = new Set(), mapaBase }) {
   const [data,   setData]   = useState([]);
   const [loading,setLoading]= useState(true);
   const [error,  setError]  = useState(null);
@@ -157,6 +167,17 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
   const totReal = tot.mes + tot.semana;
   const totPct = tot.meta > 0 ? (totReal / tot.meta) * 100 : 0;
 
+  // BASE é por vendedor — soma só 1x por vendedor distinto (senão duplicaria
+  // por linha de fornecedor/seção na visão detalhada, que não é consolidada).
+  const totBase = useMemo(() => {
+    const vistos = new Set();
+    let s = 0;
+    displayRows.forEach(r => {
+      if (!vistos.has(r.cod_vendedor)) { vistos.add(r.cod_vendedor); s += mapaBase?.get(r.cod_vendedor) ?? 0; }
+    });
+    return s;
+  }, [displayRows, mapaBase]);
+
   return (
     <div style={{ margin:"12px 16px", background:"#fff",
       border:`1px solid ${C.border}`, borderRadius:"6px",
@@ -194,6 +215,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                   <Th label="RCA"         col="cod_vendedor"          sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="center"/>
                   <Th label="NOME"        col="nome_vendedor"         sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
                   {!consolidado && <Th label={agrupamento==="secao"?"SEÇÃO":"FORNECEDOR"} col={colDimNome} sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>}
+                  <Th label="(BASE)"      col="_base"                 sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="META"        col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"    col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="DN NOVA"   col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
@@ -215,6 +237,7 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                         fontWeight:600, color:C.primary, fontSize:"11px" }}>{row.cod_vendedor}</td>
                       <td style={{ ...td, fontSize:"11px" }}>{row.nome_vendedor}</td>
                       {!consolidado && <td style={td}>{row[colDimNome]}</td>}
+                      <td style={{ ...td, textAlign:"right", fontFamily:C.mono, color:C.textSub }}>{fmtN(mapaBase?.get(row.cod_vendedor))}</td>
                       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_meta)}</td>
                       <td style={{ ...td, textAlign:"right", fontFamily:C.mono, fontWeight:600 }}>{fmtN(row.qt_cli_mes)}</td>
                       <td style={{ ...td, textAlign:"right", fontFamily:C.mono }}>{fmtN(row.qt_cli_nao_fat_semana)}</td>
@@ -226,12 +249,13 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
                   );
                 })}
                 {displayRows.length === 0 && (
-                  <tr><td colSpan={consolidado?9:10} style={{ padding:"24px", textAlign:"center", color:C.textSub }}>Nenhum dado.</td></tr>
+                  <tr><td colSpan={consolidado?10:11} style={{ padding:"24px", textAlign:"center", color:C.textSub }}>Nenhum dado.</td></tr>
                 )}
               </tbody>
               <tfoot>
                 <tr style={{ background:C.total, color:C.totalTxt, fontWeight:700 }}>
                   <td colSpan={consolidado?2:3} style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}` }}>TOTAL</td>
+                  <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(totBase)}</td>
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.meta)}</td>
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.mes)}</td>
                   <td style={{ padding:"5px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>{fmtN(tot.semana)}</td>
@@ -243,132 +267,6 @@ function EquipeDNCard({ supervisor, dataRef, agrupamento, token, colDimNome, isM
               </tfoot>
             </table>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Painel de Clientes Cadastrados (por vendedor, cadastro puro — sem
-// depender de compra/atividade) ─────────────────────────────────────────────
-// Reage ao mesmo mode/activeCode da tela: supervisor selecionado -> mostra
-// o time dele; vendedor selecionado -> desce pro número dele só; sem seleção
-// (gerencial/todos/todas equipes) -> mostra todo mundo agrupado por equipe.
-function GrupoSupervisorCadastro({ grupo, isMobile, aberturaInicial }) {
-  const [aberto, setAberto] = useState(aberturaInicial);
-  return (
-    <div style={{ border: `1px solid ${C.border}`, borderRadius: "6px", overflow: "hidden", marginBottom: "6px" }}>
-      <div onClick={() => setAberto(v => !v)}
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "7px 12px", background: C.rowEven, cursor: "pointer" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <Shield size={12} color={C.primary} />
-          <span style={{ fontSize: "12px", fontWeight: 700, color: C.text }}>{grupo.nome}</span>
-          <span style={{ fontSize: "11px", color: C.textSub }}>{grupo.rows.length} vendedor(es)</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontSize: "12px", fontWeight: 700, color: C.primary, fontFamily: C.mono }}>{fmtN(grupo.total)}</span>
-          <ChevronDown size={13} color={C.textSub} style={{ transform: aberto ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
-        </div>
-      </div>
-      {aberto && (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: isMobile ? "11px" : "12px" }}>
-          <tbody>
-            {grupo.rows.map((r, i) => (
-              <tr key={r.cod_vendedor} style={{ background: i % 2 === 0 ? "#fff" : C.rowEven }}>
-                <td style={{ padding: "5px 12px", borderTop: `1px solid ${C.border}`, fontFamily: C.mono,
-                  color: C.textSub, fontSize: "11px", width: "50px" }}>{r.cod_vendedor}</td>
-                <td style={{ padding: "5px 12px", borderTop: `1px solid ${C.border}` }}>{r.nome_vendedor}</td>
-                <td style={{ padding: "5px 12px", borderTop: `1px solid ${C.border}`, textAlign: "right",
-                  fontFamily: C.mono, fontWeight: 600 }}>{fmtN(r.qt_clientes_cadastrados)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </div>
-  );
-}
-
-function CadastradosPanel({ data, mode, activeCode, isMobile }) {
-  const [aberto, setAberto] = useState(true);
-
-  const filtrado = useMemo(() => {
-    if (mode === "vendedor" && activeCode) return data.filter(r => r.cod_vendedor === activeCode);
-    if ((mode === "equipe" || mode === "supervisor") && activeCode) return data.filter(r => r.cod_supervisor === activeCode);
-    return data;
-  }, [data, mode, activeCode]);
-
-  const total = filtrado.reduce((s, r) => s + (r.qt_clientes_cadastrados ?? 0), 0);
-
-  const grupos = useMemo(() => {
-    const map = new Map();
-    filtrado.forEach(r => {
-      const key = r.cod_supervisor ?? "—";
-      if (!map.has(key)) map.set(key, { cod: key, nome: r.nome_supervisor ?? `#${key}`, rows: [], total: 0 });
-      const g = map.get(key);
-      g.rows.push(r);
-      g.total += r.qt_clientes_cadastrados ?? 0;
-    });
-    return Array.from(map.values()).sort((a, b) => (a.nome ?? "").localeCompare(b.nome ?? ""));
-  }, [filtrado]);
-
-  // Vendedor único selecionado — mostra um número grande, sem tabela/grupo.
-  if (mode === "vendedor" && activeCode) {
-    const r = filtrado[0];
-    return (
-      <div style={{ margin: "12px 16px", background: "#fff", border: `1px solid ${C.border}`,
-        borderRadius: "8px", padding: "14px 18px", display: "flex", alignItems: "center", gap: "14px" }}>
-        <ClipboardList size={18} color={C.primary} />
-        <div>
-          <div style={{ fontSize: "11px", color: C.textSub, fontWeight: 600 }}>CLIENTES CADASTRADOS</div>
-          <div style={{ fontSize: "22px", fontWeight: 800, color: C.text }}>{fmtN(r?.qt_clientes_cadastrados ?? 0)}</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Só uma equipe (supervisor selecionado, ou já é o único grupo) — tabela direta, sem colapsar.
-  const equipeUnica = ((mode === "equipe" || mode === "supervisor") && activeCode) || grupos.length === 1;
-
-  return (
-    <div style={{ margin: "12px 16px", background: "#fff", border: `1px solid ${C.border}`, borderRadius: "8px", overflow: "hidden" }}>
-      <div onClick={() => setAberto(v => !v)}
-        style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "10px 14px", background: `linear-gradient(90deg,${C.header},${C.primary})`, cursor: "pointer" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <ClipboardList size={14} color={C.gold} />
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: "13px" }}>Clientes Cadastrados</span>
-          <span style={{ fontSize: "11px", color: "rgba(255,255,255,.7)" }}>
-            {filtrado.length} vendedor(es) · total {fmtN(total)}
-          </span>
-        </div>
-        <ChevronDown size={14} color="#fff" style={{ transform: aberto ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
-      </div>
-      {aberto && (
-        <div style={{ padding: "8px 10px" }}>
-          {filtrado.length === 0 && (
-            <div style={{ padding: "16px", textAlign: "center", color: C.textSub, fontSize: "12px" }}>Sem dados.</div>
-          )}
-          {equipeUnica
-            ? grupos.map(g => (
-                <table key={g.cod} style={{ width: "100%", borderCollapse: "collapse", fontSize: isMobile ? "11px" : "12px" }}>
-                  <tbody>
-                    {g.rows.map((r, i) => (
-                      <tr key={r.cod_vendedor} style={{ background: i % 2 === 0 ? "#fff" : C.rowEven }}>
-                        <td style={{ padding: "5px 12px", fontFamily: C.mono, color: C.textSub, fontSize: "11px", width: "50px" }}>{r.cod_vendedor}</td>
-                        <td style={{ padding: "5px 12px" }}>{r.nome_vendedor}</td>
-                        <td style={{ padding: "5px 12px", textAlign: "right", fontFamily: C.mono, fontWeight: 600 }}>{fmtN(r.qt_clientes_cadastrados)}</td>
-                      </tr>
-                    ))}
-                    <tr style={{ background: C.total, color: C.totalTxt, fontWeight: 700 }}>
-                      <td colSpan={2} style={{ padding: "5px 12px" }}>TOTAL</td>
-                      <td style={{ padding: "5px 12px", textAlign: "right", fontFamily: C.mono }}>{fmtN(g.total)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              ))
-            : grupos.map(g => <GrupoSupervisorCadastro key={g.cod} grupo={g} isMobile={isMobile} aberturaInicial={false} />)}
         </div>
       )}
     </div>
@@ -424,12 +322,43 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
       .then(r => r.json()).then(j => setTodosData(j.dados ?? [])).catch(() => {});
   }, [agrupamento, headers]);
 
-  // Clientes cadastrados por vendedor — cadastro puro (PCCLIENT), independe
-  // de data/agrupamento, então busca 1x só (não entra no fetchData de baixo).
+  // Base de clientes (cadastro por vendedor, PCCLIENT) — vira a coluna
+  // "(BASE)" ao lado de META nas tabelas abaixo. Independe de data/
+  // agrupamento, busca 1x só. Erro fica visível (erroCadastrados) em vez
+  // de engolido — um 401/500 silencioso fazia a coluna só ficar vazia sem
+  // pista nenhuma do motivo.
+  const [erroCadastrados, setErroCadastrados] = useState(null);
   useEffect(() => {
+    setErroCadastrados(null);
     fetch(`${API_BASE}/api/dn/cadastrados`, { headers })
-      .then(r => r.json()).then(j => setCadastradosData(j.dados ?? [])).catch(() => {});
+      .then(async r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+        return r.json();
+      })
+      .then(j => setCadastradosData(j.dados ?? []))
+      .catch(e => { setCadastradosData([]); setErroCadastrados(e.message); });
   }, [headers]);
+
+  // BASE = atendidos nos últimos 3 meses (qt_clientes_atendidos_3m), não o
+  // cadastro puro — é essa a base que a META usa (por fornecedor; aqui
+  // somada em todos). Map cod_vendedor -> valor, pra lookup O(1) nas tabelas.
+  const mapaBase = useMemo(() => new Map(
+    cadastradosData.map(r => [r.cod_vendedor, r.qt_clientes_atendidos_3m])
+  ), [cadastradosData]);
+
+  // Gerencial: sem filtro nenhum -> soma de TODOS os vendedores.
+  const baseGerencial = useMemo(() =>
+    cadastradosData.reduce((s, r) => s + (r.qt_clientes_atendidos_3m ?? 0), 0)
+  , [cadastradosData]);
+
+  // Supervisor (com um supervisor escolhido, tabela agregada por
+  // fornecedor sem quebra por vendedor) -> soma só dos vendedores DELE.
+  const baseSupervisorAtivo = useMemo(() => {
+    if (mode !== "supervisor" || !activeCode) return null;
+    return cadastradosData
+      .filter(r => r.cod_supervisor === activeCode)
+      .reduce((s, r) => s + (r.qt_clientes_atendidos_3m ?? 0), 0);
+  }, [cadastradosData, mode, activeCode]);
 
   const vendedores = useMemo(() => {
     const map = new Map();
@@ -499,6 +428,27 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
   };
   const totReal = tot.mes + tot.semana;
   const totPct  = tot.meta > 0 ? (totReal / tot.meta) * 100 : 0;
+
+  // BASE é por vendedor — soma só 1x por vendedor distinto presente em
+  // `rows` (que pode ter várias linhas do mesmo vendedor, uma por
+  // fornecedor/seção), senão duplicaria o total. Em "gerencial" (sem
+  // filtro, linhas só por fornecedor/seção — sem vendedor) e em
+  // "supervisor" com um supervisor escolhido (linhas agregadas do time,
+  // idem sem vendedor), usa os totais já calculados fora (baseGerencial/
+  // baseSupervisorAtivo) em vez de tentar somar por linha.
+  const totBase = useMemo(() => {
+    if (mode === "gerencial") return baseGerencial;
+    if (mode === "supervisor" && activeCode) return baseSupervisorAtivo ?? 0;
+    const vistos = new Set();
+    let s = 0;
+    rows.forEach(r => {
+      if (r.cod_vendedor != null && !vistos.has(r.cod_vendedor)) {
+        vistos.add(r.cod_vendedor);
+        s += mapaBase.get(r.cod_vendedor) ?? 0;
+      }
+    });
+    return s;
+  }, [rows, mapaBase, mode, activeCode, baseGerencial, baseSupervisorAtivo]);
 
   const handleSort = col => { if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} };
   const changeMode = id  => { setMode(id); setActiveCode(null); };
@@ -656,11 +606,15 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
         </div>
       </div>
 
-      {/* Clientes Cadastrados por vendedor (cadastro puro, PCCLIENT) — segue
-          o mesmo mode/activeCode da tela: supervisor selecionado mostra o
-          time dele, vendedor selecionado desce pro número dele só. */}
-      {cadastradosData.length > 0 && (
-        <CadastradosPanel data={cadastradosData} mode={mode} activeCode={activeCode} isMobile={isMobile} />
+      {/* BASE (clientes cadastrados por vendedor) vira coluna nas tabelas
+          abaixo, ao lado de META — não é mais um painel separado. Erro de
+          carregamento fica visível aqui (a coluna some silenciosamente
+          senão, sem pista do motivo). */}
+      {erroCadastrados && (
+        <div style={{ margin: "12px 16px", background: "#FEF2F2", border: `1px solid ${C.red}`,
+          borderRadius: "8px", padding: "10px 14px", fontSize: "12px", color: C.red }}>
+          Erro ao carregar coluna (BASE): {erroCadastrados}
+        </div>
       )}
 
       {/* Modo Todas Equipes */}
@@ -771,7 +725,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
             <EquipeDNCard key={`${sup.cod}-${agrupamento}`} supervisor={sup} dataRef={dataRef}
               agrupamento={agrupamento} token={token} colDimNome={colDimNome}
               isMobile={isMobile} consolidado={consolidado}
-              filtroRcas={filtroRcas} filtroDims={filtroDims}/>
+              filtroRcas={filtroRcas} filtroDims={filtroDims} mapaBase={mapaBase}/>
           ))}
         </div>
       )}
@@ -811,7 +765,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                 {showVendedor && (
                   <tr>
                     <th colSpan={2} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"left", border:`1px solid ${C.primaryDk}` }}>VENDEDOR</th>
-                    <th colSpan={8} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"center", border:`1px solid ${C.primaryDk}` }}>INDICADORES</th>
+                    <th colSpan={9} style={{ background:C.header, color:"#fff", padding:"4px 8px", fontSize:"10px", fontWeight:700, textAlign:"center", border:`1px solid ${C.primaryDk}` }}>INDICADORES</th>
                   </tr>
                 )}
                 <tr>
@@ -821,6 +775,7 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                   </>}
                   <Th label={agrupamento === "secao" ? "SEÇÃO" : "FORNECEDOR"}
                       col={colDimNome}               sortCol={sortCol} sortDir={sortDir} onSort={handleSort}/>
+                  <Th label="(BASE)"             col="_base"                 sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="META"               col="qt_cli_meta"           sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="FAT. MES"           col="qt_cli_mes"            sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
                   <Th label="DN NOVA"          col="qt_cli_nao_fat_semana" sortCol={sortCol} sortDir={sortDir} onSort={handleSort} align="right"/>
@@ -832,10 +787,13 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
               </thead>
               <tbody>
                 {(mode==="supervisor" && !activeCode)
-                  ? buildDNBySupervisor(rows, colDimNome)
+                  ? buildDNBySupervisor(rows, colDimNome, mapaBase)
                   : rows.map((row,i) => (
                     <DataRow key={`${row.cod_vendedor ?? "ger"}-${row.dim_id ?? i}-${i}`}
-                      row={row} i={i} showVendedor={showVendedor} colDimNome={colDimNome}/>
+                      row={row} i={i} showVendedor={showVendedor} colDimNome={colDimNome} mapaBase={mapaBase}
+                      baseFixo={mode === "gerencial" ? baseGerencial
+                        : (mode === "supervisor" && activeCode) ? baseSupervisorAtivo
+                        : undefined}/>
                   ))
                 }
               </tbody>
@@ -850,6 +808,9 @@ export default function ModuleDistNumerica({ isMobile, token, userInfo = {} }) {
                           clientes únicos
                         </span>
                       )}
+                    </td>
+                    <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>
+                      {fmtN(totBase)}
                     </td>
                     <td style={{ padding:"6px 8px", border:`1px solid ${C.primaryDk}`, textAlign:"right", fontFamily:C.mono }}>
                       {fmtN(mode === "gerencial" ? (totaisDist.qt_total_meta ?? tot.meta) : tot.meta)}
